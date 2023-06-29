@@ -58,3 +58,34 @@ class RawPacket:
     # OPTIONAL METADATA
     interface_id: Optional[int] = None  
     """For multi-interface captures (PCAPNG)"""
+    
+    comment: Optional[str] = None  
+    """Optional annotation (not used in hash calculation)"""
+    
+    # COMPUTED PROPERTIES
+    @property
+    def timestamp_seconds(self) -> float:
+        """Convert microseconds to seconds with fractional part."""
+        return self.timestamp_us / 1_000_000.0
+    
+    @property
+    def is_truncated(self) -> bool:
+        """True if captured length < original length (snaplen limited)."""
+        return self.captured_length < self.original_length
+    
+    @property
+    def data_hash(self) -> str:
+        """Quick hash for equality checks (not cryptographic)."""
+        # Use built-in hash for performance in dictionaries/sets
+        return str(hash(self.data))
+
+@dataclass(frozen=True)  # Also immutable
+class DecodedPacket:
+    """
+    Packet after protocol decoding (L2/L3/L4 MVP).
+    
+    This model is immutable and safe for deterministic processing.
+    The raw_packet reference ensures we can always access original bytes.
+    """
+    raw_packet: RawPacket
+    """Reference to original raw packet - NEVER modify"""
