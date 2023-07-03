@@ -41,3 +41,41 @@ class SessionManifest:
     
     source_hash: str  # SHA256 of source file
     """Hash of original data source for integrity verification."""
+    
+    
+    # ========== TEMPORAL SCOPE ==========
+    time_start_us: int  # First packet timestamp
+    """Earliest packet time in microseconds."""
+    
+    time_end_us: int  # Last packet timestamp
+    """Latest packet time in microseconds."""
+    
+    
+    # ========== PACKET STATISTICS ==========
+    total_packets: int
+    """Total packets in session."""
+    
+    total_bytes_captured: int
+    """Sum of captured_length for all packets."""
+    
+    total_bytes_original: int
+    """Sum of original_length for all packets."""
+    
+    
+    # ========== STORAGE MAPPING ==========
+    file_mapping: Dict[str, str] = field(default_factory=dict)
+    """Mapping from file_id to file path.
+    Example: {"0": "/data/capture_1.pcap", "1": "/data/capture_2.pcap"}"""
+    
+    
+    # ========== SCHEMA VERSIONS ==========
+    index_schema_version: str = "0.2.0"
+    """Version of PacketIndexRecord schema used."""
+    
+    manifest_schema_version: str = "0.2.0"
+    """Version of this manifest schema."""
+    
+    
+    # ========== OPTIONAL FIELDS ==========
+    original_path: Optional[str] = None
+    """Original file path (optional for privacy/portability)."""

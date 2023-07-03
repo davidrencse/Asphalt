@@ -89,3 +89,58 @@ class DecodedPacket:
     """
     raw_packet: RawPacket
     """Reference to original raw packet - NEVER modify"""
+    
+    # Protocol stack
+    protocol_stack: Tuple[str, ...] = field(default_factory=tuple)
+    """Stack of protocol names, e.g., ('ETH', 'IP4', 'TCP')"""
+
+    # L2 metadata
+    eth_type: Optional[int] = None
+    """EtherType for Ethernet-derived frames (None if not applicable)."""
+
+    src_mac: Optional[str] = None
+    """Source MAC address (lowercase colon-separated)."""
+    dst_mac: Optional[str] = None
+    """Destination MAC address (lowercase colon-separated)."""
+
+    is_vlan: bool = False
+    """True if one or more VLAN tags were present."""
+    is_arp: bool = False
+    """True if packet was identified as ARP."""
+    is_multicast: bool = False
+    """True if destination was multicast (L2 or L3)."""
+    is_broadcast: bool = False
+    """True if destination was broadcast (L2 or L3)."""
+    is_ipv4_fragment: bool = False
+    """True if IPv4 fragmentation flags/offset indicate a fragment."""
+    is_ipv6_fragment: bool = False
+    """True if IPv6 fragment header was detected."""
+    
+    # L3/L4 summary fields
+    ip_version: int = 0
+    """IP version (4 or 6). 0 means unknown/not IP."""
+    
+    src_ip: Optional[str] = None
+    dst_ip: Optional[str] = None
+    
+    l4_protocol: Optional[str] = None
+    """L4 protocol name: TCP, UDP, ICMP, ICMP6 (None if unknown)."""
+    
+    ip_protocol: int = 0
+    """IP protocol number (e.g., 6=TCP, 17=UDP). 0 if unknown."""
+    
+    src_port: Optional[int] = None
+    dst_port: Optional[int] = None
+
+    tcp_flags: Optional[int] = None
+    """TCP flags bitmask (FIN=0x01, SYN=0x02, RST=0x04, PSH=0x08, 
+    ACK=0x10, URG=0x20, ECE=0x40, CWR=0x80)."""
+
+    tcp_seq: Optional[int] = None
+    """TCP sequence number."""
+    tcp_ack: Optional[int] = None
+    """TCP acknowledgment number."""
+    tcp_window: Optional[int] = None
+    """Advertised TCP receive window (unscaled)."""
+    tcp_mss: Optional[int] = None
+    """TCP MSS option value if present."""
