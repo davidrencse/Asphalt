@@ -4,3 +4,6 @@ Run Asphalt from project root.
 """
 import sys
 import os
+
+# Get project root
+project_root = os.path.dirname(os.path.abspath(__file__))
