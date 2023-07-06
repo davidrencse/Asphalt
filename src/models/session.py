@@ -79,3 +79,36 @@ class SessionManifest:
     # ========== OPTIONAL FIELDS ==========
     original_path: Optional[str] = None
     """Original file path (optional for privacy/portability)."""
+    
+    
+    # ========== CAPTURE METADATA ==========
+    capture_filter: Optional[str] = None
+    """BPF filter applied during capture (if any)."""
+    
+    interface_name: Optional[str] = None
+    """Network interface name (for live captures)."""
+    
+    link_types: List[int] = field(default_factory=list)
+    """List of DLT_* link types present in session."""
+    
+    snaplen: Optional[int] = None
+    """Maximum captured packet length (if limited)."""
+    
+    # ========== SERIALIZATION ==========
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary with deterministic field ordering."""
+        result = {
+            'session_id': self.session_id,
+            'created_at': self.created_at,
+            'source_type': self.source_type,
+            'source_hash': self.source_hash,
+            'time_start_us': self.time_start_us,
+            'time_end_us': self.time_end_us,
+            'total_packets': self.total_packets,
+            'total_bytes_captured': self.total_bytes_captured,
+            'total_bytes_original': self.total_bytes_original,
+            'file_mapping': self.file_mapping,
+            'index_schema_version': self.index_schema_version,
+            'manifest_schema_version': self.manifest_schema_version,
+        }
