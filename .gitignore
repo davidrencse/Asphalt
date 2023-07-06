@@ -11,3 +11,6 @@ venv/
 # Build artifacts
 build/
 dist/
+*.spec
+
+# Installer outputs
