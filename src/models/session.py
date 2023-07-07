@@ -112,3 +112,32 @@ class SessionManifest:
             'index_schema_version': self.index_schema_version,
             'manifest_schema_version': self.manifest_schema_version,
         }
+        
+        # Add optional fields only if they have values
+        if self.original_path:
+            result['original_path'] = self.original_path
+        if self.capture_filter:
+            result['capture_filter'] = self.capture_filter
+        if self.interface_name:
+            result['interface_name'] = self.interface_name
+        if self.link_types:
+            result['link_types'] = self.link_types
+        if self.snaplen:
+            result['snaplen'] = self.snaplen
+            
+        return result
+    
+    def to_json(self, indent: int = 2) -> str:
+        """Serialize to JSON string."""
+        return json.dumps(self.to_dict(), indent=indent)
+    
+    def save(self, filepath: str):
+        """
+        Save manifest to file.
+        
+        Creates parent directories if they don't exist.
+        """
+        path = Path(filepath)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, 'w') as f:
+            f.write(self.to_json())

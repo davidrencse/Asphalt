@@ -144,3 +144,55 @@ class DecodedPacket:
     """Advertised TCP receive window (unscaled)."""
     tcp_mss: Optional[int] = None
     """TCP MSS option value if present."""
+
+    arp_sender_ip: Optional[str] = None
+    """ARP sender protocol address (SPA)."""
+    arp_sender_mac: Optional[str] = None
+    """ARP sender hardware address (SHA)."""
+
+    dns_qname: Optional[str] = None
+    """DNS query name if decoded."""
+    dns_is_query: Optional[bool] = None
+    """True if DNS packet is a query."""
+    dns_is_response: Optional[bool] = None
+    """True if DNS packet is a response."""
+    dns_rcode: Optional[int] = None
+    """DNS response code if available."""
+    ttl: Optional[int] = None
+    """IPv4 TTL or IPv6 Hop Limit."""
+
+    # Decode quality
+    quality_flags: int = 0
+    """Bitmask of decode quality flags (see capture.packet_decoder)."""
+    
+    def __post_init__(self):
+        """Validate after initialization."""
+        # Ensure protocol_stack is a tuple (immutable)
+        if not isinstance(self.protocol_stack, tuple):
+            object.__setattr__(self, 'protocol_stack', tuple(self.protocol_stack))
+    
+    @property
+    def stack_summary(self) -> str:
+        """String representation of protocol stack."""
+        return "/".join(self.protocol_stack) if self.protocol_stack else "UNKNOWN"
+    
+    @property
+    def tcp_flag_names(self) -> Tuple[str, ...]:
+        """Return tuple of TCP flag names in canonical order."""
+        if self.tcp_flags is None:
+            return tuple()
+        flags = []
+        flag_map = [
+            (0x80, "CWR"),
+            (0x40, "ECE"),
+            (0x20, "URG"),
+            (0x10, "ACK"),
+            (0x08, "PSH"),
+            (0x04, "RST"),
+            (0x02, "SYN"),
+            (0x01, "FIN"),
+        ]
+        for mask, name in flag_map:
+            if self.tcp_flags & mask:
+                flags.append(name)
+        return tuple(flags)
