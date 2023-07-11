@@ -38,3 +38,17 @@ class PacketIndexRecord:
     
     timestamp_us: int  
     """Microseconds since epoch. MUST match RawPacket.timestamp_us."""
+    
+    
+    # ========== SIZE INFORMATION ==========
+    captured_length: int  
+    """Bytes captured (for statistics and filtering)"""
+    
+    original_length: int  
+    """Original packet size (for bandwidth calculations)"""
+    
+    
+    # ========== STORAGE REFERENCE ==========
+    pcap_ref: str  
+    """Format: 'file_id:start_offset:data_offset'
+    Used to retrieve raw packet data from PCAP store."""

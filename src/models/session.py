@@ -141,3 +141,38 @@ class SessionManifest:
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, 'w') as f:
             f.write(self.to_json())
+    
+    @classmethod
+    def load(cls, filepath: str) -> 'SessionManifest':
+        """Load manifest from file."""
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+        return cls.from_dict(data)
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'SessionManifest':
+        """Create manifest from dictionary with backward compatibility."""
+        # Handle missing fields in older versions
+        defaults = {
+            'original_path': None,
+            'capture_filter': None,
+            'interface_name': None,
+            'link_types': [],
+            'snaplen': None,
+            'index_schema_version': '0.2.0',
+            'manifest_schema_version': '0.2.0',
+        }
+        
+        # Merge defaults with provided data
+        merged = {**defaults, **data}
+        
+        return cls(**merged)
+    
+    # ========== HELPER METHODS ==========
+    
+    @property
+    def duration_seconds(self) -> float:
+        """Session duration in seconds."""
+        if self.time_end_us > self.time_start_us:
+            return (self.time_end_us - self.time_start_us) / 1_000_000.0
+        return 0.0
