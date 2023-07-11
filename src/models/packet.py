@@ -196,3 +196,80 @@ class DecodedPacket:
             if self.tcp_flags & mask:
                 flags.append(name)
         return tuple(flags)
+
+    @property
+    def quality_names(self) -> Tuple[str, ...]:
+        """Return tuple of quality flag names in canonical order."""
+        if self.quality_flags == 0:
+            return ("OK",)
+        names = []
+        flag_map = [
+            (1 << 0, "TRUNCATED"),
+            (1 << 1, "UNSUPPORTED_LINKTYPE"),
+            (1 << 2, "MALFORMED_L2"),
+            (1 << 3, "MALFORMED_L3"),
+            (1 << 4, "MALFORMED_L4"),
+            (1 << 5, "UNKNOWN_L3"),
+            (1 << 6, "UNKNOWN_L4"),
+        ]
+        for mask, name in flag_map:
+            if self.quality_flags & mask:
+                names.append(name)
+        return tuple(names)
+
+    @property
+    def flow_key(self) -> Optional[Tuple[str, str, int, int, int]]:
+        """Return a 5-tuple flow key when available."""
+        if not self.src_ip or not self.dst_ip or not self.ip_protocol:
+            return None
+        if self.src_port is None or self.dst_port is None:
+            return None
+        return (self.src_ip, self.dst_ip, self.src_port, self.dst_port, self.ip_protocol)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Deterministic dict representation for storage/UI."""
+        from analysis.osi import derive_osi_tags_from_decoded
+        raw = self.raw_packet
+        return {
+            "packet_id": raw.packet_id,
+            "timestamp_us": raw.timestamp_us,
+            "captured_length": raw.captured_length,
+            "original_length": raw.original_length,
+            "link_type": raw.link_type,
+            "eth_type": self.eth_type,
+            "src_mac": self.src_mac,
+            "dst_mac": self.dst_mac,
+            "pcap_ref": raw.pcap_ref,
+            "interface_id": raw.interface_id,
+            "stack_summary": self.stack_summary,
+            "ip_version": self.ip_version,
+            "src_ip": self.src_ip,
+            "dst_ip": self.dst_ip,
+            "l4_protocol": self.l4_protocol,
+            "ip_protocol": self.ip_protocol,
+            "src_port": self.src_port,
+            "dst_port": self.dst_port,
+            "tcp_flags": self.tcp_flags,
+            "tcp_seq": self.tcp_seq,
+            "tcp_ack": self.tcp_ack,
+            "tcp_window": self.tcp_window,
+            "tcp_mss": self.tcp_mss,
+            "arp_sender_ip": self.arp_sender_ip,
+            "arp_sender_mac": self.arp_sender_mac,
+            "dns_qname": self.dns_qname,
+            "dns_is_query": self.dns_is_query,
+            "dns_is_response": self.dns_is_response,
+            "dns_rcode": self.dns_rcode,
+            "tcp_flags_names": list(self.tcp_flag_names),
+            "ttl": self.ttl,
+            "quality_flags": self.quality_flags,
+            "quality_names": list(self.quality_names),
+            "flow_key": list(self.flow_key) if self.flow_key else None,
+            "is_vlan": self.is_vlan,
+            "is_arp": self.is_arp,
+            "is_multicast": self.is_multicast,
+            "is_broadcast": self.is_broadcast,
+            "is_ipv4_fragment": self.is_ipv4_fragment,
+            "is_ipv6_fragment": self.is_ipv6_fragment,
+            "osi_tags": derive_osi_tags_from_decoded(self),
+        }
