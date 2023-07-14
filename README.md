@@ -27,3 +27,25 @@ pip install -e .
 
 ## Pipeline Overview
 Asphalt is the same whether you run live capture, offline decode, or full analysis. The steps are modular and can be combined:
+
+1. **Capture**
+   - Live capture is performed via Scapy (`capture.scapy_backend`).
+   - Capture configuration uses a `CaptureConfig` (interface, BPF filter, buffer).
+   - A session is started and packet stats are sampled periodically.
+
+2. **Decode**
+   - Raw packets are decoded by `capture.decoder.PacketDecoder`.
+   - Decoding extracts L2/L3/L4 fields (MAC/IP/ports), protocol stack summaries, and flags.
+   - Decoded packets are converted to dictionaries for filtering or serialization.
+
+3. **Filter (optional)**
+   - Packet filters are compiled from an expression string (`utils.filtering`).
+   - Filters run against decoded fields and OSI tags (L2/L3/L4/App).
+
+4. **Analyze**
+   - The analysis engine (`analysis.engine.AnalysisEngine`) consumes decoded packets.
+   - A set of analyzers (registered in `analysis.registry`) produce metrics, summaries, and findings.
+   - Results are serialized to JSON (`report.to_json()`).
+
+## Backend Architecture
+Asphalt is structured around a few core subsystems:
