@@ -273,3 +273,14 @@ class DecodedPacket:
             "is_ipv6_fragment": self.is_ipv6_fragment,
             "osi_tags": derive_osi_tags_from_decoded(self),
         }
+
+    def to_json(self) -> str:
+        """Serialize to JSON with deterministic ordering."""
+        return json.dumps(self.to_dict(), separators=(",", ":"), ensure_ascii=True)
+
+# Helper function for timestamp conversion
+def datetime_to_microseconds(year: int, month: int, day: int, 
+                            hour: int = 0, minute: int = 0, 
+                            second: int = 0, microsecond: int = 0) -> int:
+    """
+    Convert datetime components to microseconds since epoch.
