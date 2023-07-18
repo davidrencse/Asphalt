@@ -176,3 +176,18 @@ class SessionManifest:
         if self.time_end_us > self.time_start_us:
             return (self.time_end_us - self.time_start_us) / 1_000_000.0
         return 0.0
+    
+    @property
+    def avg_packet_size(self) -> float:
+        """Average captured packet size in bytes."""
+        if self.total_packets > 0:
+            return self.total_bytes_captured / self.total_packets
+        return 0.0
+    
+    @property
+    def avg_bitrate(self) -> float:
+        """Average bitrate in bits per second."""
+        duration = self.duration_seconds
+        if duration > 0:
+            return (self.total_bytes_captured * 8) / duration
+        return 0.0
