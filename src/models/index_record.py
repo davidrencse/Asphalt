@@ -75,3 +75,21 @@ class PacketIndexRecord:
     
     protocol: int = 0  
     """IP protocol number (e.g., 6=TCP, 17=UDP)."""
+    
+    
+    # ========== PROTOCOL INFORMATION ==========
+    stack_summary: str = "unknown"  
+    """Colon-separated protocol stack, e.g., 'eth:ip:tcp'"""
+    
+    
+    # ========== SCHEMA VERSIONING ==========
+    schema_version: str = "0.2.0"  
+    """Enables schema evolution. Increment on breaking changes."""
+    
+    
+    # ========== OPTIONAL FIELDS ==========
+    # These fields are optional and can be added later
+    # without breaking existing records
+    
+    flags: Optional[int] = None  
+    """TCP flags or other protocol-specific flags"""

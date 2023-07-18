@@ -191,3 +191,18 @@ class SessionManifest:
         if duration > 0:
             return (self.total_bytes_captured * 8) / duration
         return 0.0
+    
+    def get_file_path(self, file_id: str) -> Optional[str]:
+        """Get file path for given file_id."""
+        return self.file_mapping.get(file_id)
+    
+    def validate(self) -> List[str]:
+        """
+        Validate manifest consistency.
+        
+        Returns list of warning/error messages.
+        """
+        issues = []
+        
+        if self.total_packets < 0:
+            issues.append("total_packets cannot be negative")
