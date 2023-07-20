@@ -206,3 +206,18 @@ class SessionManifest:
         
         if self.total_packets < 0:
             issues.append("total_packets cannot be negative")
+        
+        if self.time_end_us < self.time_start_us:
+            issues.append("time_end_us is before time_start_us")
+        
+        if not self.session_id:
+            issues.append("session_id is empty")
+        
+        if not self.source_hash:
+            issues.append("source_hash is empty")
+        
+        # Check for placeholder values
+        if self.src_ip == "0.0.0.0" and self.total_packets > 0:
+            issues.append("IP addresses not decoded (expected for Sprint 0.2)")
+            
+        return issues
