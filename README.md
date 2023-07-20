@@ -49,3 +49,26 @@ Asphalt is the same whether you run live capture, offline decode, or full analys
 
 ## Backend Architecture
 Asphalt is structured around a few core subsystems:
+
+- **Capture backend**
+  - `capture.scapy_backend.ScapyBackend` provides live capture, interface listing, and stats.
+  - `capture.icapture_backend.CaptureConfig` defines capture parameters.
+
+- **Packet decoding**
+  - `capture.decoder.PacketDecoder` parses raw packet bytes into structured records.
+  - Quality flags indicate decode confidence and anomalies.
+
+- **PCAP/PCAPNG ingestion**
+  - `pcap_loader.pcap_reader.PcapReader` and `pcap_loader.pcapng_reader.PcapngReader`
+    stream packets from capture files.
+  - The CLI auto-detects file formats by extension or magic bytes.
+
+- **Analysis pipeline**
+  - `analysis.engine.AnalysisEngine` orchestrates analyzer execution.
+  - `analysis.registry` registers and instantiates analyzers.
+  - Output is a normalized JSON report for programmatic use.
+
+- **UI layer**
+  - `ui_app.py` provides a PySide6 desktop UI.
+  - The UI runs the same capture + decode + analysis pipeline and renders
+    diagnostics and charts (via Matplotlib when available).
