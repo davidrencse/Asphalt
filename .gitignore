@@ -15,3 +15,7 @@ dist/
 
 # Installer outputs
 installer/dist-installer/
+
+# OS / editor
+.DS_Store
+Thumbs.db
