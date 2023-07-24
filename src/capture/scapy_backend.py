@@ -80,3 +80,78 @@ class ScapyBackend(ICaptureBackend):
                             guid = iface_guid[guid_start:guid_end+1]  # Keep braces
                         else:
                             guid = iface_guid
+                    
+                    # Try to find Windows info for this GUID
+                    win_info = guid_to_wininfo.get(guid, {})
+                    
+                    interface_info = {
+                        'id': iface_guid,
+                        'name': iface_guid,  # GUID name for capture
+                        'display_name': win_info.get('name', iface_guid),  # Human-readable
+                        'description': win_info.get('description', iface_guid),
+                        'is_up': True,  # Assume up if NpCap can see it
+                        'mac': win_info.get('mac', None),
+                        'ips': win_info.get('ips', []),
+                        'link_type': 'Ethernet',
+                        'guid': guid,
+                    }
+                    
+                    # Special handling for loopback
+                    if 'Loopback' in iface_guid or '127.0.0.1' in interface_info['ips']:
+                        interface_info['link_type'] = 'Loopback'
+                        interface_info['display_name'] = 'Loopback'
+                        interface_info['description'] = 'Loopback Interface'
+                    
+                    interfaces.append(interface_info)
+                    
+                except Exception as e:
+                    # Fallback minimal info
+                    interfaces.append({
+                        'id': iface_guid,
+                        'name': iface_guid,
+                        'display_name': iface_guid,
+                        'description': iface_guid,
+                        'is_up': True,
+                        'mac': None,
+                        'ips': [],
+                        'link_type': 'Unknown',
+                        'guid': iface_guid,
+                    })
+        
+        except Exception as e:
+            print(f"Error listing interfaces: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return interfaces
+    
+    def start(self, config: CaptureConfig) -> str:
+        with self._lock:
+            # Generate session ID
+            session_id = f"scapy_{int(time.time())}_{hash(config.interface)}"
+            
+            # DEBUG: Log what we're trying to capture on
+            print(f"DEBUG: Starting capture with interface: '{config.interface}'")
+            print(f"DEBUG: Filter: '{config.filter}'")
+            print(f"DEBUG: Promisc: {config.promisc}")
+            
+            # Resolve interface name - handle both GUID and human-readable names
+            actual_iface_name = config.interface
+            # Normalize double-backslash inputs (PowerShell often passes them literally)
+            if actual_iface_name.startswith('\\\\'):
+                actual_iface_name = actual_iface_name.replace('\\\\', '\\')
+            
+            # Check if it's already a GUID (starts with \Device\NPF_)
+            if not actual_iface_name.startswith(r'\Device\NPF_'):
+                # Try to find matching interface by human-readable name
+                all_interfaces = self.list_interfaces()
+                found_match = False
+                
+                for iface in all_interfaces:
+                    # Check against display name, description, or contains search
+                    display_name = iface.get('display_name', '')
+                    description = iface.get('description', '')
+                    
+                    if (config.interface.lower() == display_name.lower() or 
+                        config.interface.lower() == description.lower() or
+                        config.interface.lower() in description.lower()):
