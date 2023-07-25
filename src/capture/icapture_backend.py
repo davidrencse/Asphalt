@@ -15,3 +15,11 @@ class CaptureConfig:
     buffer_size: int = 10000  # Queue size
     filter: Optional[str] = None
     monitor: bool = False  # Monitor mode for WiFi
+
+class ICaptureBackend(ABC):
+    """Capture backend interface."""
+    
+    @abstractmethod
+    def start(self, config: CaptureConfig) -> str:
+        """Start capture, return session_id."""
+        pass
