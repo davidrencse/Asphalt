@@ -93,3 +93,19 @@ class PacketIndexRecord:
     
     flags: Optional[int] = None  
     """TCP flags or other protocol-specific flags"""
+    
+    ttl: Optional[int] = None  
+    """Time To Live (for IP packets)"""
+    
+    flow_id: Optional[str] = None  
+    """Links to flow tracking (future sprint)"""
+    
+    analysis_flags: int = 0  
+    """Bitmask of analysis results (future sprint)"""
+    
+    
+    # ========== SERIALIZATION METHODS ==========
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Convert to dictionary for JSON/Protobuf serialization.
