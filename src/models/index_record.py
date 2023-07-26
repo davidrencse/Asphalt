@@ -109,3 +109,35 @@ class PacketIndexRecord:
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert to dictionary for JSON/Protobuf serialization.
+        
+        IMPORTANT: This method must maintain deterministic ordering
+        for consistent hashing and testing.
+        """
+        # Define explicit field order for determinism
+        base_fields = {
+            'packet_id': self.packet_id,
+            'session_id': self.session_id,
+            'timestamp_us': self.timestamp_us,
+            'captured_length': self.captured_length,
+            'original_length': self.original_length,
+            'pcap_ref': self.pcap_ref,
+            'packet_hash': self.packet_hash,
+            'src_ip': self.src_ip,
+            'dst_ip': self.dst_ip,
+            'src_port': self.src_port,
+            'dst_port': self.dst_port,
+            'protocol': self.protocol,
+            'stack_summary': self.stack_summary,
+            'schema_version': self.schema_version,
+        }
+        
+        # Add optional fields only if they have values
+        optional_fields = {}
+        if self.flags is not None:
+            optional_fields['flags'] = self.flags
+        if self.ttl is not None:
+            optional_fields['ttl'] = self.ttl
+        if self.flow_id is not None:
+            optional_fields['flow_id'] = self.flow_id
+        if self.analysis_flags != 0:
+            optional_fields['analysis_flags'] = self.analysis_flags
