@@ -155,3 +155,48 @@ class ScapyBackend(ICaptureBackend):
                     if (config.interface.lower() == display_name.lower() or 
                         config.interface.lower() == description.lower() or
                         config.interface.lower() in description.lower()):
+                        
+                        actual_iface_name = iface['name']  # Use the GUID name
+                        print(f"DEBUG: Mapped '{config.interface}' -> '{actual_iface_name}'")
+                        print(f"DEBUG: Description: {description}")
+                        found_match = True
+                        break
+                
+                if not found_match:
+                    print(f"WARNING: Could not find interface '{config.interface}'")
+                    print(f"Available interfaces:")
+                    for iface in all_interfaces:
+                        if not iface['name'].startswith('dummy'):
+                            desc = iface.get('description', iface['name'])
+                            print(f"  '{iface['name']}' - {desc}")
+            
+            # Ensure scapy uses Npcap/pcap backend on Windows
+            try:
+                conf.use_pcap = True
+            except Exception:
+                pass
+            try:
+                conf.sniff_promisc = config.promisc
+            except Exception:
+                pass
+            try:
+                conf.iface = actual_iface_name
+            except Exception:
+                pass
+
+            # Create packet queue
+            packet_queue = queue.Queue(maxsize=config.buffer_size)
+            stop_event = threading.Event()
+            stats = {
+                'packets_total': 0,
+                'bytes_total': 0,
+                'packets_per_sec': 0,
+                'bytes_per_sec': 0,
+                'drops_total': 0,
+                'queue_depth': 0,
+                'start_time': time.time(),
+                'last_update': time.time(),
+                'packets_since_update': 0,
+                'bytes_since_update': 0,
+                'interface_name': actual_iface_name,  # Store the actual name used
+            }
