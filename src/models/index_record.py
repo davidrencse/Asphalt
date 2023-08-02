@@ -141,3 +141,26 @@ class PacketIndexRecord:
             optional_fields['flow_id'] = self.flow_id
         if self.analysis_flags != 0:
             optional_fields['analysis_flags'] = self.analysis_flags
+            
+        return {**base_fields, **optional_fields}
+    
+    def to_json(self) -> str:
+        """Serialize to JSON string with deterministic ordering."""
+        return json.dumps(self.to_dict(), sort_keys=True, separators=(',', ':'))
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'PacketIndexRecord':
+        """
+        Deserialize from dictionary.
+        
+        Handles schema evolution by:
+        1. Setting defaults for missing fields
+        2. Ignoring unknown fields
+        3. Validating required fields
+        """
+        # Extract known fields, ignore unknown ones
+        known_fields = {
+            k: v for k, v in data.items() 
+            if k in cls.__dataclass_fields__
+        }
+        return cls(**known_fields)
