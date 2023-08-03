@@ -164,3 +164,33 @@ class PacketIndexRecord:
             if k in cls.__dataclass_fields__
         }
         return cls(**known_fields)
+    
+    
+    # ========== HELPER METHODS ==========
+    
+    @property
+    def is_decoded(self) -> bool:
+        """True if network addressing fields have been populated."""
+        return (self.src_ip != "0.0.0.0" or 
+                self.dst_ip != "0.0.0.0" or 
+                self.protocol != 0)
+    
+    @property
+    def timestamp_seconds(self) -> float:
+        """Convert microseconds to seconds with fractional part."""
+        return self.timestamp_us / 1_000_000.0
+    
+    @property
+    def is_truncated(self) -> bool:
+        """True if packet was truncated during capture."""
+        return self.captured_length < self.original_length
+    
+    def matches_filter(self, 
+                      src_ip: Optional[str] = None,
+                      dst_ip: Optional[str] = None,
+                      protocol: Optional[int] = None) -> bool:
+        """
+        Simple filter matching for common queries.
+        
+        Used by index builder for creating filtered views.
+        """
