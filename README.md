@@ -72,3 +72,25 @@ Asphalt is structured around a few core subsystems:
   - `ui_app.py` provides a PySide6 desktop UI.
   - The UI runs the same capture + decode + analysis pipeline and renders
     diagnostics and charts (via Matplotlib when available).
+
+## Features
+
+- **Live capture**
+  - Start capture on any interface with optional BPF filters.
+  - View per-interval statistics (packets/sec, totals, drops).
+  - Stop at a fixed duration or with Ctrl+C.
+
+- **Interface discovery**
+  - List interfaces and identify the exact capture name (including NPF GUIDs on Windows).
+
+- **Offline decode (PCAP/PCAPNG)**
+  - Decode capture files into a readable table or JSON/JSONL.
+  - Limit decode volume for quick inspection.
+
+- **Live capture + decode**
+  - Stream decoded summaries in real time while capturing.
+  - Output as table, JSON, or JSONL.
+
+- **Analysis engine**
+  - Run a full analyzer suite on capture files.
+  - Output structured JSON reports for downstream use or UI ingestion.
