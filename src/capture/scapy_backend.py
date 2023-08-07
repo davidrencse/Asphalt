@@ -200,3 +200,42 @@ class ScapyBackend(ICaptureBackend):
                 'bytes_since_update': 0,
                 'interface_name': actual_iface_name,  # Store the actual name used
             }
+            
+            def packet_callback(packet):
+                """Callback for each captured packet."""
+                nonlocal stats
+                
+                try:
+                    # Convert Scapy packet to our format
+                    packet_data = {
+                        'ts': packet.time,
+                        'data': bytes(packet),
+                        'wirelen': len(packet),
+                        'scapy_packet': packet,  # Keep for debugging
+                    }
+                    
+                    try:
+                        packet_queue.put_nowait(packet_data)
+                        stats['packets_since_update'] += 1
+                        stats['bytes_since_update'] += len(packet)
+                        
+                        # DEBUG: First few packets
+                        if stats['packets_total'] + stats['packets_since_update'] < 5:
+                            print(f"DEBUG: Captured packet {stats['packets_total'] + stats['packets_since_update']}: {len(packet)} bytes")
+                            
+                    except queue.Full:
+                        stats['drops_total'] += 1
+                        if stats['drops_total'] % 100 == 0:  # Log every 100 drops
+                            print(f"DEBUG: Queue full, drops: {stats['drops_total']}")
+                    
+                    # Update rate stats every second
+                    current_time = time.time()
+                    if current_time - stats['last_update'] >= 1.0:
+                        stats['packets_per_sec'] = stats['packets_since_update']
+                        stats['bytes_per_sec'] = stats['bytes_since_update']
+                        stats['packets_total'] += stats['packets_since_update']
+                        stats['bytes_total'] += stats['bytes_since_update']
+                        stats['queue_depth'] = packet_queue.qsize()
+                        stats['packets_since_update'] = 0
+                        stats['bytes_since_update'] = 0
+                        stats['last_update'] = current_time
