@@ -94,3 +94,11 @@ Asphalt is structured around a few core subsystems:
 - **Analysis engine**
   - Run a full analyzer suite on capture files.
   - Output structured JSON reports for downstream use or UI ingestion.
+
+- **Pluggable analyzers**
+  - Built-in analyzers can be selected by name.
+  - Analyzer registry allows modular extension without changing core CLI.
+
+- **Packet filters**
+  - Filter decoded packets using expressions (e.g. by protocol, IPs, ports).
+  - Applies to both decode and analyze commands.
