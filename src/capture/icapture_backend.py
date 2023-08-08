@@ -23,3 +23,8 @@ class ICaptureBackend(ABC):
     def start(self, config: CaptureConfig) -> str:
         """Start capture, return session_id."""
         pass
+    
+    @abstractmethod
+    def stop(self, session_id: str) -> Dict[str, Any]:
+        """Stop capture, return session metadata."""
+        pass
