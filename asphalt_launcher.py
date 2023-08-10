@@ -25,3 +25,5 @@ if __name__ == "__main__":
         print("  asphalt --interface Ethernet --duration 5")
         print("  asphalt --interface Ethernet --filter 'tcp port 80'")
         sys.exit(0)
+    
+    capture()

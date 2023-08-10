@@ -102,3 +102,51 @@ Asphalt is structured around a few core subsystems:
 - **Packet filters**
   - Filter decoded packets using expressions (e.g. by protocol, IPs, ports).
   - Applies to both decode and analyze commands.
+
+- **Desktop UI (optional)**
+  - Run the full pipeline with live diagnostics and charts.
+  - UI gracefully degrades if Matplotlib is missing.
+
+## CLIs
+
+List interfaces:
+
+```powershell
+asphalt capture --interface list
+```
+
+Start a capture (Ctrl+C to stop):
+
+```powershell
+asphalt capture --interface "Ethernet" --duration 10
+```
+
+Capture with a BPF filter:
+
+```powershell
+asphalt capture --interface "Ethernet" --filter "tcp port 80"
+```
+
+Decode a PCAP/PCAPNG file:
+
+```powershell
+asphalt decode capture.pcapng --limit 20
+```
+
+Decode to JSONL:
+
+```powershell
+asphalt decode capture.pcapng --format jsonl --output decoded.jsonl
+```
+
+Live capture + decode:
+
+```powershell
+asphalt capture-decode --interface "Ethernet" --limit 50
+```
+
+Run analysis and save a report:
+
+```powershell
+asphalt analyze capture.pcapng --output report.json
+```

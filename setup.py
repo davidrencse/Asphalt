@@ -17,3 +17,4 @@ setup(
     # Add this to include non-Python files
     include_package_data=True,
     python_requires=">=3.8",
+)

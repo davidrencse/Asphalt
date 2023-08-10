@@ -13,3 +13,13 @@ sys.path.insert(0, src_path)
 import click
 
 @click.group()
+def cli():
+    """Asphalt - Wireshark-grade packet capture and analysis."""
+    pass
+
+# Import and add commands
+from asphalt_cli.capture import capture
+cli.add_command(capture)
+
+if __name__ == "__main__":
+    cli()
