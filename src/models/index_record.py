@@ -194,3 +194,10 @@ class PacketIndexRecord:
         
         Used by index builder for creating filtered views.
         """
+        if src_ip and self.src_ip != src_ip:
+            return False
+        if dst_ip and self.dst_ip != dst_ip:
+            return False
+        if protocol and self.protocol != protocol:
+            return False
+        return True
