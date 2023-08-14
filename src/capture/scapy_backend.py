@@ -301,3 +301,47 @@ class ScapyBackend(ICaptureBackend):
                         session = self._sessions[session_id]
                         session_stats = session['stats']
                         session_queue = session['queue']
+                        
+                        # Update from callback stats (if any)
+                        session_stats['queue_depth'] = session_queue.qsize()
+                        
+                        # If no packets in last 2 seconds, reset pps/bps
+                        current_time = time.time()
+                        if current_time - session_stats['last_update'] > 2.0:
+                            session_stats['packets_per_sec'] = 0
+                            session_stats['bytes_per_sec'] = 0
+        
+        stats_thread = threading.Thread(
+            target=stats_updater,
+            daemon=True
+        )
+        stats_thread.start()
+        
+        print(f"DEBUG: Capture session {session_id} started successfully")
+        return session_id
+    
+    def _stats_updater(self, session_id: str, stop_event: threading.Event):
+        """Update stats periodically."""
+        while not stop_event.is_set():
+            time.sleep(1)
+            with self._lock:
+                if session_id in self._sessions:
+                    session = self._sessions[session_id]
+                    stats = session['stats']
+                    queue = session['queue']
+                    
+                    with session['stats_lock']:
+                        # Final update of rates
+                        stats['packets_per_sec'] = stats['packets_since_update']
+                        stats['bytes_per_sec'] = stats['bytes_since_update']
+                        stats['packets_total'] += stats['packets_since_update']
+                        stats['bytes_total'] += stats['bytes_since_update']
+                        stats['queue_depth'] = queue.qsize()
+                        stats['packets_since_update'] = 0
+                        stats['bytes_since_update'] = 0
+                        stats['last_update'] = time.time()
+    
+    def stop(self, session_id: str) -> Dict[str, Any]:
+        with self._lock:
+            if session_id not in self._sessions:
+                raise ValueError(f"Session {session_id} not found")
