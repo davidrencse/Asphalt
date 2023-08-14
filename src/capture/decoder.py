@@ -14,3 +14,8 @@ try:
     from ..models.index_record import PacketIndexRecord
     from ..pcap_loader.packet_index import PacketIndexBuilder
     from .packet_decoder import decode_packet
+except ImportError:
+    from models.packet import RawPacket, DecodedPacket
+    from models.index_record import PacketIndexRecord
+    from pcap_loader.packet_index import PacketIndexBuilder
+    from capture.packet_decoder import decode_packet
