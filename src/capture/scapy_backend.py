@@ -239,3 +239,65 @@ class ScapyBackend(ICaptureBackend):
                         stats['packets_since_update'] = 0
                         stats['bytes_since_update'] = 0
                         stats['last_update'] = current_time
+                        
+                except Exception as e:
+                    print(f"Error in packet callback: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
+            try:
+                # DEBUG: Before starting sniffer
+                print(f"DEBUG: Creating AsyncSniffer with interface='{actual_iface_name}'")
+                
+                # Start Scapy AsyncSniffer
+                sniffer = AsyncSniffer(
+                    iface=actual_iface_name,
+                    prn=packet_callback,
+                    filter=config.filter,
+                    store=False,  # Don't store in Scapy's memory
+                    promisc=config.promisc,
+                    monitor=config.monitor,
+                    timeout=config.timeout_ms,  # Use config timeout
+                )
+                
+                print(f"DEBUG: Starting sniffer...")
+                sniffer.start()
+                print(f"DEBUG: Sniffer started successfully")
+                
+            except Exception as e:
+                print(f"ERROR: Failed to start capture on '{actual_iface_name}': {e}")
+                print(f"Error type: {type(e).__name__}")
+                import traceback
+                traceback.print_exc()
+                
+                # Suggest common fixes
+                if "The system cannot find the file specified" in str(e):
+                    print("\nTROUBLESHOOTING:")
+                    print("1. Make sure NpCap is installed from https://npcap.com/")
+                    print("2. Run as Administrator")
+                    print("3. Try a different interface name")
+                    print("   Use 'asphalt capture --interface list' to see available interfaces")
+                
+                raise RuntimeError(f"Failed to start capture: {e}")
+            
+            # Store session
+            self._sessions[session_id] = {
+                'sniffer': sniffer,
+                'queue': packet_queue,
+                'stop_event': stop_event,
+                'config': config,
+                'actual_interface': actual_iface_name,  # Store actual interface used
+                'stats': stats,
+                'stats_lock': threading.Lock(),
+            }
+        
+        # Start stats updater thread
+        def stats_updater():
+            """Update stats periodically (backup in case packet_callback fails)."""
+            while not stop_event.is_set():
+                time.sleep(1)
+                with self._lock:
+                    if session_id in self._sessions:
+                        session = self._sessions[session_id]
+                        session_stats = session['stats']
+                        session_queue = session['queue']

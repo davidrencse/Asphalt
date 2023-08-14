@@ -21,3 +21,21 @@ class RawPacket:
         self.capture_length = capture_length
         self.wire_length = wire_length
         self.interface = interface
+
+# Now import from same directory
+from .scapy_backend import ScapyBackend, CaptureConfig
+
+class LiveCaptureSource(IPacketSource):
+    """Live packet capture source using Scapy."""
+    
+    def __init__(self, interface: str, filter: Optional[str] = None, 
+                 promisc: bool = True, snaplen: int = 65535):
+        self.backend = ScapyBackend()
+        self.config = CaptureConfig(
+            interface=interface,
+            filter=filter,
+            promisc=promisc,
+            snaplen=snaplen
+        )
+        self.session_id: Optional[str] = None
+        self._capturing = False
