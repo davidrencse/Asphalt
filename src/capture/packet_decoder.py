@@ -123,3 +123,60 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
             )
         ethertype = struct.unpack_from("!H", data, 12)[0]
         offset = 14
+
+        # VLAN tags (single or double)
+        for _ in range(2):
+            if ethertype in (ETH_TYPE_VLAN, ETH_TYPE_QINQ):
+                is_vlan = True
+                if cap_len < offset + 4:
+                    quality |= DecodeQuality.MALFORMED_L2
+                    return DecodedPacket(
+                        raw_packet=raw,
+                        protocol_stack=tuple(protocol_stack + ["VLAN"]),
+                        quality_flags=int(quality),
+                    )
+                protocol_stack.append("VLAN")
+                ethertype = struct.unpack_from("!H", data, offset + 2)[0]
+                offset += 4
+            else:
+                break
+        eth_type = ethertype
+
+        if ethertype == ETH_TYPE_IPV4:
+            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv4_fragment = _parse_ipv4(data, offset)
+            quality |= l3_quality
+            protocol_stack.append("IP4")
+            if l4_offset is None:
+                return _finalize(raw, protocol_stack, ip_version, src_ip, dst_ip, l4_protocol,
+                                 ip_protocol, src_port, dst_port, tcp_flags, ttl, quality,
+                                 eth_type, src_mac, dst_mac, is_vlan, is_arp, is_multicast, is_broadcast,
+                                 is_ipv4_fragment, is_ipv6_fragment,
+                                 tcp_seq, tcp_ack, tcp_window, tcp_mss,
+                                 arp_sender_ip, arp_sender_mac,
+                                 dns_qname, dns_is_query, dns_is_response, dns_rcode)
+            l4_protocol, src_port, dst_port, tcp_flags, tcp_seq, tcp_ack, tcp_window, tcp_mss, l4_payload_offset, tcp_header_len, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
+            quality |= l4_quality
+            if l4_protocol:
+                protocol_stack.append(l4_protocol)
+        elif ethertype == ETH_TYPE_IPV6:
+            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv6_fragment = _parse_ipv6(data, offset)
+            quality |= l3_quality
+            protocol_stack.append("IP6")
+            if l4_offset is None:
+                return _finalize(raw, protocol_stack, ip_version, src_ip, dst_ip, l4_protocol,
+                                 ip_protocol, src_port, dst_port, tcp_flags, ttl, quality,
+                                 eth_type, src_mac, dst_mac, is_vlan, is_arp, is_multicast, is_broadcast,
+                                 is_ipv4_fragment, is_ipv6_fragment,
+                                 tcp_seq, tcp_ack, tcp_window, tcp_mss,
+                                 arp_sender_ip, arp_sender_mac,
+                                 dns_qname, dns_is_query, dns_is_response, dns_rcode)
+            l4_protocol, src_port, dst_port, tcp_flags, tcp_seq, tcp_ack, tcp_window, tcp_mss, l4_payload_offset, tcp_header_len, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
+            quality |= l4_quality
+            if l4_protocol:
+                protocol_stack.append(l4_protocol)
+        elif ethertype == ETH_TYPE_ARP:
+            protocol_stack.append("ARP")
+            is_arp = True
+            arp_sender_mac, arp_sender_ip = _parse_arp(data, offset)
+        else:
+            quality |= DecodeQuality.UNKNOWN_L3
