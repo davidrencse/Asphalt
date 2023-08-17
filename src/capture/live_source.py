@@ -39,3 +39,8 @@ class LiveCaptureSource(IPacketSource):
         )
         self.session_id: Optional[str] = None
         self._capturing = False
+    
+    def open(self):
+        """Start capture."""
+        self.session_id = self.backend.start(self.config)
+        self._capturing = True

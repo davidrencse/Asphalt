@@ -345,3 +345,36 @@ class ScapyBackend(ICaptureBackend):
         with self._lock:
             if session_id not in self._sessions:
                 raise ValueError(f"Session {session_id} not found")
+            
+            session = self._sessions[session_id]
+            
+            # Signal stop
+            session['stop_event'].set()
+            
+            # Stop Scapy sniffer
+            session['sniffer'].stop()
+            
+            # Wait for it to stop
+            time.sleep(0.5)
+            
+            # Prepare metadata
+            metadata = {
+                'session_id': session_id,
+                'backend': 'scapy',
+                'interface': session['config'].interface,
+                'start_ts': session['stats']['start_time'],
+                'end_ts': time.time(),
+                'config': {
+                    'interface': session['config'].interface,
+                    'snaplen': session['config'].snaplen,
+                    'promisc': session['config'].promisc,
+                    'filter': session['config'].filter,
+                },
+                'stats_summary': session['stats'].copy()
+            }
+            
+            # Remove final queue items
+            metadata['stats_summary']['final_queue_size'] = session['queue'].qsize()
+            
+            # Remove session
+            del self._sessions[session_id]
