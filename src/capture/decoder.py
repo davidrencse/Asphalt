@@ -29,3 +29,10 @@ class PacketDecoder:
     def decode_stream(self, packets: Iterable[RawPacket]) -> Iterator[DecodedPacket]:
         for packet in packets:
             yield decode_packet(packet)
+
+
+def enrich_index_record(record: PacketIndexRecord,
+                        decoded: Optional[DecodedPacket]) -> PacketIndexRecord:
+    """Return a new PacketIndexRecord enriched with decoded fields."""
+    if decoded is None:
+        return record

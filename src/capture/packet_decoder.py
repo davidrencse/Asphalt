@@ -180,3 +180,94 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
             arp_sender_mac, arp_sender_ip = _parse_arp(data, offset)
         else:
             quality |= DecodeQuality.UNKNOWN_L3
+
+    elif raw.link_type == DLT_RAW:
+        # Raw IP without L2 header
+        if cap_len < 1:
+            quality |= DecodeQuality.MALFORMED_L3
+            return DecodedPacket(raw_packet=raw, quality_flags=int(quality))
+        version = data[0] >> 4
+        if version == 4:
+            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv4_fragment = _parse_ipv4(data, 0)
+            quality |= l3_quality
+            protocol_stack.append("IP4")
+        elif version == 6:
+            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv6_fragment = _parse_ipv6(data, 0)
+            quality |= l3_quality
+            protocol_stack.append("IP6")
+        else:
+            quality |= DecodeQuality.UNKNOWN_L3
+            l4_offset = None
+        if l4_offset is not None:
+            l4_protocol, src_port, dst_port, tcp_flags, tcp_seq, tcp_ack, tcp_window, tcp_mss, l4_payload_offset, tcp_header_len, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
+            quality |= l4_quality
+            if l4_protocol:
+                protocol_stack.append(l4_protocol)
+
+    elif raw.link_type == DLT_LINUX_SLL:
+        protocol_stack.append("SLL")
+        if cap_len < 16:
+            quality |= DecodeQuality.MALFORMED_L2
+            return DecodedPacket(raw_packet=raw, protocol_stack=tuple(protocol_stack), quality_flags=int(quality))
+        ethertype = struct.unpack_from("!H", data, 14)[0]
+        eth_type = ethertype
+        offset = 16
+        if ethertype == ETH_TYPE_IPV4:
+            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv4_fragment = _parse_ipv4(data, offset)
+            quality |= l3_quality
+            protocol_stack.append("IP4")
+            if l4_offset is not None:
+                l4_protocol, src_port, dst_port, tcp_flags, tcp_seq, tcp_ack, tcp_window, tcp_mss, l4_payload_offset, tcp_header_len, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
+                quality |= l4_quality
+                if l4_protocol:
+                    protocol_stack.append(l4_protocol)
+        elif ethertype == ETH_TYPE_IPV6:
+            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv6_fragment = _parse_ipv6(data, offset)
+            quality |= l3_quality
+            protocol_stack.append("IP6")
+            if l4_offset is not None:
+                l4_protocol, src_port, dst_port, tcp_flags, tcp_seq, tcp_ack, tcp_window, tcp_mss, l4_payload_offset, tcp_header_len, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
+                quality |= l4_quality
+                if l4_protocol:
+                    protocol_stack.append(l4_protocol)
+        else:
+            quality |= DecodeQuality.UNKNOWN_L3
+
+    elif raw.link_type == DLT_NULL:
+        if cap_len < 4:
+            quality |= DecodeQuality.MALFORMED_L2
+        else:
+            family_le = struct.unpack_from("<I", data, 0)[0]
+            family_be = struct.unpack_from(">I", data, 0)[0]
+            family = family_le if family_le in (2, 24, 28, 30) else family_be
+            offset = 4
+            if family == 2:
+                ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv4_fragment = _parse_ipv4(data, offset)
+                quality |= l3_quality
+                protocol_stack.append("IP4")
+            elif family in (24, 28, 30):
+                ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv6_fragment = _parse_ipv6(data, offset)
+                quality |= l3_quality
+                protocol_stack.append("IP6")
+            else:
+                quality |= DecodeQuality.UNKNOWN_L3
+                l4_offset = None
+            if l4_offset is not None:
+                l4_protocol, src_port, dst_port, tcp_flags, tcp_seq, tcp_ack, tcp_window, tcp_mss, l4_payload_offset, tcp_header_len, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
+                quality |= l4_quality
+                if l4_protocol:
+                    protocol_stack.append(l4_protocol)
+
+    else:
+        quality |= DecodeQuality.UNSUPPORTED_LINKTYPE
+
+    # IP-level multicast/broadcast detection (fallback for non-ethernet sources)
+    if dst_ip:
+        try:
+            ip_obj = ipaddress.ip_address(dst_ip)
+            if ip_obj.is_multicast:
+                is_multicast = True
+            if ip_obj.version == 4 and dst_ip == "255.255.255.255":
+                is_broadcast = True
+        except Exception:
+            pass
