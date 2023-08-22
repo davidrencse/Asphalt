@@ -36,3 +36,12 @@ def enrich_index_record(record: PacketIndexRecord,
     """Return a new PacketIndexRecord enriched with decoded fields."""
     if decoded is None:
         return record
+
+    src_ip = decoded.src_ip if decoded.src_ip else record.src_ip
+    dst_ip = decoded.dst_ip if decoded.dst_ip else record.dst_ip
+    src_port = decoded.src_port if decoded.src_port is not None else record.src_port
+    dst_port = decoded.dst_port if decoded.dst_port is not None else record.dst_port
+    protocol = decoded.ip_protocol if decoded.ip_protocol else record.protocol
+    stack_summary = decoded.stack_summary if decoded.protocol_stack else record.stack_summary
+    flags = decoded.tcp_flags if decoded.tcp_flags is not None else record.flags
+    ttl = decoded.ttl if decoded.ttl is not None else record.ttl
