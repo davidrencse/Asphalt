@@ -378,3 +378,30 @@ class ScapyBackend(ICaptureBackend):
             
             # Remove session
             del self._sessions[session_id]
+            
+            return metadata
+    
+    def get_stats(self, session_id: str) -> Dict[str, Any]:
+        with self._lock:
+            if session_id not in self._sessions:
+                raise ValueError(f"Session {session_id} not found")
+            
+            session = self._sessions[session_id]
+            with session['stats_lock']:
+                return session['stats'].copy()
+    
+    def get_packets(self, session_id: str, count: int = 100) -> List[Dict]:
+        """Get captured packets from the queue."""
+        with self._lock:
+            if session_id not in self._sessions:
+                raise ValueError(f"Session {session_id} not found")
+            
+            session = self._sessions[session_id]
+            packets = []
+            for _ in range(count):
+                try:
+                    packets.append(session['queue'].get_nowait())
+                except queue.Empty:
+                    break
+            
+            return packets

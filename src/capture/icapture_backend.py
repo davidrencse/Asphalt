@@ -28,3 +28,13 @@ class ICaptureBackend(ABC):
     def stop(self, session_id: str) -> Dict[str, Any]:
         """Stop capture, return session metadata."""
         pass
+    
+    @abstractmethod
+    def get_stats(self, session_id: str) -> Dict[str, Any]:
+        """Get current capture statistics."""
+        pass
+    
+    @abstractmethod
+    def get_packets(self, session_id: str, count: int = 100) -> List[Dict]:
+        """Get captured packets from queue."""
+        pass
