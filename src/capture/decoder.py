@@ -45,3 +45,15 @@ def enrich_index_record(record: PacketIndexRecord,
     stack_summary = decoded.stack_summary if decoded.protocol_stack else record.stack_summary
     flags = decoded.tcp_flags if decoded.tcp_flags is not None else record.flags
     ttl = decoded.ttl if decoded.ttl is not None else record.ttl
+
+    return replace(
+        record,
+        src_ip=src_ip,
+        dst_ip=dst_ip,
+        src_port=src_port,
+        dst_port=dst_port,
+        protocol=protocol,
+        stack_summary=stack_summary,
+        flags=flags,
+        ttl=ttl,
+    )
