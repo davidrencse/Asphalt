@@ -44,3 +44,19 @@ class LiveCaptureSource(IPacketSource):
         """Start capture."""
         self.session_id = self.backend.start(self.config)
         self._capturing = True
+    
+    def __iter__(self) -> Iterator[RawPacket]:
+        """Yield captured packets."""
+        if not self.session_id or not self._capturing:
+            raise RuntimeError("Capture not started. Call open() first.")
+        
+        while self._capturing:
+            packets = self.backend.get_packets(self.session_id, count=100)
+            for pkt in packets:
+                yield RawPacket(
+                    timestamp=int(pkt['ts'] * 1_000_000),  # Convert to microseconds
+                    data=pkt['data'],
+                    capture_length=len(pkt['data']),
+                    wire_length=pkt['wirelen'],
+                    interface=self.config.interface
+                )

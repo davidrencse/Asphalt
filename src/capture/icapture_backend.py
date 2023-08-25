@@ -38,3 +38,8 @@ class ICaptureBackend(ABC):
     def get_packets(self, session_id: str, count: int = 100) -> List[Dict]:
         """Get captured packets from queue."""
         pass
+    
+    @abstractmethod
+    def list_interfaces(self) -> List[Dict]:
+        """List available network interfaces."""
+        pass
