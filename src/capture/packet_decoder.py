@@ -355,3 +355,16 @@ def _finalize(raw: RawPacket,
         ttl=ttl,
         quality_flags=int(quality),
     )
+
+
+def _parse_ipv4(data: bytes, offset: int) -> Tuple[int, Optional[str], Optional[str], int, Optional[int], Optional[int], DecodeQuality, bool]:
+    cap_len = len(data)
+    if offset + 20 > cap_len:
+        return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3, False
+    vihl = data[offset]
+    version = vihl >> 4
+    ihl = (vihl & 0x0F) * 4
+    if version != 4 or ihl < 20:
+        return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3, False
+    if offset + ihl > cap_len:
+        return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3, False
