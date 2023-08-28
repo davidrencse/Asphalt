@@ -427,3 +427,50 @@ def _parse_l4(data: bytes, offset: int, ip_protocol: int) -> Tuple[Optional[str]
 
     if ip_protocol == IP_PROTO_ICMP:
         return "ICMP", None, None, None, None, None, None, None, None, None, DecodeQuality.OK
+
+    if ip_protocol == IP_PROTO_ICMPV6:
+        return "ICMP6", None, None, None, None, None, None, None, None, None, DecodeQuality.OK
+
+    return None, None, None, None, None, None, None, None, None, None, DecodeQuality.UNKNOWN_L4
+
+
+def _format_ipv4(addr: bytes) -> Optional[str]:
+    if len(addr) != 4:
+        return None
+    return "{}.{}.{}.{}".format(addr[0], addr[1], addr[2], addr[3])
+
+
+def _format_ipv6(addr: bytes) -> Optional[str]:
+    if len(addr) != 16:
+        return None
+    try:
+        return str(ipaddress.IPv6Address(addr))
+    except Exception:
+        return None
+
+
+def _format_mac(addr: Optional[bytes]) -> Optional[str]:
+    if not addr or len(addr) != 6:
+        return None
+    return ":".join(f"{b:02x}" for b in addr)
+
+
+def _parse_mss_option(options: bytes) -> Optional[int]:
+    idx = 0
+    length = len(options)
+    while idx < length:
+        kind = options[idx]
+        if kind == 0:
+            break
+        if kind == 1:
+            idx += 1
+            continue
+        if idx + 1 >= length:
+            break
+        opt_len = options[idx + 1]
+        if opt_len < 2 or idx + opt_len > length:
+            break
+        if kind == 2 and opt_len == 4:
+            return struct.unpack_from("!H", options, idx + 2)[0]
+        idx += opt_len
+    return None

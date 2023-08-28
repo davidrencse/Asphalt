@@ -57,3 +57,13 @@ def enrich_index_record(record: PacketIndexRecord,
         flags=flags,
         ttl=ttl,
     )
+
+
+def build_index_record(builder: PacketIndexBuilder,
+                       packet: RawPacket,
+                       decoded: Optional[DecodedPacket] = None) -> PacketIndexRecord:
+    """Create a PacketIndexRecord with optional decoded enrichment."""
+    record = builder.create_index_record(packet, decoded=decoded)
+    if decoded is None:
+        return record
+    return enrich_index_record(record, decoded)
