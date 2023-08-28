@@ -60,3 +60,14 @@ class LiveCaptureSource(IPacketSource):
                     wire_length=pkt['wirelen'],
                     interface=self.config.interface
                 )
+            
+            if not packets:
+                time.sleep(0.01)  # Small sleep to prevent busy waiting
+    
+    def close(self):
+        """Stop capture."""
+        if self.session_id and self._capturing:
+            metadata = self.backend.stop(self.session_id)
+            self._capturing = False
+            return metadata
+        return None
