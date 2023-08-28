@@ -368,3 +368,62 @@ def _parse_ipv4(data: bytes, offset: int) -> Tuple[int, Optional[str], Optional[
         return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3, False
     if offset + ihl > cap_len:
         return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3, False
+
+    ttl = data[offset + 8]
+    ip_proto = data[offset + 9]
+    flags_frag = struct.unpack_from("!H", data, offset + 6)[0]
+    frag_offset = flags_frag & 0x1FFF
+    more_frag = (flags_frag & 0x2000) != 0
+    is_fragment = frag_offset != 0 or more_frag
+    src_ip = _format_ipv4(data[offset + 12:offset + 16])
+    dst_ip = _format_ipv4(data[offset + 16:offset + 20])
+    l4_offset = offset + ihl
+    return 4, src_ip, dst_ip, ip_proto, ttl, l4_offset, DecodeQuality.OK, is_fragment
+
+
+def _parse_ipv6(data: bytes, offset: int) -> Tuple[int, Optional[str], Optional[str], int, Optional[int], Optional[int], DecodeQuality, bool]:
+    cap_len = len(data)
+    if offset + 40 > cap_len:
+        return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3, False
+    version = data[offset] >> 4
+    if version != 6:
+        return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3, False
+
+    next_header = data[offset + 6]
+    hop_limit = data[offset + 7]
+    src_ip = _format_ipv6(data[offset + 8:offset + 24])
+    dst_ip = _format_ipv6(data[offset + 24:offset + 40])
+
+    is_fragment = next_header == 44
+    l4_offset = None if is_fragment else offset + 40
+    return 6, src_ip, dst_ip, next_header, hop_limit, l4_offset, DecodeQuality.OK, is_fragment
+
+
+def _parse_l4(data: bytes, offset: int, ip_protocol: int) -> Tuple[Optional[str], Optional[int], Optional[int], Optional[int], Optional[int], Optional[int], Optional[int], Optional[int], Optional[int], Optional[int], DecodeQuality]:
+    cap_len = len(data)
+
+    if ip_protocol == IP_PROTO_TCP:
+        if offset + 20 > cap_len:
+            return None, None, None, None, None, None, None, None, None, None, DecodeQuality.MALFORMED_L4
+        src_port, dst_port = struct.unpack_from("!HH", data, offset)
+        seq = struct.unpack_from("!I", data, offset + 4)[0]
+        ack = struct.unpack_from("!I", data, offset + 8)[0]
+        data_offset = (data[offset + 12] >> 4) * 4
+        if data_offset < 20 or offset + data_offset > cap_len:
+            return "TCP", src_port, dst_port, None, seq, ack, None, None, None, None, DecodeQuality.MALFORMED_L4
+        flags = data[offset + 13]
+        window = struct.unpack_from("!H", data, offset + 14)[0]
+        mss = None
+        if data_offset > 20:
+            options = data[offset + 20: offset + data_offset]
+            mss = _parse_mss_option(options)
+        return "TCP", src_port, dst_port, flags, seq, ack, window, mss, offset + data_offset, data_offset, DecodeQuality.OK
+
+    if ip_protocol == IP_PROTO_UDP:
+        if offset + 8 > cap_len:
+            return None, None, None, None, None, None, None, None, None, None, DecodeQuality.MALFORMED_L4
+        src_port, dst_port = struct.unpack_from("!HH", data, offset)
+        return "UDP", src_port, dst_port, None, None, None, None, None, offset + 8, None, DecodeQuality.OK
+
+    if ip_protocol == IP_PROTO_ICMP:
+        return "ICMP", None, None, None, None, None, None, None, None, None, DecodeQuality.OK
