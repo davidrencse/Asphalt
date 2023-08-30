@@ -474,3 +474,87 @@ def _parse_mss_option(options: bytes) -> Optional[int]:
             return struct.unpack_from("!H", options, idx + 2)[0]
         idx += opt_len
     return None
+
+
+def _parse_arp(data: bytes, offset: int) -> Tuple[Optional[str], Optional[str]]:
+    # Ethernet ARP payload starts at offset; expect IPv4/ETH (hlen=6, plen=4)
+    if offset + 28 > len(data):
+        return None, None
+    try:
+        htype, ptype, hlen, plen, _ = struct.unpack_from("!HHBBH", data, offset)
+        if hlen != 6 or plen != 4:
+            return None, None
+        sha = data[offset + 8:offset + 14]
+        spa = data[offset + 14:offset + 18]
+        return _format_mac(sha), _format_ipv4(spa)
+    except Exception:
+        return None, None
+
+
+def _maybe_parse_dns(data: bytes,
+                     l4_protocol: Optional[str],
+                     src_port: Optional[int],
+                     dst_port: Optional[int],
+                     payload_offset: Optional[int],
+                     tcp_header_len: Optional[int]) -> Tuple[Optional[str], Optional[bool], Optional[bool], Optional[int]]:
+    if src_port != 53 and dst_port != 53:
+        return None, None, None, None
+    if payload_offset is None:
+        return None, None, None, None
+    if l4_protocol == "UDP":
+        payload = data[payload_offset:]
+        return _parse_dns_payload(payload, False)
+    if l4_protocol == "TCP":
+        if tcp_header_len is None:
+            return None, None, None, None
+        payload = data[payload_offset:]
+        return _parse_dns_payload(payload, True)
+    return None, None, None, None
+
+
+def _parse_dns_payload(payload: bytes, is_tcp: bool) -> Tuple[Optional[str], Optional[bool], Optional[bool], Optional[int]]:
+    if is_tcp:
+        if len(payload) < 2:
+            return None, None, None, None
+        msg_len = struct.unpack_from("!H", payload, 0)[0]
+        payload = payload[2:2 + msg_len]
+    if len(payload) < 12:
+        return None, None, None, None
+    flags = struct.unpack_from("!H", payload, 2)[0]
+    qr = (flags >> 15) & 0x1
+    rcode = flags & 0xF
+    qdcount = struct.unpack_from("!H", payload, 4)[0]
+    if qdcount < 1:
+        return None, bool(qr == 0), bool(qr == 1), rcode
+    name, _ = _parse_dns_name(payload, 12)
+    return name, bool(qr == 0), bool(qr == 1), rcode
+
+
+def _parse_dns_name(payload: bytes, offset: int, depth: int = 0) -> Tuple[Optional[str], int]:
+    if depth > 5:
+        return None, offset
+    labels = []
+    idx = offset
+    length = len(payload)
+    while idx < length:
+        length_octet = payload[idx]
+        if length_octet == 0:
+            idx += 1
+            break
+        if (length_octet & 0xC0) == 0xC0:
+            if idx + 1 >= length:
+                return None, idx + 1
+            pointer = ((length_octet & 0x3F) << 8) | payload[idx + 1]
+            name, _ = _parse_dns_name(payload, pointer, depth + 1)
+            if name:
+                labels.append(name)
+            idx += 2
+            break
+        label_len = length_octet
+        idx += 1
+        if idx + label_len > length:
+            return None, idx + label_len
+        label = payload[idx:idx + label_len].decode("ascii", errors="ignore")
+        labels.append(label)
+        idx += label_len
+    return ".".join([l for l in labels if l]), idx
