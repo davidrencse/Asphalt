@@ -71,3 +71,9 @@ class LiveCaptureSource(IPacketSource):
             self._capturing = False
             return metadata
         return None
+    
+    def get_stats(self):
+        """Get current capture statistics."""
+        if self.session_id:
+            return self.backend.get_stats(self.session_id)
+        return None
