@@ -66,4 +66,46 @@ class PcapReader(IPacketSource):
         self.link_type = self.DLT_EN10MB # Default ethernet
 
         # 6. _packet_count: 0 (count packets as we read)
-        self._packet_count = 0
+        self._packet_count = 0 
+
+        # 7. _time_range: None (track (start_us, end_us))
+        self._time_range = None
+
+        # 8. _file_size: 0 (set in open())
+        self._file_size = 0
+
+        # 9. _current_offset: 0 (track position in file)
+        self._current_offset = 0 
+        
+    def open(self):
+        """
+        Open and validate PCAP file.
+        
+        Implementation of abstract method from IPacketSource.
+        """
+        # TODO:
+        # 1. Check file exists with os.path.exists()
+        if not os.path.exists(self.filepath):
+            raise FileNotFoundError(f"PCAP file not found: {self.filepath}")
+        
+        # 2. Open file: self.file_handle = open(self.filepath, 'rb')
+        self.file_handle = open(self.filepath, 'rb')
+
+        # 3. Get file size: self._file_size = os.path.getsize(self.filepath)
+        self._file_size = os.path.getsize(self.filepath)
+
+        # 4. Call self._read_global_header() to validate and set format
+        self._read_global_header()
+
+        # 5. Create memory map
+        try:
+            self.mmap = mmap.mmap(
+                self.file_handle.fileno(), 
+                0,  # Map entire file
+                access=mmap.ACCESS_READ
+            )
+        except Exception as e:
+            # Close file if mmap fails
+            self.file_handle.close()
+            self.file_handle = None
+            raise PcapFormatError(f"Failed to memory map file: {e}")
