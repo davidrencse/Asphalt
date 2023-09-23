@@ -11,3 +11,7 @@ class PcapError(Exception):
 class PcapFormatError(PcapError):
     """Raised when PCAP file format is invalid or corrupt."""
     pass
+
+class PcapEOFError(PcapFormatError):
+    """Raised when PCAP file ends unexpectedly (truncated)."""
+    pass
