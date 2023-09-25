@@ -109,3 +109,65 @@ class PcapReader(IPacketSource):
             self.file_handle.close()
             self.file_handle = None
             raise PcapFormatError(f"Failed to memory map file: {e}")
+
+        # 6. Set self._current_offset = 24 (skip global header)
+        self._current_offset = 24
+
+    
+    def _read_global_header(self):
+        
+        # Read and validate PCAP global header (24 bytes).
+        
+        # TODO:
+        # 1. Read first 24 bytes from file_handle
+        self.file_handle.seek(0)
+        header_data = self.file_handle.read(24)
+        # 2. Check length >= 24 bytes
+        if len(header_data) < 24:
+            raise PcapFormatError("File too small for PCAP header")
+        
+        # 3. Read magic number (first 4 bytes) to determine:
+        #    - byte_order ('>' or '<')
+        #    - is_nanosecond (True for nanosecond formats)
+        magic_number, = struct.unpack('>I', header_data[0:4])
+
+        # 4. Parse rest of header to get link_type
+        if magic_number == self.MAGIC_NUMBER_BIG_ENDIAN:
+            self.byte_order = '>'
+            self.is_nanosecond = False
+        elif magic_number == self.MAGIC_NUMBER_LITTLE_ENDIAN:
+            self.byte_order = '<'
+            self.is_nanosecond = False
+        elif magic_number == self.MAGIC_NUMBER_BIG_ENDIAN_NANO:
+            self.byte_order = '>'
+            self.is_nanosecond = True
+        elif magic_number == self.MAGIC_NUMBER_LITTLE_ENDIAN_NANO:
+            self.byte_order = '<'
+            self.is_nanosecond = True
+        else:
+            # Try little-endian interpretation for better error message
+            magic_le, = struct.unpack('<I', header_data[0:4])
+            raise PcapFormatError(
+                f"Invalid PCAP magic number: 0x{magic_number:08x} (big) / "
+                f"0x{magic_le:08x} (little). Expected one of the valid magic numbers."
+            )
+        # Step 5: Parse rest of header (bytes 4-24)
+        # Format string: 'HHIIII' means:
+        # H = unsigned short (2 bytes) - version_major
+        # H = unsigned short (2 bytes) - version_minor  
+        # I = unsigned int (4 bytes) - timezone offset (ignore)
+        # I = unsigned int (4 bytes) - timestamp accuracy (ignore)
+        # I = unsigned int (4 bytes) - snaplen (max packet size)
+        # I = unsigned int (4 bytes) - link_type
+        fmt = self.byte_order + 'HHIIII'
+        version_major, version_minor, _, _, snaplen, self.link_type = \
+            struct.unpack(fmt, header_data[4:24])
+        
+    
+    def __iter__(self) -> Iterator[RawPacket]:
+        """
+        Read packets from file and yield them.
+        """
+        # 1. Check self.mmap exists (raise error if not opened)
+        if self.mmap is None:
+            raise RuntimeError("PCAP file not opened. Call open() or use 'with' statement.")

@@ -21,3 +21,15 @@ except ImportError as e:
     print(f"Warning: Failed to import pcap_loader modules: {e}")
     print("You may need to run Python from the project root with -m flag")
     raise
+
+__all__ = [
+    'IPacketSource',
+    'PcapReader',
+    'PcapngReader',
+    'PacketIndexBuilder',
+    'SessionManifest',
+    'PcapError',
+    'PcapFormatError', 
+    'PcapEOFError',
+    'PcapngError',
+    'PcapngFormatError',
