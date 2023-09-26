@@ -171,3 +171,50 @@ class PcapReader(IPacketSource):
         # 1. Check self.mmap exists (raise error if not opened)
         if self.mmap is None:
             raise RuntimeError("PCAP file not opened. Call open() or use 'with' statement.")
+        
+        # 2. Start at offset = 24 (after global header)
+        offset = 24  # Use local variable, not self._current_offset for iteration
+        
+        # 3. packet_id = 1 (MUST start at 1!)
+        packet_id = 1
+        
+        # 4. While there's enough bytes for a packet header (16 bytes):
+        while offset + 16 <= len(self.mmap):
+            
+            # a. Store packet start for pcap_ref
+            packet_start = offset
+            
+            # b. Read packet header (16 bytes from mmap[offset:offset+16])
+            header = self.mmap[offset:offset + 16]
+            if len(header) < 16:
+                # Truncated header - end of file
+                break
+            
+            # c. Parse header with struct.unpack(self.byte_order + 'IIII')
+            # Format: 'IIII' = 4 unsigned integers:
+            #   ts_sec: timestamp seconds
+            #   ts_frac: timestamp fraction (micro/nanoseconds)
+            #   caplen: captured length (bytes actually saved)
+            #   wirelen: wire length (original packet size)
+            fmt = self.byte_order + 'IIII'
+            ts_sec, ts_frac, caplen, wirelen = struct.unpack(fmt, header)
+            
+            # d. Calculate timestamp_us (convert seconds + microseconds/nanoseconds)
+            if self.is_nanosecond:
+                # ts_frac is nanoseconds, convert to microseconds
+                timestamp_us = ts_sec * 1_000_000 + ts_frac // 1000
+            else:
+                # ts_frac is already microseconds
+                timestamp_us = ts_sec * 1_000_000 + ts_frac
+            
+            # Move to data start (after 16-byte header)
+            offset += 16
+            data_start = offset
+            
+            # e. Validate packet data fits in file
+            if offset + caplen > len(self.mmap):
+                raise PcapEOFError(
+                    f"Packet {packet_id} truncated: "
+                    f"expected {caplen} bytes at offset {offset}, "
+                    f"but file only has {len(self.mmap)} bytes"
+                )

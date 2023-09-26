@@ -15,3 +15,7 @@ class PcapFormatError(PcapError):
 class PcapEOFError(PcapFormatError):
     """Raised when PCAP file ends unexpectedly (truncated)."""
     pass
+
+class PcapUnsupportedFeatureError(PcapError):
+    """Raised when encountering unsupported PCAP features."""
+    pass
