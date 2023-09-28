@@ -218,3 +218,49 @@ class PcapReader(IPacketSource):
                     f"expected {caplen} bytes at offset {offset}, "
                     f"but file only has {len(self.mmap)} bytes"
                 )
+            
+            # f. Get packet data slice from mmap
+            packet_data = self.mmap[offset:offset + caplen]
+            
+            # g. Create pcap_ref = f"0:{packet_start}:{data_start}"
+            pcap_ref = f"0:{packet_start}:{data_start}"
+            
+            # h. Create RawPacket with all fields
+            packet = RawPacket(
+                packet_id=packet_id,
+                timestamp_us=timestamp_us,
+                captured_length=caplen,
+                original_length=wirelen,
+                link_type=self.link_type,
+                data=bytes(packet_data),  # Convert to bytes for safety
+                pcap_ref=pcap_ref
+            )
+            
+            # i. Yield the RawPacket
+            yield packet
+            
+            # j. Update tracking variables
+            packet_id += 1
+            self._packet_count += 1
+            
+            # Update time range (track earliest and latest timestamps)
+            if self._time_range is None:
+                self._time_range = (timestamp_us, timestamp_us)
+            else:
+                start, end = self._time_range
+                if timestamp_us < start:
+                    start = timestamp_us
+                if timestamp_us > end:
+                    end = timestamp_us
+                self._time_range = (start, end)
+            
+            # k. Move offset to next packet (add caplen + padding)
+            offset += caplen
+            
+            # PCAP files pad packet data to 32-bit (4-byte) boundaries
+            if caplen % 4 != 0:
+                padding = 4 - (caplen % 4)
+                offset += padding
+            
+            # Update current offset (optional, for debugging)
+            self._current_offset = offset

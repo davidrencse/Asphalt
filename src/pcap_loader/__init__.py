@@ -33,3 +33,4 @@ __all__ = [
     'PcapEOFError',
     'PcapngError',
     'PcapngFormatError',
+]
