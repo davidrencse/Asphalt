@@ -19,3 +19,7 @@ class PcapEOFError(PcapFormatError):
 class PcapUnsupportedFeatureError(PcapError):
     """Raised when encountering unsupported PCAP features."""
     pass
+
+class PcapngError(PcapError):
+    """Base exception for PCAPNG-specific errors."""
+    pass

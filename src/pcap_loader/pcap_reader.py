@@ -264,3 +264,44 @@ class PcapReader(IPacketSource):
             
             # Update current offset (optional, for debugging)
             self._current_offset = offset
+        
+        # When loop ends, we've read all packets
+        
+    
+    def close(self):
+        """
+        Close the packet source and release resources.
+        Safe to call multiple times.
+        """
+        # Close memory map
+        if self.mmap is not None:
+            try:
+                self.mmap.close()
+            except:
+                pass  # Already closed or error
+            self.mmap = None
+        
+        # Close file handle
+        if self.file_handle is not None:
+            try:
+                self.file_handle.close()
+            except:
+                pass  # Already closed or error
+            self.file_handle = None
+        
+        # Reset state
+        self._packet_count = 0
+        self._time_range = None
+        self._current_offset = 0
+    
+    def get_index_record(self, packet: RawPacket, packet_id: int) -> PacketIndexRecord:
+        """
+        Create index record for a packet.
+        
+        Implementation of abstract method from IPacketSource.
+        """
+        
+        # Create PacketIndexBuilder instance
+        # Need a session_id, but don't have it yet (will come from SessionManifest)
+        # For now, use a placeholder like "unknown_session"
+        builder = PacketIndexBuilder(session_id="unknown_session")
