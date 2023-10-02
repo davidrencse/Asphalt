@@ -305,3 +305,40 @@ class PcapReader(IPacketSource):
         # Need a session_id, but don't have it yet (will come from SessionManifest)
         # For now, use a placeholder like "unknown_session"
         builder = PacketIndexBuilder(session_id="unknown_session")
+        
+        # Call builder.create_index_record(packet)
+        index_record = builder.create_index_record(packet)
+        
+        # Return the result
+        return index_record
+    
+    def get_session_info(self) -> Dict[str, Any]:
+        """
+        Return session metadata.
+        
+        Implementation of abstract method from IPacketSource.
+        
+        TODO:
+        Return dictionary with these REQUIRED keys:
+        {
+            'packet_count': self._packet_count,
+            'time_range': self._time_range or (0, 0),
+            'link_types': [self.link_type],  # List of link types found
+            'file_size': self._file_size,
+            'format': 'pcap',
+            'byte_order': self.byte_order,
+            'is_nanosecond': self.is_nanosecond,
+            'link_type': self.link_type,
+        }
+        """
+
+        return {
+            'packet_count': self._packet_count,
+            'time_range': self._time_range if self._time_range is not None else (0, 0),
+            'link_types': [self.link_type],  # List of link types found
+            'file_size': self._file_size,
+            'format': 'pcap',
+            'byte_order': self.byte_order,
+            'is_nanosecond': self.is_nanosecond,
+            'link_type': self.link_type,
+        }
