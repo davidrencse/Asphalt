@@ -92,3 +92,74 @@ class PcapngReader(IPacketSource):
         
         # 2. Open file
         self.file_handle = open(self.filepath, 'rb')
+        
+        # 3. Get file size
+        self._file_size = os.path.getsize(self.filepath)
+        
+        # 4. Create memory map
+        try:
+            self.mmap = mmap.mmap(
+                self.file_handle.fileno(),
+                0,  # Map entire file
+                access=mmap.ACCESS_READ
+            )
+        except Exception as e:
+            self.file_handle.close()
+            self.file_handle = None
+            raise PcapngFormatError(f"Failed to memory map file: {e}")
+        
+        # 5. Parse initial blocks to find SHB and IDBs
+        self._parse_initial_blocks()
+        
+        # 6. Set starting offset
+        self._current_offset = 0
+    
+    def _read_block_header(self, offset: int) -> Tuple[int, int]:
+        """
+        Read block type and length at given offset.
+        
+        PCAPNG block format:
+        - Bytes 0-3: Block Type (e.g., 0x0A0D0D0A = Section Header)
+        - Bytes 4-7: Block Total Length (includes header and footer)
+        
+        Args:
+            offset: Position in file to read from
+            
+        Returns:
+            Tuple of (block_type, block_total_length)
+            
+        Raises:
+            PcapEOFError: If not enough bytes for header
+        """
+        # 1. Check we have enough bytes
+        if offset + 8 > len(self.mmap):
+            raise PcapEOFError(f"Not enough bytes for block header at offset {offset}")
+        
+        # 2. Read 8 bytes from memory map
+        header_bytes = self.mmap[offset:offset + 8]
+        
+        # 3. Unpack as two 32-bit unsigned integers (little-endian)
+        block_type, block_length = struct.unpack('<II', header_bytes)
+        
+        # 4. Validate block_length makes sense
+        if block_length < 12:
+            raise PcapngFormatError(
+                f"Invalid block length {block_length} at offset {offset} - "
+                f"must be at least 12 bytes"
+            )
+        
+        if offset + block_length > len(self.mmap):
+            raise PcapEOFError(
+                f"Block extends past end of file: "
+                f"offset={offset}, length={block_length}, "
+                f"file size={len(self.mmap)}"
+            )
+        
+        return block_type, block_length
+    
+    def _parse_section_header_block(self, offset: int):
+        """
+        Parse Section Header Block (SHB).
+        """
+        if self.mmap is None:
+            raise PcapngFormatError("File not memory-mapped")
