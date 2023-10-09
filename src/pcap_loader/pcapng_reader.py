@@ -163,3 +163,40 @@ class PcapngReader(IPacketSource):
         """
         if self.mmap is None:
             raise PcapngFormatError("File not memory-mapped")
+        
+        # Read block type and length
+        block_type, block_length = struct.unpack_from("<II", self.mmap, offset)
+        if block_type != self.BLOCK_TYPE_SECTION_HEADER:
+            raise PcapngFormatError(f"Expected SHB at offset {offset}, got type {hex(block_type)}")
+        
+        # Byte-order magic (4B)
+        bom = struct.unpack_from("<I", self.mmap, offset + 8)[0]
+        if bom != 0x1A2B3C4D:
+            raise PcapngFormatError(f"Invalid byte-order magic: {hex(bom)} (expected 0x1A2B3C4D)")
+        
+        # Version major/minor (2B each)
+        version_major, version_minor = struct.unpack_from("<HH", self.mmap, offset + 12)
+        
+        # Section length (8B signed int, -1 = unknown)
+        section_length = struct.unpack_from("<q", self.mmap, offset + 16)[0]
+        
+        # Validate trailing block length matches
+        trailing_length = struct.unpack_from("<I", self.mmap, offset + block_length - 4)[0]
+        if trailing_length != block_length:
+            raise PcapngFormatError("Mismatched block lengths in SHB")
+        
+        # Update current_section
+        self.current_section.update({
+            'byte_order': 'little',
+            'version_major': version_major,
+            'version_minor': version_minor,
+            'section_length': section_length,
+            'start_offset': offset,
+        })
+    
+    def _parse_interface_description_block(self, offset: int):
+        """
+        Parse Interface Description Block (IDB).
+        """
+        if self.mmap is None:
+            raise PcapngFormatError("File not memory-mapped")
