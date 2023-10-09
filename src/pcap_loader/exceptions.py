@@ -23,3 +23,6 @@ class PcapUnsupportedFeatureError(PcapError):
 class PcapngError(PcapError):
     """Base exception for PCAPNG-specific errors."""
     pass
+
+class PcapngFormatError(PcapngError):
+    """Raised when PCAPNG file format is invalid."""
