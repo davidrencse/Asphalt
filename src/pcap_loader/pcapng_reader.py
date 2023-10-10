@@ -200,3 +200,40 @@ class PcapngReader(IPacketSource):
         """
         if self.mmap is None:
             raise PcapngFormatError("File not memory-mapped")
+        
+        # Read block type and length
+        block_type, block_length = struct.unpack_from("<II", self.mmap, offset)
+        if block_type != self.BLOCK_TYPE_INTERFACE_DESCRIPTION:
+            raise PcapngFormatError(f"Expected IDB at offset {offset}, got type {hex(block_type)}")
+        
+        # Link type (2B), reserved (2B), snaplen (4B)
+        link_type, _, snaplen = struct.unpack_from("<HHI", self.mmap, offset + 8)
+        
+        # Options start at offset + 16; parse some common ones
+        opt_offset = offset + 16
+        interface_info = {
+            'link_type': link_type,
+            'snaplen': snaplen,
+            'tsresol': 6,  # Default μs (10**-6)
+            'name': None,
+        }
+        
+        while True:
+            if opt_offset >= offset + block_length - 4:
+                break
+            opt_code, opt_len = struct.unpack_from("<HH", self.mmap, opt_offset)
+            if opt_code == 0:  # End of options
+                break
+            opt_data_start = opt_offset + 4
+            if opt_code == 2:  # if_name (UTF-8 string)
+                interface_info['name'] = self.mmap[opt_data_start:opt_data_start + opt_len].decode('utf-8', errors='ignore').rstrip('\x00')
+            elif opt_code == 9:  # if_tsresol (1B: unit+exponent)
+                tsresol_byte = self.mmap[opt_data_start]
+                if tsresol_byte & 0x80:  # Binary (2**exponent)
+                    exponent = -(tsresol_byte & 0x7F)
+                else:  # Decimal (10**exponent)
+                    exponent = -tsresol_byte
+                interface_info['tsresol'] = -exponent  # Store as log10 resolution
+            # Pad to 32-bit
+            padded_len = ((opt_len + 3) // 4) * 4
+            opt_offset += 4 + padded_len
