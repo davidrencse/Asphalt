@@ -237,3 +237,55 @@ class PcapngReader(IPacketSource):
             # Pad to 32-bit
             padded_len = ((opt_len + 3) // 4) * 4
             opt_offset += 4 + padded_len
+        
+        # Validate trailing length
+        trailing_length = struct.unpack_from("<I", self.mmap, offset + block_length - 4)[0]
+        if trailing_length != block_length:
+            raise PcapngFormatError("Mismatched block lengths in IDB")
+        
+        # Store: interface_id is sequential
+        interface_id = len(self.interfaces)
+        self.interfaces[interface_id] = interface_info
+    
+    def _parse_enhanced_packet_block(self, offset: int) -> RawPacket:
+        """
+        Parse Enhanced Packet Block (EPB) and return RawPacket.
+        """
+        if self.mmap is None:
+            raise PcapngFormatError("File not memory-mapped")
+        
+        # Read block header (type + length)
+        block_type, block_length = struct.unpack_from("<II", self.mmap, offset)
+        if block_type != self.BLOCK_TYPE_ENHANCED_PACKET:
+            raise PcapngFormatError(f"Expected EPB at offset {offset}, got type {hex(block_type)}")
+        
+        # Read: interface_id (4B), ts_high (4B), ts_low (4B), caplen (4B), wirelen (4B)
+        interface_id, ts_high, ts_low, caplen, wirelen = struct.unpack_from("<IIIII", self.mmap, offset + 8)
+        
+        # Get interface info
+        if_info = self.interfaces.get(interface_id)
+        if if_info is None:
+            raise PcapngFormatError(f"Unknown interface_id {interface_id}")
+        
+        # Calculate timestamp in microseconds
+        ts_raw = (ts_high << 32) | ts_low
+        tsresol = if_info['tsresol']
+        if tsresol == 9:  # ns → μs
+            timestamp_us = ts_raw // 1000
+        elif tsresol == 6:  # μs
+            timestamp_us = ts_raw
+        else:
+            raise NotImplementedError(f"Unsupported tsresol {tsresol}")
+        
+        # Read packet data
+        data_start = offset + 8 + 20  # header + fields
+        data = self.mmap[data_start:data_start + caplen]
+        
+        # Validate trailing length
+        trailing_length = struct.unpack_from("<I", self.mmap, offset + block_length - 4)[0]
+        if trailing_length != block_length:
+            raise PcapngFormatError("Mismatched block lengths in EPB")
+        
+        # Create pcap_ref
+        file_id = "0"  # Use file ID 0 for single-file sessions
+        pcap_ref = f"{file_id}:{offset}"
