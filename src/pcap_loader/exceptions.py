@@ -26,3 +26,4 @@ class PcapngError(PcapError):
 
 class PcapngFormatError(PcapngError):
     """Raised when PCAPNG file format is invalid."""
+    pass
