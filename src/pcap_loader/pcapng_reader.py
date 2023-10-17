@@ -289,3 +289,30 @@ class PcapngReader(IPacketSource):
         # Create pcap_ref
         file_id = "0"  # Use file ID 0 for single-file sessions
         pcap_ref = f"{file_id}:{offset}"
+        
+        # Create RawPacket
+        return RawPacket(
+            packet_id=0,  # Will be assigned in __iter__
+            timestamp_us=timestamp_us,
+            captured_length=caplen,
+            original_length=wirelen,
+            link_type=if_info['link_type'],
+            data=bytes(data),
+            pcap_ref=pcap_ref,
+            interface_id=interface_id,  # Store interface ID
+        )
+    
+    def _parse_initial_blocks(self):
+        """
+        Parse initial blocks to find Section Header and Interface Descriptions.
+        """
+        if self.mmap is None:
+            raise RuntimeError("File not opened")
+        
+        offset = 0
+        found_shb = False
+        
+        while offset < len(self.mmap):
+            # Read block header
+            if offset + 8 > len(self.mmap):
+                break
