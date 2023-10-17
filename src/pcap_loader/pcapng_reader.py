@@ -316,3 +316,67 @@ class PcapngReader(IPacketSource):
             # Read block header
             if offset + 8 > len(self.mmap):
                 break
+            
+            block_type, block_length = self._read_block_header(offset)
+            
+            # Handle SHB first
+            if block_type == self.BLOCK_TYPE_SECTION_HEADER:
+                self._parse_section_header_block(offset)
+                found_shb = True
+            elif block_type == self.BLOCK_TYPE_INTERFACE_DESCRIPTION:
+                self._parse_interface_description_block(offset)
+            else:
+                # Found a packet or unknown block - stop parsing initial metadata
+                break
+            
+            # Move to next block
+            offset += block_length
+        
+        if not found_shb:
+            raise PcapngFormatError("No Section Header Block found")
+        
+        if not self.interfaces:
+            print("Warning: No Interface Description Blocks found")
+    
+    def __iter__(self) -> Iterator[RawPacket]:
+        """
+        Read packets from file and yield them.
+        
+        Implementation of abstract method from IPacketSource.
+        """
+        if self.mmap is None:
+            raise RuntimeError("PCAPNG file not opened. Call open() or use 'with' statement.")
+        
+        offset = 0
+        packet_id = 1
+        
+        while offset < len(self.mmap):
+            if offset + 8 > len(self.mmap):
+                break  # Incomplete block
+            
+            try:
+                block_type, block_length = self._read_block_header(offset)
+            except PcapEOFError:
+                break  # End of file
+            
+            # Process block based on type
+            if block_type == self.BLOCK_TYPE_SECTION_HEADER:
+                # We already parsed SHBs in _parse_initial_blocks
+                pass
+            elif block_type == self.BLOCK_TYPE_INTERFACE_DESCRIPTION:
+                # We already parsed IDBs in _parse_initial_blocks
+                pass
+            elif block_type == self.BLOCK_TYPE_ENHANCED_PACKET:
+                try:
+                    packet = self._parse_enhanced_packet_block(offset)
+                    # Assign packet_id
+                    packet = RawPacket(
+                        packet_id=packet_id,
+                        timestamp_us=packet.timestamp_us,
+                        captured_length=packet.captured_length,
+                        original_length=packet.original_length,
+                        link_type=packet.link_type,
+                        data=packet.data,
+                        pcap_ref=packet.pcap_ref,
+                        interface_id=packet.interface_id,
+                    )
