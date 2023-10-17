@@ -380,3 +380,57 @@ class PcapngReader(IPacketSource):
                         pcap_ref=packet.pcap_ref,
                         interface_id=packet.interface_id,
                     )
+                    
+                    # Store block offset for indexing
+                    self.block_offsets[packet_id] = offset
+                    
+                    # Update statistics
+                    self._packet_count += 1
+                    timestamp_us = packet.timestamp_us
+                    if self._time_range is None:
+                        self._time_range = (timestamp_us, timestamp_us)
+                    else:
+                        start, end = self._time_range
+                        if timestamp_us < start:
+                            start = timestamp_us
+                        if timestamp_us > end:
+                            end = timestamp_us
+                        self._time_range = (start, end)
+                    
+                    yield packet
+                    packet_id += 1
+                    
+                except Exception as e:
+                    print(f"Warning: Failed to parse packet at offset {offset}: {e}")
+                    # Skip this packet and continue
+            elif block_type == self.BLOCK_TYPE_SIMPLE_PACKET:
+                # TODO: Implement SPB parsing
+                pass
+            else:
+                # Unknown block type - skip it
+                pass
+            
+            # Move to next block
+            offset += block_length
+    
+    def close(self):
+        """
+        Close the packet source and release resources.
+        
+        Implementation of abstract method from IPacketSource.
+        """
+        # Close memory map
+        if self.mmap is not None:
+            try:
+                self.mmap.close()
+            except:
+                pass  # Already closed or error
+            self.mmap = None
+        
+        # Close file handle
+        if self.file_handle is not None:
+            try:
+                self.file_handle.close()
+            except:
+                pass  # Already closed or error
+            self.file_handle = None
