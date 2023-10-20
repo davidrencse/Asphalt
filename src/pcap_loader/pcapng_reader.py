@@ -434,3 +434,40 @@ class PcapngReader(IPacketSource):
             except:
                 pass  # Already closed or error
             self.file_handle = None
+        
+        # Reset state
+        self._packet_count = 0
+        self._time_range = None
+        self._current_offset = 0
+        self.block_offsets.clear()
+        # Keep interfaces and current_section for potential reuse
+    
+    def get_index_record(self, packet: RawPacket, packet_id: int) -> PacketIndexRecord:
+        """
+        Create index record for a packet.
+        
+        Implementation of abstract method from IPacketSource.
+        """
+        # Create builder with placeholder session ID
+        builder = PacketIndexBuilder(session_id="pcapng_session_placeholder")
+        
+        # Create index record
+        return builder.create_index_record(packet)
+    
+    def get_session_info(self) -> Dict[str, Any]:
+        """
+        Return session metadata.
+        
+        Implementation of abstract method from IPacketSource.
+        """
+        link_types = [if_info['link_type'] for if_info in self.interfaces.values()]
+        
+        return {
+            'packet_count': self._packet_count,
+            'time_range': self._time_range if self._time_range is not None else (0, 0),
+            'link_types': link_types,
+            'file_size': self._file_size,
+            'format': 'pcapng',
+            'interfaces': self.interfaces,
+            'sections': [self.current_section],
+        }
