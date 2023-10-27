@@ -68,3 +68,14 @@ class PacketIndexBuilder:
                 f"got {packet.packet_id}. Packet sources must maintain "
                 f"monotonic packet_id starting at 1."
             )
+        
+        # TODO: Step 3 - Calculate hash using _calculate_packet_hash(packet)
+        # Every packet is given a hash, calculate this hash for fingerprint
+        hash_value = self._calculate_packet_hash(packet)
+
+        # TODO: Step 4 - If stack_summary is None, set to "raw"
+        if stack_summary is None:
+            if decoded is not None:
+                stack_summary = decoded.stack_summary
+            else:
+                stack_summary = "raw"
