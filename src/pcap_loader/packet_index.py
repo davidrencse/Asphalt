@@ -79,3 +79,21 @@ class PacketIndexBuilder:
                 stack_summary = decoded.stack_summary
             else:
                 stack_summary = "raw"
+
+        # Prepare decoded fields (if available)
+        if decoded is not None:
+            src_ip = decoded.src_ip if decoded.src_ip else "0.0.0.0"
+            dst_ip = decoded.dst_ip if decoded.dst_ip else "0.0.0.0"
+            src_port = decoded.src_port if decoded.src_port is not None else 0
+            dst_port = decoded.dst_port if decoded.dst_port is not None else 0
+            protocol = decoded.ip_protocol if decoded.ip_protocol else 0
+            flags = decoded.tcp_flags if decoded.tcp_flags is not None else None
+            ttl = decoded.ttl if decoded.ttl is not None else None
+        else:
+            src_ip = "0.0.0.0"
+            dst_ip = "0.0.0.0"
+            src_port = 0
+            dst_port = 0
+            protocol = 0
+            flags = None
+            ttl = None

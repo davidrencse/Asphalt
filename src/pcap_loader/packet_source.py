@@ -67,3 +67,25 @@ class IPacketSource(ABC):
         4. MUST set packet_id correctly (starts at 1!)
         """
         pass
+    
+    # =========================================================================
+    # TODO: MUST IMPLEMENT - INDEX RECORD CREATION
+    # =========================================================================
+    @abstractmethod
+    def get_index_record(self, packet: RawPacket, packet_id: int) -> PacketIndexRecord:
+        """
+        Create index record for a packet.
+        
+        This creates the "library card" for searching packets later.
+        
+        Args:
+            packet: RawPacket from the iterator
+            packet_id: Should match packet.packet_id (for validation)
+            
+        Returns:
+            PacketIndexRecord with all required fields
+            
+        IMPORTANT: Must be DETERMINISTIC!
+        - Same packet → same index record, every time
+        - No random values
+        - No system-specific values (like current time)
