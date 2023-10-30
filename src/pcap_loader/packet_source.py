@@ -46,3 +46,24 @@ class IPacketSource(ABC):
     def __iter__(self) -> Iterator[RawPacket]:
         """
         Iterate through packets in capture order.
+        
+        This is the MAIN JOB of a packet source: read packets one by one.
+        
+        Yields:
+            RawPacket objects with these REQUIRED fields:
+            - packet_id: Must start at 1, increment by 1 (1, 2, 3...)
+            - timestamp_us: Microseconds since 1970
+            - pcap_ref: Format "file_id:start_offset:data_offset"
+            - captured_length, original_length, link_type, data
+            
+        Raises:
+            FormatError: If file is corrupt or wrong format
+            IOError: If file cannot be read (permissions, missing)
+            
+        Implementation Rules:
+        1. MUST handle EOF gracefully (stop when no more packets)
+        2. MUST preserve packet order (first in file = first yielded)
+        3. SHOULD use memory mapping for large files (for speed)
+        4. MUST set packet_id correctly (starts at 1!)
+        """
+        pass
