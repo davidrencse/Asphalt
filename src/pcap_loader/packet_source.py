@@ -89,3 +89,26 @@ class IPacketSource(ABC):
         - Same packet → same index record, every time
         - No random values
         - No system-specific values (like current time)
+        
+        Implementation Rules:
+        1. Use PacketIndexBuilder for consistency
+        2. Validate packet_id matches packet.packet_id
+        3. Fill in placeholder values for fields not yet decoded
+        """
+        pass
+    
+    # =========================================================================
+    # TODO: MUST IMPLEMENT - SESSION METADATA
+    # =========================================================================
+    @abstractmethod
+    def get_session_info(self) -> Dict[str, Any]:
+        """
+        Return session metadata.
+        
+        This info is used to build the SessionManifest.
+        
+        Returns dictionary with AT LEAST:
+        - 'packet_count': Total packets in source
+        - 'time_range': Tuple of (start_us, end_us) in microseconds
+        - 'link_types': List of DLT_* constants present (e.g., [1, 12])
+        - 'file_size': Size in bytes (for file sources)

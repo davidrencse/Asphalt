@@ -97,3 +97,24 @@ class PacketIndexBuilder:
             protocol = 0
             flags = None
             ttl = None
+
+        # TODO: Step 5 - Create and return PacketIndexRecord with all fields
+        return PacketIndexRecord(
+            packet_id=self._packet_counter,
+            session_id=self.session_id,
+            timestamp_us=packet.timestamp_us,
+            captured_length=packet.captured_length,  
+            original_length=packet.original_length,
+            pcap_ref=packet.pcap_ref,
+            packet_hash=hash_value,
+            src_ip=src_ip,
+            dst_ip=dst_ip,
+            src_port=src_port,
+            dst_port=dst_port,
+            protocol=protocol,
+            stack_summary=stack_summary,
+            schema_version=self.schema_version,
+            flags=flags,
+            ttl=ttl,
+        )
+        # Remember: src_ip, dst_ip, etc. are placeholders ("0.0.0.0", 0)
