@@ -112,3 +112,44 @@ class IPacketSource(ABC):
         - 'time_range': Tuple of (start_us, end_us) in microseconds
         - 'link_types': List of DLT_* constants present (e.g., [1, 12])
         - 'file_size': Size in bytes (for file sources)
+        
+        Optional fields (implementation-specific):
+        - 'format_version': PCAP/PCAPNG version
+        - 'snaplen': Maximum capture length
+        - 'endianness': 'big' or 'little'
+        - 'is_nanosecond': True if nanosecond timestamps
+        
+        Implementation Rules:
+        1. Calculate time_range by scanning packets
+        2. Count packets during iteration
+        3. Track all link types encountered
+        """
+        pass
+    
+    # =========================================================================
+    # TODO: MUST IMPLEMENT - OPEN SOURCE
+    # =========================================================================
+    @abstractmethod
+    def open(self):
+        """
+        Open the packet source for reading.
+        
+        Called before iteration starts.
+        
+        Should do:
+        1. Validate file format (check magic numbers)
+        2. Initialize resources (open files, memory maps)
+        3. Read initial metadata (global headers)
+        4. Prepare for iteration
+        
+        Raises:
+            FileNotFoundError: If file doesn't exist
+            FormatError: If file format is invalid
+            PermissionError: If cannot read file
+            
+        Implementation Rules:
+        1. MUST validate file is correct format
+        2. MUST set up for iteration (reset counters, etc.)
+        3. SHOULD use context manager pattern
+        """
+        pass

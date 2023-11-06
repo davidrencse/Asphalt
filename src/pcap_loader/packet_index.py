@@ -118,3 +118,17 @@ class PacketIndexBuilder:
             ttl=ttl,
         )
         # Remember: src_ip, dst_ip, etc. are placeholders ("0.0.0.0", 0)
+    
+    def _calculate_packet_hash(self, packet: RawPacket) -> str:
+        """
+        Calculate deterministic hash for packet based on packet info:
+        
+        1. Timestamp (8 bytes, big-endian)
+        2. Captured length (4 bytes, big-endian)
+        3. Original length (4 bytes, big-endian)
+        4. Link type (4 bytes, big-endian)
+        5. Packet data (variable length)
+        """
+        # TODO:
+        # 1. Create hashlib.blake2b(digest_size=16)
+        h = hashlib.blake2b(digest_size=16)
