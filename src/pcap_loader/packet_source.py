@@ -153,3 +153,33 @@ class IPacketSource(ABC):
         3. SHOULD use context manager pattern
         """
         pass
+    
+    # =========================================================================
+    # TODO: MUST IMPLEMENT - CLOSE SOURCE
+    # =========================================================================
+    @abstractmethod
+    def close(self):
+        """
+        Close the packet source and release resources.
+        
+        Called after iteration completes or on error.
+        
+        Should do:
+        1. Close file handles
+        2. Release memory mappings
+        3. Clean up temporary resources
+        4. Reset state if needed
+        
+        Implementation Rules:
+        1. MUST be safe to call multiple times
+        2. MUST release system resources (files, memory)
+        3. SHOULD not raise errors on already-closed resources
+        """
+        pass
+    
+    # =========================================================================
+    # TODO: IMPLEMENT - CONTEXT MANAGER (already done below)
+    # =========================================================================
+    def __enter__(self):
+        """
+        Context manager entry: open the source.
