@@ -132,3 +132,18 @@ class PacketIndexBuilder:
         # TODO:
         # 1. Create hashlib.blake2b(digest_size=16)
         h = hashlib.blake2b(digest_size=16)
+
+        # 2. Add timestamp (packet.timestamp_us.to_bytes(8, 'big'))
+        h.update(packet.timestamp_us.to_bytes(8, 'big'))
+
+        # 3. Add captured length (4 bytes, big-endian)
+        h.update(packet.captured_length.to_bytes(4, 'big'))
+
+        # 4. Add original length (4 bytes, big-endian)
+        h.update(packet.original_length.to_bytes(4, 'big'))
+
+        # 5. Add link type (4 bytes, big-endian)
+        h.update(packet.link_type.to_bytes(4, 'big'))
+
+        # 6. Add packet.data
+        h.update(packet.data)
