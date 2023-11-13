@@ -147,3 +147,35 @@ class PacketIndexBuilder:
 
         # 6. Add packet.data
         h.update(packet.data)
+
+        # 7. Return hexdigest()
+        return h.hexdigest()
+    
+    def reset(self):
+        """
+        Reset the packet counter.
+        
+        TODO: Set _packet_counter back to 0
+        """
+        # TODO:
+        self._packet_counter = 0
+    
+    @property
+    def current_packet_id(self) -> int:
+        """
+        Get the current packet_id (next one to be assigned).
+        
+        TODO: Return _packet_counter
+        """
+        # TODO: Your code here
+        return self._packet_counter
+    
+    @property
+    def total_packets_processed(self) -> int:
+        """
+        Get total packets processed so far.
+        
+        TODO: Return _packet_counter (same as current_packet_id)
+        """
+        # TODO:
+        return self._packet_counter

@@ -183,3 +183,17 @@ class IPacketSource(ABC):
     def __enter__(self):
         """
         Context manager entry: open the source.
+        
+        Enables 'with' statement:
+            with PcapReader("file.pcap") as reader:
+                for packet in reader:
+                    process(packet)
+                    
+        Implementation: Already done - calls self.open()
+        """
+        self.open()
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Context manager exit: close the source.
