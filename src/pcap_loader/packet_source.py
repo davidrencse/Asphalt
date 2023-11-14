@@ -197,3 +197,22 @@ class IPacketSource(ABC):
     def __exit__(self, exc_type, exc_val, exc_tb):
         """
         Context manager exit: close the source.
+        
+        Ensures resources are cleaned up even if errors occur.
+        
+        Implementation: Already done - calls self.close()
+        """
+        self.close()
+    
+    def __del__(self):
+        """
+        Destructor: cleanup during garbage collection.
+        
+        Safety net in case user forgets to close().
+        
+        Implementation: Already done - tries to close()
+        """
+        try:
+            self.close()
+        except:
+            pass  # Ignore errors during garbage collection
