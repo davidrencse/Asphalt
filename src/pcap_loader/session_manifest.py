@@ -311,3 +311,122 @@ class SessionManifest:
     def from_dict(cls, data: Dict[str, Any]) -> 'SessionManifest':
         """
         Create manifest from dictionary with backward compatibility.
+        
+        If fields are missing (older manifest version), uses defaults.
+        Extra fields are ignored (forward compatibility).
+        """
+        # Default values for backward compatibility
+        defaults = {
+            'original_path': None,
+            'capture_filter': None,
+            'interface_name': None,
+            'link_types': [],
+            'snaplen': None,
+            'file_mapping': {},
+            'index_schema_version': '0.2.0',
+            'manifest_schema_version': '0.2.0',
+        }
+        
+        # Merge defaults with provided data
+        merged = {**defaults, **data}
+        
+        # Extract only the fields the dataclass expects
+        # (ignores unknown fields for forward compatibility)
+        known_fields = {
+            k: v for k, v in merged.items()
+            if k in cls.__dataclass_fields__
+        }
+        
+        return cls(**known_fields)
+    
+    # ==================== HELPER PROPERTIES ====================
+    
+    @property
+    def duration_seconds(self) -> float:
+        """Session duration in seconds (with fractional part)."""
+        if self.time_end_us > self.time_start_us:
+            return (self.time_end_us - self.time_start_us) / 1_000_000.0
+        return 0.0
+    
+    @property
+    def avg_packet_size(self) -> float:
+        """Average captured packet size in bytes."""
+        if self.total_packets > 0:
+            return self.total_bytes_captured / self.total_packets
+        return 0.0
+    
+    @property
+    def avg_bitrate(self) -> float:
+        """Average bitrate in bits per second."""
+        duration = self.duration_seconds
+        if duration > 0:
+            return (self.total_bytes_captured * 8) / duration
+        return 0.0
+    
+    @property
+    def is_truncated(self) -> bool:
+        """True if any packets were truncated (snaplen limited)."""
+        return (self.snaplen is not None and 
+                self.total_bytes_captured < self.total_bytes_original)
+    
+    def get_file_path(self, file_id: str) -> Optional[str]:
+        """Get file path for given file_id."""
+        return self.file_mapping.get(file_id)
+    
+    def validate(self) -> List[str]:
+        """
+        Validate manifest consistency.
+        
+        Returns list of warning/error messages.
+        Empty list means everything is valid.
+        """
+        issues = []
+        
+        # Basic validation
+        if self.total_packets < 0:
+            issues.append("total_packets cannot be negative")
+        
+        if self.time_end_us < self.time_start_us:
+            issues.append("time_end_us is before time_start_us")
+        
+        if not self.session_id:
+            issues.append("session_id is empty")
+        
+        if not self.source_hash:
+            issues.append("source_hash is empty")
+        
+        if self.total_bytes_captured > self.total_bytes_original:
+            issues.append("captured bytes cannot exceed original bytes")
+        
+        # Warn about unusual but not necessarily wrong conditions
+        if self.total_packets == 0:
+            issues.append("Warning: session has 0 packets")
+        
+        if self.duration_seconds > 86400:  # 24 hours
+            issues.append("Warning: session longer than 24 hours")
+        
+        return issues
+    
+    def __str__(self) -> str:
+        """Human-readable summary."""
+        duration = self.duration_seconds
+        return (f"Session {self.session_id[:16]}... "
+                f"({self.total_packets} packets, "
+                f"{duration:.1f}s, "
+                f"{self.total_bytes_captured:,} bytes)")
+
+
+class SessionManifestBuilder:
+    """
+    Builds SessionManifest objects from packet sources.
+    
+    This is where the BUSINESS LOGIC lives:
+    - Calculates deterministic hashes
+    - Collects statistics from packet iteration
+    - Generates session_id from source metadata
+    
+    Separate from SessionManifest class to maintain:
+    - Single Responsibility (manifest = data, builder = logic)
+    - Testability (can test builder without manifest serialization)
+    - Flexibility (different builders for different sources)
+    """
