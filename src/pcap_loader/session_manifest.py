@@ -430,3 +430,109 @@ class SessionManifestBuilder:
     - Testability (can test builder without manifest serialization)
     - Flexibility (different builders for different sources)
     """
+    
+    @staticmethod
+    def from_packet_source(
+        source,  # Any IPacketSource implementation
+        filepath: Optional[str] = None,
+        capture_filter: Optional[str] = None,
+        interface_name: Optional[str] = None
+    ) -> SessionManifest:
+        """
+        Create manifest by analyzing a packet source.
+        
+        This is the MAIN ENTRY POINT for creating manifests.
+        
+        Process:
+        1. Calculate source hash (file hash or synthetic)
+        2. Iterate through packets to collect statistics
+        3. Generate deterministic session_id
+        4. Create and return SessionManifest
+        
+        Args:
+            source: IPacketSource (PcapReader, PcapngReader, etc.)
+            filepath: Original file path (optional)
+            capture_filter: BPF filter used (optional)
+            interface_name: Interface name for live captures (optional)
+        
+        Returns:
+            Complete SessionManifest ready for saving
+        """
+        # Step 1: Calculate source hash
+        source_hash = ""
+        source_type = "unknown"
+        
+        if filepath and Path(filepath).exists():
+            # File source - hash the actual file
+            source_hash = SessionManifestBuilder._calculate_file_hash(filepath)
+            source_type = "file"
+        elif hasattr(source, 'filepath') and Path(source.filepath).exists():
+            # Source has its own filepath
+            source_hash = SessionManifestBuilder._calculate_file_hash(source.filepath)
+            source_type = "file"
+            filepath = source.filepath
+        else:
+            # Non-file source (interface, upload, etc.)
+            # Create synthetic hash from available metadata
+            source_hash = SessionManifestBuilder._calculate_synthetic_hash(
+                source_type="interface" if interface_name else "upload",
+                metadata={
+                    'interface': interface_name,
+                    'filter': capture_filter,
+                    'start_time': datetime.utcnow().isoformat()
+                }
+            )
+            source_type = "interface" if interface_name else "upload"
+        
+        # Step 2: Get session info from source
+        # (This may iterate packets, collecting stats)
+        session_info = source.get_session_info()
+        
+        # Step 3: Generate deterministic session_id
+        session_id = SessionManifestBuilder._generate_session_id(
+            source_hash=source_hash,
+            time_range=session_info.get('time_range', (0, 0)),
+            packet_count=session_info.get('packet_count', 0),
+            source_type=source_type
+        )
+        
+        # Step 4: Create file mapping
+        file_mapping = {}
+        if filepath:
+            # Single file session
+            file_mapping = {"0": filepath}
+        
+        # Step 5: Build and return manifest
+        return SessionManifest(
+            session_id=session_id,
+            created_at=datetime.utcnow().isoformat() + "Z",
+            source_type=source_type,
+            source_hash=source_hash,
+            original_path=filepath,
+            time_start_us=session_info.get('time_range', (0, 0))[0],
+            time_end_us=session_info.get('time_range', (0, 0))[1],
+            total_packets=session_info.get('packet_count', 0),
+            total_bytes_captured=session_info.get('file_size', 0),  # Approximation
+            total_bytes_original=session_info.get('file_size', 0),  # Same for now
+            file_mapping=file_mapping,
+            capture_filter=capture_filter,
+            interface_name=interface_name,
+            link_types=session_info.get('link_types', []),
+            snaplen=session_info.get('snaplen', None),
+            # Schema versions are set by defaults in SessionManifest
+        )
+    
+    @staticmethod
+    def _calculate_file_hash(filepath: str) -> str:
+        """
+        Calculate SHA256 hash of file for integrity verification.
+        
+        Uses incremental reading for memory efficiency with large files.
+        Deterministic: same file → same hash.
+        """
+        sha256 = hashlib.sha256()
+        with open(filepath, 'rb') as f:
+            # Read in 64KB chunks for efficiency
+            for chunk in iter(lambda: f.read(65536), b''):
+                sha256.update(chunk)
+        return sha256.hexdigest()
