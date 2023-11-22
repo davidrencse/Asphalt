@@ -536,3 +536,80 @@ class SessionManifestBuilder:
             for chunk in iter(lambda: f.read(65536), b''):
                 sha256.update(chunk)
         return sha256.hexdigest()
+    
+    @staticmethod
+    def _calculate_synthetic_hash(source_type: str, metadata: Dict[str, Any]) -> str:
+        """
+        Create hash for non-file sources.
+        
+        Used for live captures, uploads, etc. where there's no
+        physical file to hash.
+        
+        Makes the hash deterministic from the metadata.
+        """
+        h = hashlib.blake2b(digest_size=32)
+        
+        # Include source type
+        h.update(source_type.encode('utf-8'))
+        
+        # Include sorted metadata for determinism
+        for key, value in sorted(metadata.items()):
+            if value is not None:
+                h.update(key.encode('utf-8'))
+                h.update(str(value).encode('utf-8'))
+        
+        return h.hexdigest()
+    
+    @staticmethod
+    def _generate_session_id(
+        source_hash: str,
+        time_range: Tuple[int, int],
+        packet_count: int,
+        source_type: str
+    ) -> str:
+        """
+        Generate deterministic session ID.
+        
+        Inputs are hashed together to create a unique but
+        deterministic identifier for the session.
+        
+        Same inputs → same session_id.
+        """
+        h = hashlib.blake2b(digest_size=32)
+        
+        # Include all identifying information
+        h.update(source_hash.encode('utf-8'))
+        h.update(source_type.encode('utf-8'))
+        h.update(str(time_range[0]).encode('utf-8'))
+        h.update(str(time_range[1]).encode('utf-8'))
+        h.update(str(packet_count).encode('utf-8'))
+        
+        return h.hexdigest()
+    
+    @staticmethod
+    def create_for_file(
+        filepath: str,
+        capture_filter: Optional[str] = None
+    ) -> SessionManifest:
+        """
+        Convenience method: create manifest for a file.
+        
+        Handles opening the appropriate reader based on file extension.
+        """
+        from .pcap_reader import PcapReader
+        from .pcapng_reader import PcapngReader
+        
+        # Determine reader based on file extension
+        if filepath.lower().endswith('.pcapng'):
+            reader_class = PcapngReader
+        else:
+            # Default to PCAP for .pcap or unknown extensions
+            reader_class = PcapReader
+        
+        # Create reader, process, and build manifest
+        with reader_class(filepath) as reader:
+            return SessionManifestBuilder.from_packet_source(
+                source=reader,
+                filepath=filepath,
+                capture_filter=capture_filter
+            )
