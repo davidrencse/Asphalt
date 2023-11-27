@@ -613,3 +613,42 @@ class SessionManifestBuilder:
                 filepath=filepath,
                 capture_filter=capture_filter
             )
+
+
+# Example usage function (not part of the class)
+def example_usage():
+    """
+    Show how to use SessionManifestBuilder.
+    
+    This would be in a test file or documentation.
+    """
+    # Method 1: Direct from file
+    manifest = SessionManifestBuilder.create_for_file("capture.pcap")
+    manifest.save("capture.manifest.json")
+    print(f"Created manifest: {manifest}")
+    
+    # Method 2: Manual with reader
+    from .pcap_reader import PcapReader
+    with PcapReader("capture.pcap") as reader:
+        manifest = SessionManifestBuilder.from_packet_source(
+            source=reader,
+            filepath="capture.pcap",
+            capture_filter="tcp port 80"
+        )
+    
+    # Load it back
+    loaded = SessionManifest.load("capture.manifest.json")
+    print(f"Loaded: {loaded.session_id}")
+    
+    # Validate
+    issues = loaded.validate()
+    if issues:
+        print(f"Validation issues: {issues}")
+    else:
+        print("Manifest is valid!")
+
+
+if __name__ == "__main__":
+    # Quick test if run directly
+    print("SessionManifest module loaded successfully")
+    print(f"SessionManifest schema version: {SessionManifest().manifest_schema_version}")
