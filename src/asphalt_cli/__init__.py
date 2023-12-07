@@ -5,3 +5,5 @@ Exports the main CLI group and commands.
 """
 
 __all__ = ['cli']
+
+def __getattr__(name):
