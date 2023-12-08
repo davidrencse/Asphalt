@@ -7,3 +7,5 @@ Exports the main CLI group and commands.
 __all__ = ['cli']
 
 def __getattr__(name):
+    """Lazy import to avoid circular import issues."""
+    if name == 'cli':
