@@ -9,3 +9,5 @@ __all__ = ['cli']
 def __getattr__(name):
     """Lazy import to avoid circular import issues."""
     if name == 'cli':
+        from .main import cli
+        return cli
