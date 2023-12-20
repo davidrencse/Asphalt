@@ -11,3 +11,6 @@ from .analyze import analyze
 def cli():
     """Asphalt - Wireshark-grade packet capture and analysis."""
     pass
+
+cli.add_command(capture)
+cli.add_command(decode)
