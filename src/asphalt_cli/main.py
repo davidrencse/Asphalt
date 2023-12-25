@@ -14,3 +14,5 @@ def cli():
 
 cli.add_command(capture)
 cli.add_command(decode)
+cli.add_command(capture_decode)
+cli.add_command(analyze)
