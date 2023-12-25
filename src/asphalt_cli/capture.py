@@ -25,3 +25,19 @@ def capture(interface: str, duration: Optional[int], filter: Optional[str]):
     except ImportError as e:
         click.echo(f"Error importing capture modules: {e}", err=True)
         sys.exit(1)
+    
+    # Create capture backend
+    try:
+        capture_backend = ScapyBackend()
+    except Exception as e:
+        click.echo(f"Error initializing scapy backend: {e}", err=True)
+        click.echo("\nFor packet capture on Windows:", err=True)
+        click.echo("1. Install NpCap from https://npcap.com/", err=True)
+        click.echo("2. Choose 'WinPcap API-compatible mode'", err=True)
+        click.echo("3. Reboot if prompted", err=True)
+        sys.exit(1)
+    
+    # List interfaces if requested
+    if interface == 'list':
+        click.echo("Available interfaces:")
+        interfaces = capture_backend.list_interfaces()
