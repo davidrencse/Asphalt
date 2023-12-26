@@ -58,3 +58,17 @@ def capture(interface: str, duration: Optional[int], filter: Optional[str]):
                 if iface.get('ips'):
                     click.echo(f"      IPs: {', '.join(iface['ips'])}")
                 click.echo(f"      Use: asphalt capture --interface \"{iface['name']}\"")
+
+        if not interfaces:
+            click.echo("\nNo real interfaces found.")
+            click.echo("Note: Interface names are GUIDs like \\Device\\NPF_{...}")
+            click.echo("      Use the exact name shown above for capture.")
+
+        return
+
+    # Create config
+    config = CaptureConfig(
+        interface=interface,
+        filter=filter,
+        buffer_size=10000
+    )
