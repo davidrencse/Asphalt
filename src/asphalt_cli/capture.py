@@ -41,3 +41,20 @@ def capture(interface: str, duration: Optional[int], filter: Optional[str]):
     if interface == 'list':
         click.echo("Available interfaces:")
         interfaces = capture_backend.list_interfaces()
+
+        if interfaces:
+            click.echo("\n=== Network Interfaces ===")
+            for iface in interfaces:
+                display_name = iface.get('display_name', iface['name'])
+                desc = iface.get('description', '')
+
+                # Truncate long GUIDs for display
+                if len(display_name) > 30 and 'NPF_' in display_name:
+                    display_name = desc if desc and desc != iface['name'] else f"...{display_name[-20:]}"
+
+                status = "UP" if iface.get('is_up', True) else "DOWN"
+
+                click.echo(f"  {status} {display_name:30}")
+                if iface.get('ips'):
+                    click.echo(f"      IPs: {', '.join(iface['ips'])}")
+                click.echo(f"      Use: asphalt capture --interface \"{iface['name']}\"")
