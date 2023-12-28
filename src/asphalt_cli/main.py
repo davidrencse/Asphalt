@@ -16,3 +16,6 @@ cli.add_command(capture)
 cli.add_command(decode)
 cli.add_command(capture_decode)
 cli.add_command(analyze)
+
+if __name__ == "__main__":
+    cli()
