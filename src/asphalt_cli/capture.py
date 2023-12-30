@@ -72,3 +72,16 @@ def capture(interface: str, duration: Optional[int], filter: Optional[str]):
         filter=filter,
         buffer_size=10000
     )
+    
+    # Start capture
+    try:
+        session_id = capture_backend.start(config)
+        click.echo(f"Capture started on '{interface}' (session: {session_id})")
+        if filter:
+            click.echo(f"Filter: {filter}")
+        if duration:
+            click.echo(f"Duration: {duration} seconds")
+        click.echo("Press Ctrl+C to stop\n")
+    except Exception as e:
+        click.echo(f"Error starting capture: {e}", err=True)
+        sys.exit(1)
