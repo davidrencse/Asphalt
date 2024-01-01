@@ -85,3 +85,18 @@ def capture(interface: str, duration: Optional[int], filter: Optional[str]):
     except Exception as e:
         click.echo(f"Error starting capture: {e}", err=True)
         sys.exit(1)
+    
+    # Display header
+    click.echo(f"{'Time':6} {'Pkts/s':8} {'Total':10} {'Drops':8}")
+    click.echo("-" * 40)
+    
+    # Capture loop
+    start_time = time.time()
+    last_display = start_time
+    
+    try:
+        while True:
+            # Check duration
+            if duration and (time.time() - start_time) >= duration:
+                click.echo(f"\nDuration reached ({duration}s), stopping...")
+                break
