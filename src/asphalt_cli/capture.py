@@ -100,3 +100,35 @@ def capture(interface: str, duration: Optional[int], filter: Optional[str]):
             if duration and (time.time() - start_time) >= duration:
                 click.echo(f"\nDuration reached ({duration}s), stopping...")
                 break
+            
+            # Update display every 0.5 seconds
+            current_time = time.time()
+            if current_time - last_display >= 0.5:
+                stats = capture_backend.get_stats(session_id)
+                elapsed = current_time - start_time
+                
+                click.echo(f"\r{elapsed:5.1f}s {stats['packets_per_sec']:8} "
+                         f"{stats['packets_total']:10} {stats['drops_total']:8}", 
+                         nl=False)
+                last_display = current_time
+            
+            time.sleep(0.1)
+            
+    except KeyboardInterrupt:
+        click.echo("\n\nStopping capture...")
+    except Exception as e:
+        click.echo(f"\nError during capture: {e}", err=True)
+    finally:
+        # Stop capture
+        metadata = capture_backend.stop(session_id)
+        
+        # Display summary
+        click.echo("\n" + "=" * 50)
+        click.echo("CAPTURE SUMMARY")
+        click.echo("=" * 50)
+        click.echo(f"Session ID:    {metadata['session_id']}")
+        click.echo(f"Interface:     {metadata['interface']}")
+        click.echo(f"Duration:      {metadata['end_ts'] - metadata['start_ts']:.2f}s")
+        click.echo(f"Total Packets: {metadata['stats_summary']['packets_total']}")
+        click.echo(f"Total Bytes:   {metadata['stats_summary']['bytes_total']:,}")
+        click.echo(f"Packet Drops:  {metadata['stats_summary']['drops_total']}")
