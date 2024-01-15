@@ -26,3 +26,9 @@ def _select_reader(filepath: str):
         return PcapngReader
     if lower.endswith(".pcap"):
         return PcapReader
+
+    try:
+        with open(filepath, "rb") as f:
+            magic = f.read(4)
+    except OSError as e:
+        raise click.ClickException(f"Failed to open file: {e}")

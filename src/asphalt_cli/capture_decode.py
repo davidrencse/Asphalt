@@ -43,3 +43,15 @@ def capture_decode(interface: str,
     except ImportError as e:
         click.echo(f"Error importing capture modules: {e}", err=True)
         sys.exit(1)
+
+    try:
+        capture_backend = ScapyBackend()
+    except Exception as e:
+        click.echo(f"Error initializing scapy backend: {e}", err=True)
+        sys.exit(1)
+
+    config = CaptureConfig(
+        interface=interface,
+        filter=filter,
+        buffer_size=10000,
+    )
