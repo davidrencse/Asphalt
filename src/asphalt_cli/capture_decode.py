@@ -55,3 +55,19 @@ def capture_decode(interface: str,
         filter=filter,
         buffer_size=10000,
     )
+
+    decoder = PacketDecoder()
+    predicate = None
+    if filter_expr:
+        from utils.filtering import compile_packet_filter
+        predicate = compile_packet_filter(filter_expr)
+    packet_id = 0
+
+    try:
+        session_id = capture_backend.start(config)
+        click.echo(f"Capture started on '{interface}' (session: {session_id})")
+        if filter:
+            click.echo(f"Filter: {filter}")
+        if duration:
+            click.echo(f"Duration: {duration} seconds")
+        click.echo("Press Ctrl+C to stop\n")

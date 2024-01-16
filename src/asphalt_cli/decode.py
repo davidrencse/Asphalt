@@ -32,3 +32,22 @@ def _select_reader(filepath: str):
             magic = f.read(4)
     except OSError as e:
         raise click.ClickException(f"Failed to open file: {e}")
+
+    if magic == _PCAPNG_MAGIC:
+        return PcapngReader
+    if magic in _PCAP_MAGIC:
+        return PcapReader
+
+    raise click.ClickException("Unsupported capture file format")
+
+
+def _format_ports(decoded) -> str:
+    if decoded.src_port is None or decoded.dst_port is None:
+        return "-"
+    return f"{decoded.src_port}->{decoded.dst_port}"
+
+
+@click.command()
+@click.argument("filepath", type=click.Path(exists=True, dir_okay=False))
+@click.option("--limit", "limit", type=int, default=50, show_default=True,
+              help="Max packets to decode (0 = no limit)")
