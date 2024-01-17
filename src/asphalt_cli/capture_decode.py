@@ -71,3 +71,41 @@ def capture_decode(interface: str,
         if duration:
             click.echo(f"Duration: {duration} seconds")
         click.echo("Press Ctrl+C to stop\n")
+
+        if format == "table":
+            click.echo("ID  Time(us)       Stack        Src -> Dst                    Ports      L4     Flags   Quality")
+            click.echo("-" * 100)
+
+        start_time = time.time()
+        decoded_count = 0
+
+        records = [] if format == "json" else None
+        file_handle = None
+        if format == "jsonl" and output:
+            file_handle = open(output, "w", encoding="utf-8")
+        wrote_output = False
+
+        while True:
+            if duration and (time.time() - start_time) >= duration:
+                break
+
+            packets = capture_backend.get_packets(session_id, count=100)
+            if not packets:
+                time.sleep(0.01)
+                continue
+
+            for pkt in packets:
+                packet_id += 1
+                raw = RawPacket(
+                    packet_id=packet_id,
+                    timestamp_us=int(pkt["ts"] * 1_000_000),
+                    captured_length=len(pkt["data"]),
+                    original_length=pkt.get("wirelen", len(pkt["data"])),
+                    link_type=1,  # DLT_EN10MB
+                    data=pkt["data"],
+                    pcap_ref="live:0:0",
+                )
+                decoded = decoder.decode(raw)
+                record = decoded.to_dict()
+                if predicate and not predicate(record):
+                    continue
