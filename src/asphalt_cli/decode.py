@@ -51,3 +51,22 @@ def _format_ports(decoded) -> str:
 @click.argument("filepath", type=click.Path(exists=True, dir_okay=False))
 @click.option("--limit", "limit", type=int, default=50, show_default=True,
               help="Max packets to decode (0 = no limit)")
+@click.option("--show-quality", is_flag=True, help="Show decode quality flags")
+@click.option("--format", "format", type=click.Choice(["table", "json", "jsonl"]),
+              default="table", show_default=True, help="Output format")
+@click.option("--output", "output", type=click.Path(dir_okay=False),
+              help="Write JSON/JSONL output to file")
+@click.option("--filter", "filter_expr", help="Filter expression for decoded packets")
+def decode(filepath: str, limit: int, show_quality: bool, format: str, output: Optional[str], filter_expr: Optional[str]):
+    """
+    Decode packets from a PCAP/PCAPNG file.
+
+    Example:
+      asphalt decode capture.pcapng --limit 20
+    """
+    reader_cls = _select_reader(filepath)
+    decoder = PacketDecoder()
+    predicate = None
+    if filter_expr:
+        from utils.filtering import compile_packet_filter
+        predicate = compile_packet_filter(filter_expr)

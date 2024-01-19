@@ -109,3 +109,12 @@ def capture_decode(interface: str,
                 record = decoded.to_dict()
                 if predicate and not predicate(record):
                     continue
+
+                if format == "table":
+                    src = decoded.src_ip or "-"
+                    dst = decoded.dst_ip or "-"
+                    ports = "-" if decoded.src_port is None or decoded.dst_port is None else f"{decoded.src_port}->{decoded.dst_port}"
+                    l4 = decoded.l4_protocol or "-"
+                    flags = ",".join(decoded.tcp_flag_names) if decoded.tcp_flag_names else "-"
+                    quality = ",".join(quality_flag_names(decoded.quality_flags)) if show_quality else "-"
+                    stack = decoded.stack_summary
