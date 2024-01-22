@@ -70,3 +70,16 @@ def decode(filepath: str, limit: int, show_quality: bool, format: str, output: O
     if filter_expr:
         from utils.filtering import compile_packet_filter
         predicate = compile_packet_filter(filter_expr)
+
+    try:
+        with reader_cls(filepath) as reader:
+            count = 0
+            records = [] if format == "json" else None
+
+            file_handle = None
+            if format == "jsonl" and output:
+                file_handle = open(output, "w", encoding="utf-8")
+
+            if format == "table":
+                click.echo("ID  Time(us)       Stack        Src -> Dst                    Ports      L4     Flags   Quality")
+                click.echo("-" * 100)

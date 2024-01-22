@@ -118,3 +118,30 @@ def capture_decode(interface: str,
                     flags = ",".join(decoded.tcp_flag_names) if decoded.tcp_flag_names else "-"
                     quality = ",".join(quality_flag_names(decoded.quality_flags)) if show_quality else "-"
                     stack = decoded.stack_summary
+
+                    click.echo(
+                        f"{raw.packet_id:<3} {raw.timestamp_us:<13} "
+                        f"{stack:<12} {src:<22} {dst:<22} {ports:<10} {l4:<6} {flags:<7} {quality}"
+                    )
+                elif format == "json":
+                    records.append(record)
+                else:
+                    line = json.dumps(record, separators=(",", ":"), ensure_ascii=True)
+                    if file_handle:
+                        file_handle.write(line + "\n")
+                    else:
+                        click.echo(line)
+
+                decoded_count += 1
+                if limit > 0 and decoded_count >= limit:
+                    if format == "json":
+                        payload = json.dumps(records, separators=(",", ":"), ensure_ascii=True)
+                        if output:
+                            with open(output, "w", encoding="utf-8") as f:
+                                f.write(payload)
+                        else:
+                            click.echo(payload)
+                        wrote_output = True
+                    if file_handle:
+                        file_handle.close()
+                    return
