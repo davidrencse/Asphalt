@@ -83,3 +83,18 @@ def decode(filepath: str, limit: int, show_quality: bool, format: str, output: O
             if format == "table":
                 click.echo("ID  Time(us)       Stack        Src -> Dst                    Ports      L4     Flags   Quality")
                 click.echo("-" * 100)
+
+            for packet in reader:
+                decoded = decoder.decode(packet)
+                record = decoded.to_dict()
+                if predicate and not predicate(record):
+                    continue
+
+                if format == "table":
+                    src = decoded.src_ip or "-"
+                    dst = decoded.dst_ip or "-"
+                    ports = _format_ports(decoded)
+                    l4 = decoded.l4_protocol or "-"
+                    flags = ",".join(decoded.tcp_flag_names) if decoded.tcp_flag_names else "-"
+                    quality = ",".join(quality_flag_names(decoded.quality_flags)) if show_quality else "-"
+                    stack = decoded.stack_summary

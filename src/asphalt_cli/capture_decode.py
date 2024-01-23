@@ -145,3 +145,20 @@ def capture_decode(interface: str,
                     if file_handle:
                         file_handle.close()
                     return
+
+    except KeyboardInterrupt:
+        click.echo("\nStopping capture...")
+    finally:
+        try:
+            capture_backend.stop(session_id)
+        except Exception:
+            pass
+        if format == "json" and not wrote_output:
+            payload = json.dumps(records or [], separators=(",", ":"), ensure_ascii=True)
+            if output:
+                with open(output, "w", encoding="utf-8") as f:
+                    f.write(payload)
+            else:
+                click.echo(payload)
+        if file_handle:
+            file_handle.close()
