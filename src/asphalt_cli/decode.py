@@ -98,3 +98,16 @@ def decode(filepath: str, limit: int, show_quality: bool, format: str, output: O
                     flags = ",".join(decoded.tcp_flag_names) if decoded.tcp_flag_names else "-"
                     quality = ",".join(quality_flag_names(decoded.quality_flags)) if show_quality else "-"
                     stack = decoded.stack_summary
+
+                    click.echo(
+                        f"{packet.packet_id:<3} {packet.timestamp_us:<13} "
+                        f"{stack:<12} {src:<22} {dst:<22} {ports:<10} {l4:<6} {flags:<7} {quality}"
+                    )
+                elif format == "json":
+                    records.append(record)
+                else:
+                    line = json.dumps(record, separators=(",", ":"), ensure_ascii=True)
+                    if file_handle:
+                        file_handle.write(line + "\n")
+                    else:
+                        click.echo(line)
