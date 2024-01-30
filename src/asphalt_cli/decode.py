@@ -111,3 +111,19 @@ def decode(filepath: str, limit: int, show_quality: bool, format: str, output: O
                         file_handle.write(line + "\n")
                     else:
                         click.echo(line)
+
+                count += 1
+                if limit > 0 and count >= limit:
+                    break
+
+            if format == "json":
+                payload = json.dumps(records, separators=(",", ":"), ensure_ascii=True)
+                if output:
+                    with open(output, "w", encoding="utf-8") as f:
+                        f.write(payload)
+                else:
+                    click.echo(payload)
+            if file_handle:
+                file_handle.close()
+    except Exception as e:
+        raise click.ClickException(str(e))
