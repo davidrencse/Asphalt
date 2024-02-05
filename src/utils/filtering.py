@@ -14,3 +14,22 @@ _DNS_RCODE_MAP = {
 
 def _normalize_tag(tag: str) -> str:
     return tag.lower()
+
+
+def _with_osi_fields(record: Dict[str, Any]) -> Dict[str, Any]:
+    tags = record.get("osi_tags")
+    if not tags:
+        tags = derive_osi_tags_from_decoded(record)
+    tags = [_normalize_tag(t) for t in tags]
+    enriched = dict(record)
+    enriched["osi_tags"] = tags
+    # OSI lenses
+    enriched["l2"] = [t.split(":", 1)[1] for t in tags if t.startswith("l2:")]
+    enriched["l3"] = [t.split(":", 1)[1] for t in tags if t.startswith("l3:")]
+    enriched["l4"] = [t.split(":", 1)[1] for t in tags if t.startswith("l4:")]
+    enriched["app"] = [t.split(":", 1)[1] for t in tags if t.startswith("app:")]
+    # Aliases
+    enriched["tcp_flag"] = [f.lower() for f in (record.get("tcp_flags_names") or [])]
+    if record.get("dns_rcode") is not None:
+        enriched["dns_rcode"] = record.get("dns_rcode")
+    return enriched
