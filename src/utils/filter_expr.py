@@ -57,3 +57,12 @@ def _tokenize(expr: str) -> List[Token]:
             tokens.append(("IDENT", ident))
     tokens.append(("EOF", ""))
     return tokens
+
+
+def _coerce_value(val: str) -> Any:
+    try:
+        if "." in val:
+            return float(val)
+        return int(val)
+    except Exception:
+        return val
