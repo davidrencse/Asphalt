@@ -113,3 +113,9 @@ def _compare(op: str, left: Any, right: Any) -> bool:
     if op == "<=":
         return l <= r
     return False
+
+
+class _Parser:
+    def __init__(self, tokens: List[Token]):
+        self.tokens = tokens
+        self.pos = 0
