@@ -119,3 +119,39 @@ class _Parser:
     def __init__(self, tokens: List[Token]):
         self.tokens = tokens
         self.pos = 0
+
+    def _peek(self) -> Token:
+        return self.tokens[self.pos]
+
+    def _eat(self, kind: str) -> Token:
+        tok = self._peek()
+        if tok[0] != kind:
+            raise ValueError(f"Expected {kind}, got {tok[0]}")
+        self.pos += 1
+        return tok
+
+    def parse(self):
+        return self._parse_or()
+
+    def _parse_or(self):
+        node = self._parse_and()
+        while self._peek()[0] == "OR":
+            self._eat("OR")
+            right = self._parse_and()
+            node = ("OR", node, right)
+        return node
+
+    def _parse_and(self):
+        node = self._parse_not()
+        while self._peek()[0] == "AND":
+            self._eat("AND")
+            right = self._parse_not()
+            node = ("AND", node, right)
+        return node
+
+    def _parse_not(self):
+        if self._peek()[0] == "NOT":
+            self._eat("NOT")
+            node = self._parse_not()
+            return ("NOT", node)
+        return self._parse_term()
