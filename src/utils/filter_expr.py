@@ -155,3 +155,29 @@ class _Parser:
             node = self._parse_not()
             return ("NOT", node)
         return self._parse_term()
+
+    def _parse_term(self):
+        kind, value = self._peek()
+        if kind == "(":
+            self._eat("(")
+            node = self._parse_or()
+            self._eat(")")
+            return node
+        return self._parse_comparison()
+
+    def _parse_comparison(self):
+        field = self._eat("IDENT")[1]
+        op = self._eat("OP")[1]
+        kind, val = self._peek()
+        if kind == "STRING":
+            self._eat("STRING")
+            rhs = val
+        elif kind == "NUMBER":
+            self._eat("NUMBER")
+            rhs = _coerce_value(val)
+        elif kind == "IDENT":
+            self._eat("IDENT")
+            rhs = val
+        else:
+            raise ValueError("Expected comparison value")
+        return ("CMP", field, op, rhs)
