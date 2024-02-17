@@ -181,3 +181,49 @@ class _Parser:
         else:
             raise ValueError("Expected comparison value")
         return ("CMP", field, op, rhs)
+
+
+def _eval_ast(node, record: Dict[str, Any]) -> bool:
+    if node is None:
+        return True
+    kind = node[0]
+    if kind == "CMP":
+        _, field, op, rhs = node
+        left_val = _field_value(record, field)
+        return _compare(op, left_val, rhs)
+    if kind == "NOT":
+        return not _eval_ast(node[1], record)
+    if kind == "AND":
+        return _eval_ast(node[1], record) and _eval_ast(node[2], record)
+    if kind == "OR":
+        return _eval_ast(node[1], record) or _eval_ast(node[2], record)
+    return False
+
+
+def build_predicate(expr: str, value_normalizers: Dict[str, Callable[[Any], Any]] | None = None) -> Callable[[Dict[str, Any]], bool]:
+    if not expr:
+        return lambda _r: True
+    tokens = _tokenize(expr)
+    parser = _Parser(tokens)
+    ast = parser.parse()
+    normalizers = value_normalizers or {}
+
+    def _eval(record: Dict[str, Any]) -> bool:
+        def _eval_node(node):
+            if node is None:
+                return True
+            kind = node[0]
+            if kind == "CMP":
+                _, field, op, rhs = node
+                if field in normalizers:
+                    rhs = normalizers[field](rhs)
+                left_val = _field_value(record, field)
+                return _compare(op, left_val, rhs)
+            if kind == "NOT":
+                return not _eval_node(node[1])
+            if kind == "AND":
+                return _eval_node(node[1]) and _eval_node(node[2])
+            if kind == "OR":
+                return _eval_node(node[1]) or _eval_node(node[2])
+            return False
+        return _eval_node(ast)

@@ -33,3 +33,13 @@ def _with_osi_fields(record: Dict[str, Any]) -> Dict[str, Any]:
     if record.get("dns_rcode") is not None:
         enriched["dns_rcode"] = record.get("dns_rcode")
     return enriched
+
+
+def _normalize_dns_rcode(value: Any) -> Any:
+    if isinstance(value, str):
+        return _DNS_RCODE_MAP.get(value.lower(), value)
+    return value
+
+
+def compile_packet_filter(expr: str):
+    predicate = build_predicate(expr, value_normalizers={"dns_rcode": _normalize_dns_rcode})
