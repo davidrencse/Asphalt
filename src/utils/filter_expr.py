@@ -227,3 +227,5 @@ def build_predicate(expr: str, value_normalizers: Dict[str, Callable[[Any], Any]
                 return _eval_node(node[1]) or _eval_node(node[2])
             return False
         return _eval_node(ast)
+
+    return _eval
