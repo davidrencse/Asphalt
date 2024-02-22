@@ -1,0 +1,100 @@
+"""Analysis data models."""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+import json
+
+try:
+    from models.packet import DecodedPacket
+except ImportError:
+    from ..models.packet import DecodedPacket
+
+class Direction(str, Enum):
+    FWD = "fwd"
+    REV = "rev"
+    UNKNOWN = "unknown"
+
+@dataclass(frozen=True)
+class AnalysisPacket:
+    """Normalized decoded packet for analysis."""
+    packet_id: int
+    timestamp_us: int
+    captured_length: int
+    original_length: int
+    link_type: int
+    eth_type: Optional[int]
+    src_mac: Optional[str]
+    dst_mac: Optional[str]
+    ip_version: int
+    src_ip: Optional[str]
+    dst_ip: Optional[str]
+    ip_protocol: int
+    l4_protocol: Optional[str]
+    src_port: Optional[int]
+    dst_port: Optional[int]
+    tcp_flags: Optional[int]
+    tcp_seq: Optional[int]
+    tcp_ack: Optional[int]
+    tcp_window: Optional[int]
+    tcp_mss: Optional[int]
+    arp_sender_ip: Optional[str]
+    arp_sender_mac: Optional[str]
+    dns_qname: Optional[str]
+    dns_is_query: Optional[bool]
+    dns_is_response: Optional[bool]
+    dns_rcode: Optional[int]
+    ttl: Optional[int]
+    quality_flags: int
+    is_vlan: bool = False
+    is_arp: bool = False
+    is_multicast: bool = False
+    is_broadcast: bool = False
+    is_ipv4_fragment: bool = False
+    is_ipv6_fragment: bool = False
+    protocol_stack: Tuple[str, ...] = field(default_factory=tuple)
+    payload_bytes: Optional[bytes] = None
+
+    @classmethod
+    def from_decoded(cls, decoded: DecodedPacket) -> "AnalysisPacket":
+        raw = decoded.raw_packet
+        return cls(
+            packet_id=raw.packet_id,
+            timestamp_us=raw.timestamp_us,
+            captured_length=raw.captured_length,
+            original_length=raw.original_length,
+            link_type=raw.link_type,
+            eth_type=getattr(decoded, "eth_type", None),
+            src_mac=getattr(decoded, "src_mac", None),
+            dst_mac=getattr(decoded, "dst_mac", None),
+            ip_version=decoded.ip_version,
+            src_ip=decoded.src_ip,
+            dst_ip=decoded.dst_ip,
+            ip_protocol=decoded.ip_protocol,
+            l4_protocol=decoded.l4_protocol,
+            src_port=decoded.src_port,
+            dst_port=decoded.dst_port,
+            tcp_flags=decoded.tcp_flags,
+            tcp_seq=getattr(decoded, "tcp_seq", None),
+            tcp_ack=getattr(decoded, "tcp_ack", None),
+            tcp_window=getattr(decoded, "tcp_window", None),
+            tcp_mss=getattr(decoded, "tcp_mss", None),
+            arp_sender_ip=getattr(decoded, "arp_sender_ip", None),
+            arp_sender_mac=getattr(decoded, "arp_sender_mac", None),
+            dns_qname=getattr(decoded, "dns_qname", None),
+            dns_is_query=getattr(decoded, "dns_is_query", None),
+            dns_is_response=getattr(decoded, "dns_is_response", None),
+            dns_rcode=getattr(decoded, "dns_rcode", None),
+            ttl=decoded.ttl,
+            quality_flags=decoded.quality_flags,
+            is_vlan=getattr(decoded, "is_vlan", False),
+            is_arp=getattr(decoded, "is_arp", False),
+            is_multicast=getattr(decoded, "is_multicast", False),
+            is_broadcast=getattr(decoded, "is_broadcast", False),
+            is_ipv4_fragment=getattr(decoded, "is_ipv4_fragment", False),
+            is_ipv6_fragment=getattr(decoded, "is_ipv6_fragment", False),
+            protocol_stack=decoded.protocol_stack,
+            payload_bytes=raw.data,
+        )
