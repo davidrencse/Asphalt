@@ -50,3 +50,20 @@ def compile_packet_filter(expr: str):
         return predicate(enriched)
 
     return _match
+
+
+def compile_flow_filter(expr: str):
+    predicate = build_predicate(expr)
+
+    def _match(flow_dict: Dict[str, Any]) -> bool:
+        tags = flow_dict.get("osi_tags")
+        if not tags:
+            tags = derive_osi_tags_from_flow(flow_dict)
+        tags = [_normalize_tag(t) for t in tags]
+        enriched = dict(flow_dict)
+        enriched["osi_tags"] = tags
+        enriched["l2"] = []
+        enriched["l3"] = [t.split(":", 1)[1] for t in tags if t.startswith("l3:")]
+        enriched["l4"] = [t.split(":", 1)[1] for t in tags if t.startswith("l4:")]
+        enriched["app"] = [t.split(":", 1)[1] for t in tags if t.startswith("app:")]
+        return predicate(enriched)
