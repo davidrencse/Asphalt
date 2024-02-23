@@ -43,3 +43,10 @@ def _normalize_dns_rcode(value: Any) -> Any:
 
 def compile_packet_filter(expr: str):
     predicate = build_predicate(expr, value_normalizers={"dns_rcode": _normalize_dns_rcode})
+
+    def _match(packet_dict: Dict[str, Any]) -> bool:
+        enriched = _with_osi_fields(packet_dict)
+        enriched["dns_rcode"] = _normalize_dns_rcode(enriched.get("dns_rcode"))
+        return predicate(enriched)
+
+    return _match
