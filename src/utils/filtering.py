@@ -67,3 +67,5 @@ def compile_flow_filter(expr: str):
         enriched["l4"] = [t.split(":", 1)[1] for t in tags if t.startswith("l4:")]
         enriched["app"] = [t.split(":", 1)[1] for t in tags if t.startswith("app:")]
         return predicate(enriched)
+
+    return _match
