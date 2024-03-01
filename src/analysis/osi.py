@@ -23,3 +23,24 @@ def derive_osi_tags_from_decoded(record) -> List[str]:
         ip_version = getattr(record, "ip_version", None)
         l4 = getattr(record, "l4_protocol", None)
         dns_qname = getattr(record, "dns_qname", None)
+
+    tags: List[str] = []
+    # L2
+    if is_arp:
+        _add(tags, "l2:arp")
+    else:
+        _add(tags, "l2:ethernet")
+    # L3
+    if ip_version == 4:
+        _add(tags, "l3:ipv4")
+    elif ip_version == 6:
+        _add(tags, "l3:ipv6")
+    # L4
+    if l4:
+        l4_val = str(l4).lower()
+        if l4_val in ("tcp", "udp"):
+            _add(tags, f"l4:{l4_val}")
+    # APP
+    if dns_qname:
+        _add(tags, "app:dns")
+    return tags
