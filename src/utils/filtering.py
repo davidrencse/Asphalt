@@ -69,3 +69,10 @@ def compile_flow_filter(expr: str):
         return predicate(enriched)
 
     return _match
+
+
+def filter_packets(packets: Iterable[Dict[str, Any]], expr: str) -> List[Dict[str, Any]]:
+    if not expr:
+        return list(packets)
+    pred = compile_packet_filter(expr)
+    return [p for p in packets if pred(p)]
