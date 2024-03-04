@@ -78,3 +78,47 @@ class AnalysisEngine:
                 )
                 self.context.flow_table[flow_id] = flow_state
             flow_state.update_from_packet(packet, flow_key.direction)
+
+        for analyzer in self.analyzers:
+            analyzer.on_packet(packet, flow_key, flow_state, self.context)
+
+    def process_packet_dict(self, payload: Dict) -> None:
+        packet = AnalysisPacket(
+            packet_id=int(payload.get("packet_id", 0)),
+            timestamp_us=int(payload.get("timestamp_us", 0)),
+            captured_length=int(payload.get("captured_length", 0)),
+            original_length=int(payload.get("original_length", 0)),
+            link_type=int(payload.get("link_type", 0)),
+            eth_type=payload.get("eth_type"),
+            src_mac=payload.get("src_mac"),
+            dst_mac=payload.get("dst_mac"),
+            ip_version=int(payload.get("ip_version", 0) or 0),
+            src_ip=payload.get("src_ip"),
+            dst_ip=payload.get("dst_ip"),
+            ip_protocol=int(payload.get("ip_protocol", 0) or 0),
+            l4_protocol=payload.get("l4_protocol"),
+            src_port=payload.get("src_port"),
+            dst_port=payload.get("dst_port"),
+            tcp_flags=payload.get("tcp_flags"),
+            tcp_seq=payload.get("tcp_seq"),
+            tcp_ack=payload.get("tcp_ack"),
+            tcp_window=payload.get("tcp_window"),
+            tcp_mss=payload.get("tcp_mss"),
+            arp_sender_ip=payload.get("arp_sender_ip"),
+            arp_sender_mac=payload.get("arp_sender_mac"),
+            dns_qname=payload.get("dns_qname"),
+            dns_is_query=payload.get("dns_is_query"),
+            dns_is_response=payload.get("dns_is_response"),
+            dns_rcode=payload.get("dns_rcode"),
+            ttl=payload.get("ttl"),
+            quality_flags=int(payload.get("quality_flags", 0) or 0),
+            is_vlan=bool(payload.get("is_vlan", False)),
+            is_arp=bool(payload.get("is_arp", False)),
+            is_multicast=bool(payload.get("is_multicast", False)),
+            is_broadcast=bool(payload.get("is_broadcast", False)),
+            is_ipv4_fragment=bool(payload.get("is_ipv4_fragment", False)),
+            is_ipv6_fragment=bool(payload.get("is_ipv6_fragment", False)),
+            protocol_stack=tuple((payload.get("stack_summary") or "").split("/")) if payload.get("stack_summary") else tuple(),
+            payload_bytes=None,
+        )
+        self._record_stats(packet)

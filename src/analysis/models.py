@@ -137,3 +137,13 @@ class AnalysisPacket:
             "is_ipv6_fragment": self.is_ipv6_fragment,
             "protocol_stack": list(self.protocol_stack),
         }
+
+@dataclass(frozen=True)
+class FlowKey:
+    """Five tuple plus protocol and direction for a packet."""
+    src_ip: str
+    dst_ip: str
+    src_port: int
+    dst_port: int
+    ip_protocol: int
+    direction: Direction
