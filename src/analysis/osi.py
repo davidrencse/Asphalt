@@ -44,3 +44,7 @@ def derive_osi_tags_from_decoded(record) -> List[str]:
     if dns_qname:
         _add(tags, "app:dns")
     return tags
+
+
+def derive_osi_tags_from_analysis_packet(packet) -> List[str]:
+    return derive_osi_tags_from_decoded(packet)

@@ -147,3 +147,47 @@ class FlowKey:
     dst_port: int
     ip_protocol: int
     direction: Direction
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "src_ip": self.src_ip,
+            "dst_ip": self.dst_ip,
+            "src_port": self.src_port,
+            "dst_port": self.dst_port,
+            "ip_protocol": self.ip_protocol,
+            "direction": self.direction.value,
+        }
+
+@dataclass
+class FlowState:
+    """Aggregate state for a flow."""
+    flow_id: str
+    a_ip: str
+    a_port: int
+    b_ip: str
+    b_port: int
+    ip_protocol: int
+    first_ts_us: int
+    last_ts_us: int
+    packets_total: int = 0
+    packets_fwd: int = 0
+    packets_rev: int = 0
+    bytes_captured_total: int = 0
+    bytes_captured_fwd: int = 0
+    bytes_captured_rev: int = 0
+    bytes_original_total: int = 0
+    bytes_original_fwd: int = 0
+    bytes_original_rev: int = 0
+    ip_versions: Dict[str, int] = field(default_factory=dict)
+    l4_protocols: Dict[str, int] = field(default_factory=dict)
+    tcp_flags: Dict[str, int] = field(default_factory=dict)
+    quality_flags: Dict[str, int] = field(default_factory=dict)
+    has_fwd: bool = False
+    has_rev: bool = False
+    tcp_syn_seen: bool = False
+    tcp_synack_seen: bool = False
+    tcp_ack_seen: bool = False
+    tcp_rst_seen: bool = False
+    tcp_seen: bool = False
+    udp_seen: bool = False
+    dns_seen: bool = False
