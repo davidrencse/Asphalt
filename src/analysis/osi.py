@@ -48,3 +48,28 @@ def derive_osi_tags_from_decoded(record) -> List[str]:
 
 def derive_osi_tags_from_analysis_packet(packet) -> List[str]:
     return derive_osi_tags_from_decoded(packet)
+
+
+def derive_osi_tags_from_flow(flow) -> List[str]:
+    tags: List[str] = []
+    if flow is None:
+        return tags
+    if isinstance(flow, dict):
+        ip_versions = flow.get("ip_versions", {}) or {}
+        proto = flow.get("ip_protocol")
+        dns_seen = flow.get("dns_seen", False)
+    else:
+        ip_versions = getattr(flow, "ip_versions", {}) or {}
+        proto = getattr(flow, "ip_protocol", None)
+        dns_seen = getattr(flow, "dns_seen", False)
+    if "4" in ip_versions or 4 in ip_versions:
+        _add(tags, "l3:ipv4")
+    if "6" in ip_versions or 6 in ip_versions:
+        _add(tags, "l3:ipv6")
+    if proto == 6:
+        _add(tags, "l4:tcp")
+    elif proto == 17:
+        _add(tags, "l4:udp")
+    if dns_seen:
+        _add(tags, "app:dns")
+    return tags

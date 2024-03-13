@@ -34,3 +34,21 @@ def make_flow_key(decoded: DecodedPacket) -> Optional[Tuple[str, FlowKey, Tuple[
 
     src_key = _endpoint_key(src_ip, src_port)
     dst_key = _endpoint_key(dst_ip, dst_port)
+
+    if src_key <= dst_key:
+        direction = Direction.FWD
+        a_ip, a_port, b_ip, b_port = src_ip, src_port, dst_ip, dst_port
+    else:
+        direction = Direction.REV
+        a_ip, a_port, b_ip, b_port = dst_ip, dst_port, src_ip, src_port
+
+    flow_id = f"{a_ip}:{a_port}-{b_ip}:{b_port}-{decoded.ip_protocol}"
+    flow_key = FlowKey(
+        src_ip=src_ip,
+        dst_ip=dst_ip,
+        src_port=src_port,
+        dst_port=dst_port,
+        ip_protocol=int(decoded.ip_protocol),
+        direction=direction,
+    )
+    return flow_id, flow_key, (a_ip, a_port, b_ip, b_port)
