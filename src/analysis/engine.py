@@ -122,3 +122,32 @@ class AnalysisEngine:
             payload_bytes=None,
         )
         self._record_stats(packet)
+
+        self.context.osi_tags.append(derive_osi_tags_from_analysis_packet(packet))
+
+        flow_key_data = make_flow_key_from_fields(
+            packet.src_ip,
+            packet.dst_ip,
+            packet.src_port,
+            packet.dst_port,
+            packet.ip_protocol,
+        )
+        flow_key = None
+        flow_state = None
+        if flow_key_data:
+            flow_id, flow_key, endpoints = flow_key_data
+            flow_state = self.context.flow_table.get(flow_id)
+            if flow_state is None:
+                a_ip, a_port, b_ip, b_port = endpoints
+                flow_state = FlowState(
+                    flow_id=flow_id,
+                    a_ip=a_ip,
+                    a_port=a_port,
+                    b_ip=b_ip,
+                    b_port=b_port,
+                    ip_protocol=int(packet.ip_protocol),
+                    first_ts_us=packet.timestamp_us,
+                    last_ts_us=packet.timestamp_us,
+                )
+                self.context.flow_table[flow_id] = flow_state
+            flow_state.update_from_packet(packet, flow_key.direction)

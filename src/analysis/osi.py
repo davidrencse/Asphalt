@@ -73,3 +73,20 @@ def derive_osi_tags_from_flow(flow) -> List[str]:
     if dns_seen:
         _add(tags, "app:dns")
     return tags
+
+
+def count_tags(tag_lists: Iterable[Iterable[str]]) -> dict:
+    summary = {
+        "l2": {"ethernet": 0, "arp": 0},
+        "l3": {"ipv4": 0, "ipv6": 0},
+        "l4": {"tcp": 0, "udp": 0},
+        "app": {"dns": 0},
+    }
+    for tags in tag_lists:
+        for tag in tags:
+            if not isinstance(tag, str) or ":" not in tag:
+                continue
+            layer, value = tag.split(":", 1)
+            if layer in summary and value in summary[layer]:
+                summary[layer][value] += 1
+    return summary
