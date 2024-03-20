@@ -191,3 +191,43 @@ class FlowState:
     tcp_seen: bool = False
     udp_seen: bool = False
     dns_seen: bool = False
+
+    def update_from_packet(self, packet: AnalysisPacket, direction: Direction) -> None:
+        self.last_ts_us = max(self.last_ts_us, packet.timestamp_us)
+        self.packets_total += 1
+        self.bytes_captured_total += packet.captured_length
+        self.bytes_original_total += packet.original_length
+
+        if direction == Direction.FWD:
+            self.packets_fwd += 1
+            self.bytes_captured_fwd += packet.captured_length
+            self.bytes_original_fwd += packet.original_length
+            self.has_fwd = True
+        elif direction == Direction.REV:
+            self.packets_rev += 1
+            self.bytes_captured_rev += packet.captured_length
+            self.bytes_original_rev += packet.original_length
+            self.has_rev = True
+
+        if packet.ip_version:
+            key = str(packet.ip_version)
+            self.ip_versions[key] = self.ip_versions.get(key, 0) + 1
+        if packet.l4_protocol:
+            self.l4_protocols[packet.l4_protocol] = self.l4_protocols.get(packet.l4_protocol, 0) + 1
+
+        if packet.tcp_flags is not None:
+            for name in _tcp_flag_names(packet.tcp_flags):
+                self.tcp_flags[name] = self.tcp_flags.get(name, 0) + 1
+            self.tcp_seen = True
+            flags = packet.tcp_flags
+            is_syn = bool(flags & 0x02)
+            is_ack = bool(flags & 0x10)
+            is_rst = bool(flags & 0x04)
+            if is_syn and not is_ack:
+                self.tcp_syn_seen = True
+            if is_syn and is_ack:
+                self.tcp_synack_seen = True
+            if is_ack and not is_syn:
+                self.tcp_ack_seen = True
+            if is_rst:
+                self.tcp_rst_seen = True
