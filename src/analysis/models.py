@@ -231,3 +231,46 @@ class FlowState:
                 self.tcp_ack_seen = True
             if is_rst:
                 self.tcp_rst_seen = True
+
+        if packet.quality_flags != 0:
+            self.quality_flags[str(packet.quality_flags)] = self.quality_flags.get(str(packet.quality_flags), 0) + 1
+
+        if packet.l4_protocol == "UDP" or packet.ip_protocol == 17:
+            self.udp_seen = True
+        if packet.dns_qname:
+            self.dns_seen = True
+
+    def duration_us(self) -> int:
+        if self.packets_total == 0:
+            return 0
+        return max(0, self.last_ts_us - self.first_ts_us)
+
+    def to_dict(self) -> Dict[str, Any]:
+        from .osi import derive_osi_tags_from_flow
+        duration = self.duration_us()
+        return {
+            "flow_id": self.flow_id,
+            "a_ip": self.a_ip,
+            "a_port": self.a_port,
+            "b_ip": self.b_ip,
+            "b_port": self.b_port,
+            "ip_protocol": self.ip_protocol,
+            "first_ts_us": self.first_ts_us,
+            "last_ts_us": self.last_ts_us,
+            "duration_us": duration,
+            "packets_total": self.packets_total,
+            "packets_fwd": self.packets_fwd,
+            "packets_rev": self.packets_rev,
+            "bytes_captured_total": self.bytes_captured_total,
+            "bytes_captured_fwd": self.bytes_captured_fwd,
+            "bytes_captured_rev": self.bytes_captured_rev,
+            "bytes_original_total": self.bytes_original_total,
+            "bytes_original_fwd": self.bytes_original_fwd,
+            "bytes_original_rev": self.bytes_original_rev,
+            "ip_versions": self.ip_versions,
+            "l4_protocols": self.l4_protocols,
+            "tcp_flags": self.tcp_flags,
+            "quality_flags": self.quality_flags,
+            "dns_seen": self.dns_seen,
+            "osi_tags": derive_osi_tags_from_flow(self),
+        }

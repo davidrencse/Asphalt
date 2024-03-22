@@ -52,3 +52,22 @@ def make_flow_key(decoded: DecodedPacket) -> Optional[Tuple[str, FlowKey, Tuple[
         direction=direction,
     )
     return flow_id, flow_key, (a_ip, a_port, b_ip, b_port)
+
+
+def make_flow_key_from_fields(src_ip: Optional[str],
+                              dst_ip: Optional[str],
+                              src_port: Optional[int],
+                              dst_port: Optional[int],
+                              ip_protocol: Optional[int]) -> Optional[Tuple[str, FlowKey, Tuple[str, int, str, int]]]:
+    if not src_ip or not dst_ip:
+        return None
+    if src_port is None or dst_port is None:
+        return None
+    if not ip_protocol:
+        return None
+
+    src_ip = str(src_ip)
+    dst_ip = str(dst_ip)
+    src_port = int(src_port)
+    dst_port = int(dst_port)
+    ip_protocol = int(ip_protocol)
