@@ -274,3 +274,20 @@ class FlowState:
             "dns_seen": self.dns_seen,
             "osi_tags": derive_osi_tags_from_flow(self),
         }
+
+@dataclass(frozen=True)
+class TimeSeriesPoint:
+    start_us: int
+    end_us: int
+    packets: int
+    bytes_captured: int
+    bytes_original: int
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "start_us": self.start_us,
+            "end_us": self.end_us,
+            "packets": self.packets,
+            "bytes_captured": self.bytes_captured,
+            "bytes_original": self.bytes_original,
+        }
