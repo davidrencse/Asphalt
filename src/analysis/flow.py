@@ -71,3 +71,6 @@ def make_flow_key_from_fields(src_ip: Optional[str],
     src_port = int(src_port)
     dst_port = int(dst_port)
     ip_protocol = int(ip_protocol)
+
+    src_key = _endpoint_key(src_ip, src_port)
+    dst_key = _endpoint_key(dst_ip, dst_port)

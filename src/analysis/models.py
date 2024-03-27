@@ -291,3 +291,45 @@ class TimeSeriesPoint:
             "bytes_captured": self.bytes_captured,
             "bytes_original": self.bytes_original,
         }
+
+@dataclass(frozen=True)
+class AnalyzerResult:
+    analyzer: str
+    global_results: Dict[str, Any] = field(default_factory=dict)
+    flow_results: Dict[str, Any] = field(default_factory=dict)
+    time_series: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "analyzer": self.analyzer,
+            "global_results": self.global_results,
+            "flow_results": self.flow_results,
+            "time_series": self.time_series,
+        }
+
+@dataclass
+class AnalysisReport:
+    capture_path: Optional[str]
+    created_at: str
+    stats: Dict[str, Any]
+    global_results: Dict[str, Any] = field(default_factory=dict)
+    flow_results: Dict[str, Any] = field(default_factory=dict)
+    time_series: Dict[str, Any] = field(default_factory=dict)
+    osi_summary: Dict[str, Any] = field(default_factory=dict)
+    analyzers: List[Dict[str, str]] = field(default_factory=list)
+
+    @staticmethod
+    def now_iso() -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "capture_path": self.capture_path,
+            "created_at": self.created_at,
+            "stats": self.stats,
+            "global_results": self.global_results,
+            "flow_results": self.flow_results,
+            "time_series": self.time_series,
+            "osi_summary": self.osi_summary,
+            "analyzers": self.analyzers,
+        }
