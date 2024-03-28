@@ -9,3 +9,6 @@ from ..models import AnalysisPacket, AnalyzerResult, FlowKey
 class Analyzer(ABC):
     name = "base"
     version = "0.1"
+
+    def on_start(self, context) -> None:
+        return None
