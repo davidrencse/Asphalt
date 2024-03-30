@@ -12,3 +12,7 @@ class Analyzer(ABC):
 
     def on_start(self, context) -> None:
         return None
+
+    @abstractmethod
+    def on_packet(self, packet: AnalysisPacket, flow_key: Optional[FlowKey], flow_state, context) -> None:
+        raise NotImplementedError
