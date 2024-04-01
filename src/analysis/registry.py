@@ -39,3 +39,10 @@ def _load_builtin_analyzers() -> None:
 def list_analyzers() -> List[str]:
     _load_builtin_analyzers()
     return sorted(_REGISTRY.keys())
+
+
+def create_analyzer(name: str, **kwargs) -> Analyzer:
+    _load_builtin_analyzers()
+    if name not in _REGISTRY:
+        raise KeyError(f"Unknown analyzer: {name}")
+    return _REGISTRY[name](**kwargs)
