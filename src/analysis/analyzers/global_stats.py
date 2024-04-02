@@ -11,3 +11,9 @@ from ..registry import register_analyzer
 class GlobalStatsAnalyzer(Analyzer):
     name = "global_stats"
     version = "1.0"
+
+    def __init__(self):
+        self.ip_versions: Dict[str, int] = {}
+        self.l4_protocols: Dict[str, int] = {}
+        self.quality_flags: Dict[str, int] = {}
+        self.tcp_flags: Dict[str, int] = {}
