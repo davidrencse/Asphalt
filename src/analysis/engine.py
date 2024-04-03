@@ -151,3 +151,31 @@ class AnalysisEngine:
                 )
                 self.context.flow_table[flow_id] = flow_state
             flow_state.update_from_packet(packet, flow_key.direction)
+
+        for analyzer in self.analyzers:
+            analyzer.on_packet(packet, flow_key, flow_state, self.context)
+
+    def analyze_stream(self, packets: Iterable, limit: int = 0) -> AnalysisReport:
+        count = 0
+        for decoded in packets:
+            self.process_packet(decoded)
+            count += 1
+            if limit > 0 and count >= limit:
+                break
+        return self.finalize()
+
+    def finalize(self) -> AnalysisReport:
+        global_results: Dict[str, Dict] = {}
+        flow_results: Dict[str, Dict] = {}
+        time_series: Dict[str, Dict] = {}
+        analyzer_meta: List[Dict[str, str]] = []
+
+        for analyzer in self.analyzers:
+            analyzer_meta.append({"name": analyzer.name, "version": analyzer.version})
+            result: AnalyzerResult = analyzer.on_end(self.context)
+            if result.global_results:
+                global_results[result.analyzer] = result.global_results
+            if result.flow_results:
+                flow_results[result.analyzer] = result.flow_results
+            if result.time_series:
+                time_series[result.analyzer] = result.time_series
