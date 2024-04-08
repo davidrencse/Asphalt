@@ -17,3 +17,16 @@ class GlobalStatsAnalyzer(Analyzer):
         self.l4_protocols: Dict[str, int] = {}
         self.quality_flags: Dict[str, int] = {}
         self.tcp_flags: Dict[str, int] = {}
+
+    def on_packet(self, packet: AnalysisPacket, flow_key: Optional[FlowKey], flow_state, context) -> None:
+        if packet.ip_version:
+            key = str(packet.ip_version)
+            self.ip_versions[key] = self.ip_versions.get(key, 0) + 1
+        if packet.l4_protocol:
+            self.l4_protocols[packet.l4_protocol] = self.l4_protocols.get(packet.l4_protocol, 0) + 1
+        if packet.quality_flags != 0:
+            key = str(packet.quality_flags)
+            self.quality_flags[key] = self.quality_flags.get(key, 0) + 1
+        if packet.tcp_flags is not None:
+            for name in _tcp_flag_names(packet.tcp_flags):
+                self.tcp_flags[name] = self.tcp_flags.get(name, 0) + 1
