@@ -9,3 +9,6 @@ from ..registry import register_analyzer
 class FlowSummaryAnalyzer(Analyzer):
     name = "flow_summary"
     version = "1.0"
+
+    def on_packet(self, packet, flow_key, flow_state, context) -> None:
+        return None
