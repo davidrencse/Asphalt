@@ -25,3 +25,23 @@ class TimeSeriesAnalyzer(Analyzer):
         bucket["packets"] += 1
         bucket["bytes_captured"] += packet.captured_length
         bucket["bytes_original"] += packet.original_length
+
+    def on_end(self, context) -> AnalyzerResult:
+        points = []
+        for start in sorted(self.buckets.keys()):
+            data = self.buckets[start]
+            point = TimeSeriesPoint(
+                start_us=start,
+                end_us=start + self.bucket_us,
+                packets=data["packets"],
+                bytes_captured=data["bytes_captured"],
+                bytes_original=data["bytes_original"],
+            )
+            points.append(point.to_dict())
+        return AnalyzerResult(
+            analyzer=self.name,
+            time_series={
+                "bucket_ms": self.bucket_us // 1000,
+                "traffic": points,
+            },
+        )

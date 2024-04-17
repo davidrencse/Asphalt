@@ -16,3 +16,8 @@ class ProtocolMixAnalyzer(Analyzer):
     def __init__(self):
         self.counts: Dict[str, int] = {}
         self.total = 0
+
+    def on_packet(self, packet: AnalysisPacket, flow_key: Optional[FlowKey], flow_state, context) -> None:
+        label = _classify_l4(packet)
+        self.counts[label] = self.counts.get(label, 0) + 1
+        self.total += 1
