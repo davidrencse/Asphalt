@@ -30,3 +30,19 @@ class GlobalStatsAnalyzer(Analyzer):
         if packet.tcp_flags is not None:
             for name in _tcp_flag_names(packet.tcp_flags):
                 self.tcp_flags[name] = self.tcp_flags.get(name, 0) + 1
+
+    def on_end(self, context) -> AnalyzerResult:
+        duration_us = context.stats.get("duration_us", 0)
+        return AnalyzerResult(
+            analyzer=self.name,
+            global_results={
+                "packets_total": context.stats.get("packets_total", 0),
+                "bytes_captured_total": context.stats.get("bytes_captured_total", 0),
+                "bytes_original_total": context.stats.get("bytes_original_total", 0),
+                "duration_us": duration_us,
+                "ip_versions": self.ip_versions,
+                "l4_protocols": self.l4_protocols,
+                "quality_flags": self.quality_flags,
+                "tcp_flags": self.tcp_flags,
+            },
+        )

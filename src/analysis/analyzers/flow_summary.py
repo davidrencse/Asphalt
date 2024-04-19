@@ -12,3 +12,10 @@ class FlowSummaryAnalyzer(Analyzer):
 
     def on_packet(self, packet, flow_key, flow_state, context) -> None:
         return None
+
+    def on_end(self, context) -> AnalyzerResult:
+        flows = [flow.to_dict() for flow in context.flow_table.values()]
+        return AnalyzerResult(
+            analyzer=self.name,
+            flow_results={"flows": flows},
+        )
