@@ -179,3 +179,15 @@ class AnalysisEngine:
                 flow_results[result.analyzer] = result.flow_results
             if result.time_series:
                 time_series[result.analyzer] = result.time_series
+
+        report = AnalysisReport(
+            capture_path=self.context.capture_path,
+            created_at=AnalysisReport.now_iso(),
+            stats=self.context.stats,
+            global_results=global_results,
+            flow_results=flow_results,
+            time_series=time_series,
+            analyzers=analyzer_meta,
+            osi_summary=count_tags(self.context.osi_tags),
+        )
+        return report
