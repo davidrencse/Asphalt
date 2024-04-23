@@ -27,3 +27,16 @@ class _Handshake:
 class TcpHandshakeAnalyzer(Analyzer):
     name = "tcp_handshakes"
     version = "1.0"
+
+    def __init__(self):
+        self.handshakes: Dict[str, _Handshake] = {}
+
+    def on_packet(self, packet: AnalysisPacket, flow_key: Optional[FlowKey], flow_state, context) -> None:
+        if packet.ip_protocol != 6 and packet.l4_protocol != "TCP":
+            return
+        if flow_state is None:
+            return
+
+        flags = packet.tcp_flags or 0
+        is_syn = bool(flags & 0x02)
+        is_ack = bool(flags & 0x10)
