@@ -21,3 +21,17 @@ class ProtocolMixAnalyzer(Analyzer):
         label = _classify_l4(packet)
         self.counts[label] = self.counts.get(label, 0) + 1
         self.total += 1
+
+    def on_end(self, context) -> AnalyzerResult:
+        percentages = {}
+        if self.total:
+            for key, count in self.counts.items():
+                percentages[key] = round((count / self.total) * 100.0, 2)
+        return AnalyzerResult(
+            analyzer=self.name,
+            global_results={
+                "total_packets": self.total,
+                "protocol_counts": self.counts,
+                "protocol_percentages": percentages,
+            },
+        )
