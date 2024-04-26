@@ -25,3 +25,21 @@ class ThroughputPeaksAnalyzer(Analyzer):
         bucket = self.buckets.setdefault(start, {"packets": 0, "bytes_captured": 0})
         bucket["packets"] += 1
         bucket["bytes_captured"] += packet.captured_length
+
+    def on_end(self, context) -> AnalyzerResult:
+        if not self.buckets:
+            return AnalyzerResult(
+                analyzer=self.name,
+                global_results={
+                    "bucket_ms": self.bucket_us // 1000,
+                    "bps_now": 0.0,
+                    "bps_avg": 0.0,
+                    "pps_now": 0.0,
+                    "pps_avg": 0.0,
+                    "peak_bps": 0.0,
+                    "peak_pps": 0.0,
+                    "peak_bps_timestamp": None,
+                    "peak_pps_timestamp": None,
+                    "peak_timestamp": None,
+                },
+            )
