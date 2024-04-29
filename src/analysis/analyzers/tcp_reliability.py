@@ -51,3 +51,16 @@ class TcpReliabilityAnalyzer(Analyzer):
         items = sorted(self.flows.items(), key=lambda kv: (kv[1].last_seen_us, kv[0]))
         for fid, _ in items[:len(self.flows) - self.max_flows]:
             del self.flows[fid]
+
+    def _flow_state(self, flow_id: str, ts_us: int) -> _FlowReliabilityState:
+        state = self.flows.get(flow_id)
+        if state is None:
+            state = _FlowReliabilityState(
+                last_seen_us=ts_us,
+                last_seq={"fwd": 0, "rev": 0},
+                recent_seqs={"fwd": deque(maxlen=self.seq_window), "rev": deque(maxlen=self.seq_window)},
+                last_ack={"fwd": None, "rev": None},
+                last_ack_repeats={"fwd": 0, "rev": 0},
+            )
+            self.flows[flow_id] = state
+        return state
