@@ -40,3 +40,18 @@ class TcpHandshakeAnalyzer(Analyzer):
         flags = packet.tcp_flags or 0
         is_syn = bool(flags & 0x02)
         is_ack = bool(flags & 0x10)
+
+        handshake = self.handshakes.get(flow_state.flow_id)
+        if handshake is None:
+            handshake = _Handshake(flow_id=flow_state.flow_id)
+            self.handshakes[flow_state.flow_id] = handshake
+
+        if is_syn and not is_ack and handshake.syn_ts is None:
+            handshake.syn_ts = packet.timestamp_us
+            handshake.syn_src = packet.src_ip
+            handshake.syn_dst = packet.dst_ip
+            handshake.syn_port = packet.src_port
+            handshake.syn_dst_port = packet.dst_port
+            handshake.initiator = f"{packet.src_ip}:{packet.src_port}"
+            handshake.responder = f"{packet.dst_ip}:{packet.dst_port}"
+            return
