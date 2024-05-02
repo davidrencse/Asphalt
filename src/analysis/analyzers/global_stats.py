@@ -46,3 +46,20 @@ class GlobalStatsAnalyzer(Analyzer):
                 "tcp_flags": self.tcp_flags,
             },
         )
+
+def _tcp_flag_names(flags: int):
+    names = []
+    flag_map = [
+        (0x80, "CWR"),
+        (0x40, "ECE"),
+        (0x20, "URG"),
+        (0x10, "ACK"),
+        (0x08, "PSH"),
+        (0x04, "RST"),
+        (0x02, "SYN"),
+        (0x01, "FIN"),
+    ]
+    for mask, name in flag_map:
+        if flags & mask:
+            names.append(name)
+    return tuple(names)
