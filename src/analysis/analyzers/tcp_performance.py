@@ -22,3 +22,16 @@ def _percentile(values: List[int], percent: float) -> Optional[float]:
         return float(sorted_vals[lower])
     weight = position - lower
     return sorted_vals[lower] + (sorted_vals[upper] - sorted_vals[lower]) * weight
+
+
+@register_analyzer
+class TcpPerformanceAnalyzer(Analyzer):
+    name = "tcp_performance"
+    version = "1.0"
+
+    def __init__(self, top_n: int = 3):
+        self.top_n = max(1, top_n)
+        self.windows: List[int] = []
+        self.zero_window = 0
+        self.mss_counts: Dict[int, int] = defaultdict(int)
+        self.mss_total = 0

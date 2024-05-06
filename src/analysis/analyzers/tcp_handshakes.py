@@ -55,3 +55,24 @@ class TcpHandshakeAnalyzer(Analyzer):
             handshake.initiator = f"{packet.src_ip}:{packet.src_port}"
             handshake.responder = f"{packet.dst_ip}:{packet.dst_port}"
             return
+
+        if is_syn and is_ack and handshake.synack_ts is None:
+            handshake.synack_ts = packet.timestamp_us
+            return
+
+        if is_ack and not is_syn and handshake.ack_ts is None:
+            handshake.ack_ts = packet.timestamp_us
+
+    def on_end(self, context) -> AnalyzerResult:
+        results = []
+        complete = 0
+        incomplete = 0
+        rtt_samples = []
+
+        for handshake in self.handshakes.values():
+            status = "incomplete"
+            if handshake.syn_ts and handshake.synack_ts and handshake.ack_ts:
+                status = "complete"
+                complete += 1
+            else:
+                incomplete += 1

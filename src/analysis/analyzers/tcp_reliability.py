@@ -64,3 +64,14 @@ class TcpReliabilityAnalyzer(Analyzer):
             )
             self.flows[flow_id] = state
         return state
+
+    def on_packet(self, packet: AnalysisPacket, flow_key: Optional[FlowKey], flow_state, context) -> None:
+        if packet.ip_protocol != 6 and packet.l4_protocol != "TCP":
+            return
+        if flow_key is None or packet.tcp_seq is None:
+            return
+
+        ts_us = packet.timestamp_us or 0
+        self._purge(ts_us)
+        state = self._flow_state(flow_state.flow_id if flow_state else flow_key.to_dict().__str__(), ts_us)
+        direction = flow_key.direction.value if flow_key else "fwd"
