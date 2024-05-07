@@ -76,3 +76,32 @@ class TcpHandshakeAnalyzer(Analyzer):
                 complete += 1
             else:
                 incomplete += 1
+
+            rtt_synack = None
+            rtt_ack = None
+            if handshake.syn_ts and handshake.synack_ts:
+                rtt_synack = handshake.synack_ts - handshake.syn_ts
+                rtt_samples.append(rtt_synack)
+            if handshake.syn_ts and handshake.ack_ts:
+                rtt_ack = handshake.ack_ts - handshake.syn_ts
+
+            results.append({
+                "flow_id": handshake.flow_id,
+                "initiator": handshake.initiator,
+                "responder": handshake.responder,
+                "syn_ts": handshake.syn_ts,
+                "synack_ts": handshake.synack_ts,
+                "ack_ts": handshake.ack_ts,
+                "rtt_synack_us": rtt_synack,
+                "rtt_ack_us": rtt_ack,
+                "status": status,
+            })
+
+        total = len(self.handshakes)
+        completion_rate = round(complete / total, 4) if total else 0.0
+        rtt_median_ms = _percentile(rtt_samples, 50.0)
+        rtt_p95_ms = _percentile(rtt_samples, 95.0)
+        if rtt_median_ms is not None:
+            rtt_median_ms = round(rtt_median_ms / 1000.0, 3)
+        if rtt_p95_ms is not None:
+            rtt_p95_ms = round(rtt_p95_ms / 1000.0, 3)

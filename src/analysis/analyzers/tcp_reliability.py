@@ -75,3 +75,23 @@ class TcpReliabilityAnalyzer(Analyzer):
         self._purge(ts_us)
         state = self._flow_state(flow_state.flow_id if flow_state else flow_key.to_dict().__str__(), ts_us)
         direction = flow_key.direction.value if flow_key else "fwd"
+
+        state.last_seen_us = ts_us
+        state.tcp_packets += 1
+        self.total_tcp_packets += 1
+
+        flags = packet.tcp_flags or 0
+        is_syn = bool(flags & 0x02)
+        is_fin = bool(flags & 0x01)
+        is_rst = bool(flags & 0x04)
+        is_ack = bool(flags & 0x10)
+        if is_rst:
+            state.rst_packets += 1
+            self.total_rst += 1
+
+        seq = packet.tcp_seq
+        if seq in state.recent_seqs[direction]:
+            state.retransmissions += 1
+            self.total_retransmissions += 1
+        else:
+            state.recent_seqs[direction].append(seq)

@@ -35,3 +35,9 @@ class TcpPerformanceAnalyzer(Analyzer):
         self.zero_window = 0
         self.mss_counts: Dict[int, int] = defaultdict(int)
         self.mss_total = 0
+
+    def on_packet(self, packet: AnalysisPacket, flow_key: Optional[FlowKey], flow_state, context) -> None:
+        if packet.ip_protocol != 6 and packet.l4_protocol != "TCP":
+            return
+        flags = packet.tcp_flags or 0
+        is_ack = bool(flags & 0x10)
