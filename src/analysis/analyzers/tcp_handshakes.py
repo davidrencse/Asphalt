@@ -105,3 +105,18 @@ class TcpHandshakeAnalyzer(Analyzer):
             rtt_median_ms = round(rtt_median_ms / 1000.0, 3)
         if rtt_p95_ms is not None:
             rtt_p95_ms = round(rtt_p95_ms / 1000.0, 3)
+
+        return AnalyzerResult(
+            analyzer=self.name,
+            global_results={
+                "handshakes_total": len(self.handshakes),
+                "handshakes_complete": complete,
+                "handshakes_incomplete": incomplete,
+                "completion_rate": completion_rate,
+                "rtt_median_ms": rtt_median_ms,
+                "rtt_p95_ms": rtt_p95_ms,
+            },
+            flow_results={
+                "handshakes": results,
+            },
+        )
