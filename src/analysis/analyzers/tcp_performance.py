@@ -41,3 +41,12 @@ class TcpPerformanceAnalyzer(Analyzer):
             return
         flags = packet.tcp_flags or 0
         is_ack = bool(flags & 0x10)
+
+        if packet.tcp_window is not None:
+            self.windows.append(int(packet.tcp_window))
+            if packet.tcp_window == 0 and is_ack:
+                self.zero_window += 1
+
+        if packet.tcp_mss is not None:
+            self.mss_counts[int(packet.tcp_mss)] += 1
+            self.mss_total += 1
