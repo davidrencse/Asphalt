@@ -33,3 +33,13 @@ class AbnormalActivityAnalyzer(Analyzer):
         self.tcp_ack_packets = 0
         self.per_src_ports: Dict[str, Set[int]] = {}
         self.flow_handshakes: Dict[str, _HandshakeState] = {}
+
+    def on_packet(self, packet: AnalysisPacket, flow_key: Optional[FlowKey], flow_state, context) -> None:
+        if packet.quality_flags:
+            self.malformed_packets += 1
+            if packet.quality_flags & (1 << 0):
+                self.truncated_packets += 1
+
+        if packet.src_ip and packet.dst_port is not None:
+            ports = self.per_src_ports.setdefault(packet.src_ip, set())
+            ports.add(int(packet.dst_port))
