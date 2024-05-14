@@ -35,3 +35,19 @@ class ProtocolMixAnalyzer(Analyzer):
                 "protocol_percentages": percentages,
             },
         )
+
+
+def _classify_l4(packet: AnalysisPacket) -> str:
+    if packet.l4_protocol:
+        return packet.l4_protocol.upper()
+    if packet.ip_protocol == 1:
+        return "ICMP"
+    if packet.ip_protocol == 6:
+        return "TCP"
+    if packet.ip_protocol == 17:
+        return "UDP"
+    if packet.ip_protocol == 58:
+        return "ICMP6"
+    if packet.ip_protocol == 0:
+        return "UNKNOWN"
+    return "OTHER"
