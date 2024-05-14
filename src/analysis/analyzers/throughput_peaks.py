@@ -43,3 +43,15 @@ class ThroughputPeaksAnalyzer(Analyzer):
                     "peak_timestamp": None,
                 },
             )
+
+        bucket_duration_sec = self.bucket_us / 1_000_000.0
+        starts = sorted(self.buckets.keys())
+        first_start = starts[0]
+        last_start = starts[-1]
+
+        total_packets = 0
+        total_bytes = 0
+        peak_bps = 0.0
+        peak_pps = 0.0
+        peak_bps_ts = None
+        peak_pps_ts = None
