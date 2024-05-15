@@ -120,3 +120,18 @@ class TcpHandshakeAnalyzer(Analyzer):
                 "handshakes": results,
             },
         )
+
+
+def _percentile(values, percent: float):
+    if not values:
+        return None
+    if len(values) == 1:
+        return float(values[0])
+    sorted_vals = sorted(values)
+    position = (percent / 100.0) * (len(sorted_vals) - 1)
+    lower = int(position)
+    upper = min(lower + 1, len(sorted_vals) - 1)
+    if lower == upper:
+        return float(sorted_vals[lower])
+    weight = position - lower
+    return sorted_vals[lower] + (sorted_vals[upper] - sorted_vals[lower]) * weight

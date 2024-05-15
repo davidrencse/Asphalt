@@ -95,3 +95,10 @@ class TcpReliabilityAnalyzer(Analyzer):
             self.total_retransmissions += 1
         else:
             state.recent_seqs[direction].append(seq)
+
+        last_seq = state.last_seq[direction]
+        if last_seq and seq < last_seq and not is_syn and not is_fin:
+            state.out_of_order += 1
+            self.total_out_of_order += 1
+        if seq > last_seq:
+            state.last_seq[direction] = seq
