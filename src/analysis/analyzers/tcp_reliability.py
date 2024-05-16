@@ -102,3 +102,34 @@ class TcpReliabilityAnalyzer(Analyzer):
             self.total_out_of_order += 1
         if seq > last_seq:
             state.last_seq[direction] = seq
+
+        ack = packet.tcp_ack if is_ack else None
+        if ack is not None:
+            if state.last_ack[direction] == ack:
+                state.last_ack_repeats[direction] += 1
+                state.dup_acks += 1
+                self.total_dup_acks += 1
+            else:
+                state.last_ack[direction] = ack
+                state.last_ack_repeats[direction] = 0
+
+    def on_end(self, context) -> AnalyzerResult:
+        total = self.total_tcp_packets
+        rst_rate = round(self.total_rst / total, 4) if total else 0.0
+        retrans_rate = round(self.total_retransmissions / total, 4) if total else 0.0
+        out_of_order_rate = round(self.total_out_of_order / total, 4) if total else 0.0
+        dup_ack_rate = round(self.total_dup_acks / total, 4) if total else 0.0
+        return AnalyzerResult(
+            analyzer=self.name,
+            global_results={
+                "tcp_packets": total,
+                "retransmissions": self.total_retransmissions,
+                "retransmission_rate": retrans_rate,
+                "out_of_order": self.total_out_of_order,
+                "out_of_order_rate": out_of_order_rate,
+                "dup_acks": self.total_dup_acks,
+                "dup_ack_rate": dup_ack_rate,
+                "rst_packets": self.total_rst,
+                "rst_rate": rst_rate,
+            },
+        )

@@ -50,3 +50,11 @@ class TcpPerformanceAnalyzer(Analyzer):
         if packet.tcp_mss is not None:
             self.mss_counts[int(packet.tcp_mss)] += 1
             self.mss_total += 1
+
+    def _top_mss(self) -> List[dict]:
+        items = sorted(self.mss_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        results = []
+        for value, count in items[:self.top_n]:
+            pct = round((count / self.mss_total) * 100.0, 2) if self.mss_total else 0.0
+            results.append({"mss": value, "count": count, "pct": pct})
+        return results
