@@ -43,3 +43,10 @@ class AbnormalActivityAnalyzer(Analyzer):
         if packet.src_ip and packet.dst_port is not None:
             ports = self.per_src_ports.setdefault(packet.src_ip, set())
             ports.add(int(packet.dst_port))
+
+        if packet.l4_protocol == "TCP" or packet.ip_protocol == 6:
+            self.tcp_packets += 1
+            flags = packet.tcp_flags or 0
+            is_syn = bool(flags & 0x02)
+            is_ack = bool(flags & 0x10)
+            is_rst = bool(flags & 0x04)

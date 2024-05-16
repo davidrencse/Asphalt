@@ -21,3 +21,25 @@ def _entropy_score(value: str) -> float:
         p = count / total
         entropy -= p * log2(p)
     return entropy
+
+
+@register_analyzer
+class DnsAnomaliesAnalyzer(Analyzer):
+    name = "dns_anomalies"
+    version = "1.0"
+
+    def __init__(self,
+                 entropy_threshold: float = 3.5,
+                 label_length_threshold: int = 40,
+                 nxdomain_threshold_pct: float = 30.0,
+                 min_responses: int = 10,
+                 max_samples: int = 5):
+        self.entropy_threshold = entropy_threshold
+        self.label_length_threshold = label_length_threshold
+        self.nxdomain_threshold_pct = nxdomain_threshold_pct
+        self.min_responses = min_responses
+        self.max_samples = max(1, max_samples)
+        self.high_entropy: List[Dict[str, object]] = []
+        self.long_labels: List[Dict[str, object]] = []
+        self.nxdomain_count = 0
+        self.total_responses = 0
