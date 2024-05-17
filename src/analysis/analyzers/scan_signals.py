@@ -33,3 +33,12 @@ class ScanSignalsAnalyzer(Analyzer):
             self._add_to_set(self.dst_ips, packet.src_ip, packet.dst_ip)
         if packet.src_ip and packet.dst_port is not None:
             self._add_to_set(self.dst_ports, packet.src_ip, int(packet.dst_port))
+
+        if packet.ip_protocol == 6 or packet.l4_protocol == "TCP":
+            flags = packet.tcp_flags or 0
+            is_syn = bool(flags & 0x02)
+            is_ack = bool(flags & 0x10)
+            if is_syn and not is_ack:
+                self.syn_count += 1
+            if is_syn and is_ack:
+                self.synack_count += 1
