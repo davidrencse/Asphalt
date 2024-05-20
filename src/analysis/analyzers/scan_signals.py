@@ -42,3 +42,13 @@ class ScanSignalsAnalyzer(Analyzer):
                 self.syn_count += 1
             if is_syn and is_ack:
                 self.synack_count += 1
+
+    def _max_set(self, table: Dict[str, set]):
+        max_count = 0
+        max_src = None
+        for src, values in table.items():
+            count = len(values)
+            if count > max_count or (count == max_count and max_src and src < max_src):
+                max_count = count
+                max_src = src
+        return max_count, max_src
