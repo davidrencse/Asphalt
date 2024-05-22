@@ -52,3 +52,15 @@ class ScanSignalsAnalyzer(Analyzer):
                 max_count = count
                 max_src = src
         return max_count, max_src
+
+    def on_end(self, context) -> AnalyzerResult:
+        ports_max, ports_src = self._max_set(self.dst_ports)
+        ips_max, ips_src = self._max_set(self.dst_ips)
+        ratio = None
+        ratio_note = None
+        if self.synack_count > 0:
+            ratio = round(self.syn_count / self.synack_count, 3)
+        elif self.syn_count > 0:
+            ratio_note = "synack_zero"
+        else:
+            ratio = 0.0
