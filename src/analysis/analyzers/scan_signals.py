@@ -64,3 +64,23 @@ class ScanSignalsAnalyzer(Analyzer):
             ratio_note = "synack_zero"
         else:
             ratio = 0.0
+
+        return AnalyzerResult(
+            analyzer=self.name,
+            global_results={
+                "distinct_ports": {
+                    "max_count": ports_max,
+                    "src_ip": ports_src,
+                },
+                "distinct_ips": {
+                    "max_count": ips_max,
+                    "src_ip": ips_src,
+                },
+                "tcp_syn_ratio": {
+                    "syn_count": self.syn_count,
+                    "synack_count": self.synack_count,
+                    "ratio": ratio,
+                    "ratio_note": ratio_note,
+                },
+            },
+        )

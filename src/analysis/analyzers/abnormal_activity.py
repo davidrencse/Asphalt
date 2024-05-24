@@ -50,3 +50,24 @@ class AbnormalActivityAnalyzer(Analyzer):
             is_syn = bool(flags & 0x02)
             is_ack = bool(flags & 0x10)
             is_rst = bool(flags & 0x04)
+
+            if is_syn and is_ack:
+                self.tcp_synack_packets += 1
+            elif is_syn:
+                self.tcp_syn_packets += 1
+            if is_ack and not is_syn:
+                self.tcp_ack_packets += 1
+            if is_rst:
+                self.tcp_rst_packets += 1
+
+            if flow_state is not None:
+                state = self.flow_handshakes.setdefault(flow_state.flow_id, _HandshakeState())
+                if is_syn and not is_ack:
+                    state.syn_seen = True
+                elif is_syn and is_ack:
+                    state.synack_seen = True
+                elif is_ack and not is_syn:
+                    state.ack_seen = True
+
+    def on_end(self, context) -> AnalyzerResult:
+        findings = []

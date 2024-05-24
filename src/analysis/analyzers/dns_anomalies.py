@@ -43,3 +43,19 @@ class DnsAnomaliesAnalyzer(Analyzer):
         self.long_labels: List[Dict[str, object]] = []
         self.nxdomain_count = 0
         self.total_responses = 0
+
+    def on_packet(self, packet: AnalysisPacket, flow_key: Optional[FlowKey], flow_state, context) -> None:
+        if packet.dns_is_response is True:
+            self.total_responses += 1
+            if packet.dns_rcode == 3:
+                self.nxdomain_count += 1
+
+        if not packet.dns_qname:
+            return
+        qname = packet.dns_qname.strip(".").lower()
+        if not qname:
+            return
+        compact = qname.replace(".", "")
+        score = _entropy_score(compact)
+        if score >= self.entropy_threshold and len(self.high_entropy) < self.max_samples:
+            self.high_entropy.append({"domain": qname, "score": round(score, 3)})
