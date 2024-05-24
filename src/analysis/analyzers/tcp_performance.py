@@ -58,3 +58,16 @@ class TcpPerformanceAnalyzer(Analyzer):
             pct = round((count / self.mss_total) * 100.0, 2) if self.mss_total else 0.0
             results.append({"mss": value, "count": count, "pct": pct})
         return results
+
+    def on_end(self, context) -> AnalyzerResult:
+        return AnalyzerResult(
+            analyzer=self.name,
+            global_results={
+                "window_median": _percentile(self.windows, 50.0),
+                "window_p95": _percentile(self.windows, 95.0),
+                "zero_window": self.zero_window,
+                "mss_top_value": (max(self.mss_counts, key=lambda k: self.mss_counts[k]) if self.mss_counts else None),
+                "mss_top_pct": round((max(self.mss_counts.values()) / self.mss_total) * 100.0, 2) if self.mss_total else 0.0,
+                "mss_top_k": self._top_mss(),
+            },
+        )
