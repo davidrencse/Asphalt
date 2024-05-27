@@ -71,3 +71,20 @@ class AbnormalActivityAnalyzer(Analyzer):
 
     def on_end(self, context) -> AnalyzerResult:
         findings = []
+
+        if self.malformed_packets:
+            findings.append({
+                "type": "malformed_packets",
+                "severity": "medium",
+                "count": self.malformed_packets,
+            })
+
+        if self.tcp_packets:
+            rst_ratio = self.tcp_rst_packets / self.tcp_packets
+            if rst_ratio >= self.rst_ratio_threshold:
+                findings.append({
+                    "type": "high_tcp_rst_ratio",
+                    "severity": "medium",
+                    "ratio": round(rst_ratio, 3),
+                    "count": self.tcp_rst_packets,
+                })
