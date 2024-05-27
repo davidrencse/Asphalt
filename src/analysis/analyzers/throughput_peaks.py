@@ -55,3 +55,17 @@ class ThroughputPeaksAnalyzer(Analyzer):
         peak_pps = 0.0
         peak_bps_ts = None
         peak_pps_ts = None
+
+        for start in starts:
+            data = self.buckets[start]
+            total_packets += data["packets"]
+            total_bytes += data["bytes_captured"]
+
+            bps = (data["bytes_captured"] * 8) / bucket_duration_sec
+            pps = data["packets"] / bucket_duration_sec
+            if bps > peak_bps:
+                peak_bps = bps
+                peak_bps_ts = start
+            if pps > peak_pps:
+                peak_pps = pps
+                peak_pps_ts = start
