@@ -69,3 +69,10 @@ class ThroughputPeaksAnalyzer(Analyzer):
             if pps > peak_pps:
                 peak_pps = pps
                 peak_pps_ts = start
+
+        duration_us = (last_start + self.bucket_us) - first_start
+        duration_sec = duration_us / 1_000_000.0 if duration_us > 0 else bucket_duration_sec
+
+        now_bucket = self.buckets[last_start]
+        bps_now = (now_bucket["bytes_captured"] * 8) / bucket_duration_sec
+        pps_now = now_bucket["packets"] / bucket_duration_sec
