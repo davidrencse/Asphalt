@@ -59,3 +59,35 @@ class DnsAnomaliesAnalyzer(Analyzer):
         score = _entropy_score(compact)
         if score >= self.entropy_threshold and len(self.high_entropy) < self.max_samples:
             self.high_entropy.append({"domain": qname, "score": round(score, 3)})
+
+        labels = qname.split(".")
+        max_len = max((len(label) for label in labels), default=0)
+        if max_len >= self.label_length_threshold and len(self.long_labels) < self.max_samples:
+            self.long_labels.append({"domain": qname, "max_label_len": max_len})
+
+    def on_end(self, context) -> AnalyzerResult:
+        pct = round((self.nxdomain_count / self.total_responses) * 100.0, 2) if self.total_responses else 0.0
+        spike = self.total_responses >= self.min_responses and pct >= self.nxdomain_threshold_pct
+        return AnalyzerResult(
+            analyzer=self.name,
+            global_results={
+                "entropy": {
+                    "count": len(self.high_entropy),
+                    "samples": self.high_entropy,
+                    "threshold": self.entropy_threshold,
+                },
+                "long_labels": {
+                    "count": len(self.long_labels),
+                    "samples": self.long_labels,
+                    "threshold": self.label_length_threshold,
+                },
+                "nxdomain": {
+                    "nxdomain_count": self.nxdomain_count,
+                    "total_responses": self.total_responses,
+                    "nxdomain_pct": pct,
+                    "spike_detected": spike,
+                    "threshold_pct": self.nxdomain_threshold_pct,
+                    "min_responses": self.min_responses,
+                },
+            },
+        )

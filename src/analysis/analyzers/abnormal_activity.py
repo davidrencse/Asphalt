@@ -88,3 +88,14 @@ class AbnormalActivityAnalyzer(Analyzer):
                     "ratio": round(rst_ratio, 3),
                     "count": self.tcp_rst_packets,
                 })
+
+        scan_sources = []
+        for src_ip, ports in self.per_src_ports.items():
+            if len(ports) >= self.scan_port_threshold:
+                scan_sources.append({"src_ip": src_ip, "unique_dst_ports": len(ports)})
+        if scan_sources:
+            findings.append({
+                "type": "possible_port_scan",
+                "severity": "high",
+                "sources": scan_sources,
+            })
