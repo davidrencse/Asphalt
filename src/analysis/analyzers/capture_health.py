@@ -24,3 +24,12 @@ class CaptureHealthAnalyzer(Analyzer):
         self.first_ts = None
         self.last_ts = None
         self.link_types = set()
+
+    def on_packet(self, packet: AnalysisPacket, flow_key: Optional[FlowKey], flow_state, context) -> None:
+        self.total_packets += 1
+        if self.first_ts is None or packet.timestamp_us < self.first_ts:
+            self.first_ts = packet.timestamp_us
+        if self.last_ts is None or packet.timestamp_us > self.last_ts:
+            self.last_ts = packet.timestamp_us
+        if packet.link_type:
+            self.link_types.add(packet.link_type)
