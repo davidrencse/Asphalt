@@ -99,3 +99,11 @@ class AbnormalActivityAnalyzer(Analyzer):
                 "severity": "high",
                 "sources": scan_sources,
             })
+
+        syn_only = 0
+        synack_no_ack = 0
+        for state in self.flow_handshakes.values():
+            if state.syn_seen and not state.synack_seen and not state.ack_seen:
+                syn_only += 1
+            elif state.syn_seen and state.synack_seen and not state.ack_seen:
+                synack_no_ack += 1
