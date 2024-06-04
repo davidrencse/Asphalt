@@ -76,3 +76,24 @@ class ThroughputPeaksAnalyzer(Analyzer):
         now_bucket = self.buckets[last_start]
         bps_now = (now_bucket["bytes_captured"] * 8) / bucket_duration_sec
         pps_now = now_bucket["packets"] / bucket_duration_sec
+
+        bps_avg = (total_bytes * 8) / duration_sec if duration_sec > 0 else 0.0
+        pps_avg = total_packets / duration_sec if duration_sec > 0 else 0.0
+
+        peak_timestamp = peak_bps_ts if peak_bps_ts == peak_pps_ts else None
+
+        return AnalyzerResult(
+            analyzer=self.name,
+            global_results={
+                "bucket_ms": self.bucket_us // 1000,
+                "bps_now": round(bps_now, 3),
+                "bps_avg": round(bps_avg, 3),
+                "pps_now": round(pps_now, 3),
+                "pps_avg": round(pps_avg, 3),
+                "peak_bps": round(peak_bps, 3),
+                "peak_pps": round(peak_pps, 3),
+                "peak_bps_timestamp": peak_bps_ts,
+                "peak_pps_timestamp": peak_pps_ts,
+                "peak_timestamp": peak_timestamp,
+            },
+        )
