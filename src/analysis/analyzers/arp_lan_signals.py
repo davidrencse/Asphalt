@@ -37,3 +37,10 @@ class ArpLanSignalsAnalyzer(Analyzer):
         if current != mac:
             self.current_mac[ip] = mac
             self.change_counts[ip] = self.change_counts.get(ip, 0) + 1
+
+    def on_end(self, context) -> AnalyzerResult:
+        multiple = []
+        for ip, macs in self.macs_seen.items():
+            if len(macs) > 1:
+                multiple.append({"ip": ip, "macs": sorted(macs)})
+        multiple.sort(key=lambda item: (len(item["macs"]) * -1, item["ip"]))
