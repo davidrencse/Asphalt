@@ -21,3 +21,7 @@ class L2L3BreakdownAnalyzer(Analyzer):
         self.icmpv6_packets = 0
         self.multicast_packets = 0
         self.broadcast_packets = 0
+
+    def on_packet(self, packet: AnalysisPacket, flow_key: Optional[FlowKey], flow_state, context) -> None:
+        if packet.link_type == 1:  # DLT_EN10MB
+            self.ethernet_frames += 1
