@@ -107,3 +107,16 @@ class AbnormalActivityAnalyzer(Analyzer):
                 syn_only += 1
             elif state.syn_seen and state.synack_seen and not state.ack_seen:
                 synack_no_ack += 1
+
+        if syn_only:
+            findings.append({
+                "type": "syn_without_reply",
+                "severity": "medium",
+                "flows": syn_only,
+            })
+        if synack_no_ack:
+            findings.append({
+                "type": "synack_without_ack",
+                "severity": "low",
+                "flows": synack_no_ack,
+            })
