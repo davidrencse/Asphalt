@@ -33,3 +33,21 @@ class CaptureHealthAnalyzer(Analyzer):
             self.last_ts = packet.timestamp_us
         if packet.link_type:
             self.link_types.add(packet.link_type)
+
+        if packet.quality_flags == 0:
+            self.decode_ok += 1
+        else:
+            self.malformed += 1
+            if packet.quality_flags & (1 << 0):
+                self.truncated += 1
+            if packet.quality_flags & (1 << 1):
+                self.unsupported_link += 1
+            if packet.quality_flags & (1 << 5):
+                self.unknown_l3 += 1
+            if packet.quality_flags & (1 << 6):
+                self.unknown_l4 += 1
+
+    def on_end(self, context) -> AnalyzerResult:
+        duration = None
+        if self.first_ts is not None and self.last_ts is not None:
+            duration = max(0, self.last_ts - self.first_ts)

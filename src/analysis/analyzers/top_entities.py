@@ -67,3 +67,21 @@ class TopEntitiesAnalyzer(Analyzer):
         self.total_packets = 0
         self.internal_bytes = 0
         self.internal_packets = 0
+
+    def on_packet(self, packet: AnalysisPacket, flow_key: Optional[FlowKey], flow_state, context) -> None:
+        size = int(packet.captured_length or 0)
+        self.total_bytes += size
+        self.total_packets += 1
+
+        if packet.src_ip:
+            entry = self.src_ip[packet.src_ip]
+            entry["bytes"] += size
+            entry["packets"] += 1
+            if _is_internal_ip(packet.src_ip):
+                self.internal_bytes += size
+                self.internal_packets += 1
+
+        if packet.dst_ip:
+            entry = self.dst_ip[packet.dst_ip]
+            entry["bytes"] += size
+            entry["packets"] += 1
