@@ -120,3 +120,18 @@ class AbnormalActivityAnalyzer(Analyzer):
                 "severity": "low",
                 "flows": synack_no_ack,
             })
+
+        return AnalyzerResult(
+            analyzer=self.name,
+            global_results={
+                "malformed_packets": self.malformed_packets,
+                "truncated_packets": self.truncated_packets,
+                "tcp_packets": self.tcp_packets,
+                "tcp_rst_packets": self.tcp_rst_packets,
+                "tcp_syn_packets": self.tcp_syn_packets,
+                "tcp_synack_packets": self.tcp_synack_packets,
+                "tcp_ack_packets": self.tcp_ack_packets,
+                "scan_port_threshold": self.scan_port_threshold,
+                "findings": findings,
+            },
+        )
