@@ -63,3 +63,23 @@ class CaptureHealthAnalyzer(Analyzer):
             "capture_filter": capture_info.get("capture_filter"),
             "sampling_rate": capture_info.get("sampling_rate"),
         }
+
+        drops = {
+            "dropped_packets": capture_info.get("dropped_packets"),
+            "drop_rate": capture_info.get("drop_rate"),
+            "kernel_drops": capture_info.get("kernel_drops"),
+        }
+
+        decode_success_rate = None
+        if self.total_packets:
+            decode_success_rate = round(self.decode_ok / self.total_packets, 4)
+
+        decode_health = {
+            "decode_success_rate": decode_success_rate,
+            "malformed_packets": self.malformed,
+            "truncated_packets": self.truncated,
+            "unknown_l3_packets": self.unknown_l3,
+            "unknown_l4_packets": self.unknown_l4,
+            "unsupported_link_packets": self.unsupported_link,
+            "checksum_results": capture_info.get("checksum_results"),
+        }
