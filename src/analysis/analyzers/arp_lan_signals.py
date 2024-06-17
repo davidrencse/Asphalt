@@ -44,3 +44,9 @@ class ArpLanSignalsAnalyzer(Analyzer):
             if len(macs) > 1:
                 multiple.append({"ip": ip, "macs": sorted(macs)})
         multiple.sort(key=lambda item: (len(item["macs"]) * -1, item["ip"]))
+
+        changes = []
+        for ip, count in self.change_counts.items():
+            if count > self.change_threshold:
+                changes.append({"ip": ip, "changes": count})
+        changes.sort(key=lambda item: (-item["changes"], item["ip"]))
