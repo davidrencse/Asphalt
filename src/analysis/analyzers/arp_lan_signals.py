@@ -50,3 +50,18 @@ class ArpLanSignalsAnalyzer(Analyzer):
             if count > self.change_threshold:
                 changes.append({"ip": ip, "changes": count})
         changes.sort(key=lambda item: (-item["changes"], item["ip"]))
+
+        return AnalyzerResult(
+            analyzer=self.name,
+            global_results={
+                "multiple_macs": {
+                    "count": sum(1 for ip, macs in self.macs_seen.items() if len(macs) > 1),
+                    "examples": multiple[:self.max_examples],
+                },
+                "arp_changes": {
+                    "count": len(changes),
+                    "threshold": self.change_threshold,
+                    "top_changes": changes[:self.max_examples],
+                },
+            },
+        )
