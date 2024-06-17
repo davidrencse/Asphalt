@@ -85,3 +85,39 @@ class TopEntitiesAnalyzer(Analyzer):
             entry = self.dst_ip[packet.dst_ip]
             entry["bytes"] += size
             entry["packets"] += 1
+
+        if packet.src_mac:
+            entry = self.src_mac[packet.src_mac]
+            entry["bytes"] += size
+            entry["packets"] += 1
+
+        if packet.dst_mac:
+            entry = self.dst_mac[packet.dst_mac]
+            entry["bytes"] += size
+            entry["packets"] += 1
+
+        if packet.l4_protocol == "TCP" or packet.ip_protocol == 6:
+            if packet.dst_port is not None:
+                self.tcp_ports[int(packet.dst_port)] += 1
+            self.tcp_total += 1
+        elif packet.l4_protocol == "UDP" or packet.ip_protocol == 17:
+            if packet.dst_port is not None:
+                self.udp_ports[int(packet.dst_port)] += 1
+            self.udp_total += 1
+
+    def _ip_entries(self, entries: Dict[str, Dict[str, int]]) -> List[Dict[str, object]]:
+        total_bytes = self.total_bytes
+        total_packets = self.total_packets
+        results = []
+        for ip, stats in _sort_top(entries, self.top_n):
+            bytes_pct = round((stats["bytes"] / total_bytes) * 100.0, 2) if total_bytes else 0.0
+            packets_pct = round((stats["packets"] / total_packets) * 100.0, 2) if total_packets else 0.0
+            results.append({
+                "ip": ip,
+                "bytes": stats["bytes"],
+                "packets": stats["packets"],
+                "bytes_pct": bytes_pct,
+                "packets_pct": packets_pct,
+                "is_internal": _is_internal_ip(ip),
+            })
+        return results

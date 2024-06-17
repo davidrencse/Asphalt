@@ -50,3 +50,19 @@ class _P2Quantile:
                 self.np = [1, 1 + 2 * q, 1 + 4 * q, 3 + 2 * q, 5]
                 self.dn = [0, q / 2, q, (1 + q) / 2, 1]
             return
+
+        k = 0
+        if value < self.q[0]:
+            self.q[0] = value
+            k = 0
+        elif value < self.q[1]:
+            k = 0
+        elif value < self.q[2]:
+            k = 1
+        elif value < self.q[3]:
+            k = 2
+        elif value < self.q[4]:
+            k = 3
+        else:
+            self.q[4] = value
+            k = 3

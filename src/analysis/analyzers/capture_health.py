@@ -51,3 +51,15 @@ class CaptureHealthAnalyzer(Analyzer):
         duration = None
         if self.first_ts is not None and self.last_ts is not None:
             duration = max(0, self.last_ts - self.first_ts)
+
+        capture_info = context.capture_info or {}
+        session_info = {
+            "capture_start_us": self.first_ts,
+            "capture_end_us": self.last_ts,
+            "duration_us": duration,
+            "link_types": sorted(self.link_types) if self.link_types else capture_info.get("link_types"),
+            "snaplen": capture_info.get("snaplen"),
+            "promiscuous": capture_info.get("promisc"),
+            "capture_filter": capture_info.get("capture_filter"),
+            "sampling_rate": capture_info.get("sampling_rate"),
+        }
