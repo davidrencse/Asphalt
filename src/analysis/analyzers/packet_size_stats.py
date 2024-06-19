@@ -66,3 +66,32 @@ class _P2Quantile:
         else:
             self.q[4] = value
             k = 3
+
+        for i in range(k + 1, 5):
+            self.n[i] += 1
+        for i in range(5):
+            self.np[i] += self.dn[i]
+
+        for i in range(1, 4):
+            d = self.np[i] - self.n[i]
+            if (d >= 1 and self.n[i + 1] - self.n[i] > 1) or (d <= -1 and self.n[i - 1] - self.n[i] < -1):
+                d = 1 if d >= 1 else -1
+                n_i = self.n[i]
+                n_im1 = self.n[i - 1]
+                n_ip1 = self.n[i + 1]
+                q_i = self.q[i]
+                q_im1 = self.q[i - 1]
+                q_ip1 = self.q[i + 1]
+                numerator = (n_i - n_im1 + d) * (q_ip1 - q_i) / (n_ip1 - n_i)
+                numerator += (n_ip1 - n_i - d) * (q_i - q_im1) / (n_i - n_im1)
+                q_new = q_i + d * (numerator / (n_ip1 - n_im1))
+                if q_im1 < q_new < q_ip1:
+                    self.q[i] = q_new
+                else:
+                    self.q[i] = q_i + d * (self.q[i + d] - q_i) / (self.n[i + d] - n_i)
+                self.n[i] += d
+
+    def value(self) -> Optional[float]:
+        if len(self.initial) < 5:
+            return None
+        return float(self.q[2])

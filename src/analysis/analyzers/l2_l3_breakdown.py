@@ -25,3 +25,12 @@ class L2L3BreakdownAnalyzer(Analyzer):
     def on_packet(self, packet: AnalysisPacket, flow_key: Optional[FlowKey], flow_state, context) -> None:
         if packet.link_type == 1:  # DLT_EN10MB
             self.ethernet_frames += 1
+
+        if packet.is_vlan:
+            self.vlan_frames += 1
+        if packet.is_arp:
+            self.arp_packets += 1
+        if packet.ip_protocol == 1:
+            self.icmp_packets += 1
+        if packet.ip_protocol == 58:
+            self.icmpv6_packets += 1
