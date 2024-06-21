@@ -21,3 +21,10 @@ def _percentile(values: List[int], percent: float) -> Optional[float]:
         return float(sorted_vals[lower])
     weight = position - lower
     return sorted_vals[lower] + (sorted_vals[upper] - sorted_vals[lower]) * weight
+
+
+def _flow_label(flow) -> str:
+    return f"{flow.a_ip}:{flow.a_port} -> {flow.b_ip}:{flow.b_port}"
+
+
+@register_analyzer
