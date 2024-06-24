@@ -95,3 +95,31 @@ class _P2Quantile:
         if len(self.initial) < 5:
             return None
         return float(self.q[2])
+
+
+class _QuantileTracker:
+    """Track quantiles exactly for small inputs; switch to P² when large."""
+    def __init__(self, max_store: int = 200000):
+        self.max_store = max_store
+        self.values: Optional[List[int]] = []
+        self.min_value: Optional[int] = None
+        self.max_value: Optional[int] = None
+        self.p2_median = _P2Quantile(0.5)
+        self.p2_p95 = _P2Quantile(0.95)
+
+    def _promote_to_streaming(self) -> None:
+        if self.values is None:
+            return
+        for value in self.values:
+            self.p2_median.add(float(value))
+            self.p2_p95.add(float(value))
+        self.values = None
+
+    def add(self, value: Optional[int]) -> None:
+        if value is None:
+            return
+        value = int(value)
+        if self.min_value is None or value < self.min_value:
+            self.min_value = value
+        if self.max_value is None or value > self.max_value:
+            self.max_value = value

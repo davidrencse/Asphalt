@@ -34,3 +34,8 @@ class L2L3BreakdownAnalyzer(Analyzer):
             self.icmp_packets += 1
         if packet.ip_protocol == 58:
             self.icmpv6_packets += 1
+
+        if packet.is_multicast:
+            self.multicast_packets += 1
+        if packet.is_broadcast:
+            self.broadcast_packets += 1
