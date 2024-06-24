@@ -39,3 +39,17 @@ class L2L3BreakdownAnalyzer(Analyzer):
             self.multicast_packets += 1
         if packet.is_broadcast:
             self.broadcast_packets += 1
+
+    def on_end(self, context) -> AnalyzerResult:
+        return AnalyzerResult(
+            analyzer=self.name,
+            global_results={
+                "ethernet_frames": self.ethernet_frames,
+                "vlan_frames": self.vlan_frames,
+                "arp_packets": self.arp_packets,
+                "icmp_packets": self.icmp_packets,
+                "icmpv6_packets": self.icmpv6_packets,
+                "multicast_packets": self.multicast_packets,
+                "broadcast_packets": self.broadcast_packets,
+            },
+        )

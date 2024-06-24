@@ -83,3 +83,9 @@ class CaptureHealthAnalyzer(Analyzer):
             "unsupported_link_packets": self.unsupported_link,
             "checksum_results": capture_info.get("checksum_results"),
         }
+
+        filtering = {
+            "capture_filter": capture_info.get("capture_filter"),
+            "packets_filtered_out": capture_info.get("packets_filtered_out"),
+            "sampling_rate": capture_info.get("sampling_rate"),
+        }

@@ -28,3 +28,29 @@ def _flow_label(flow) -> str:
 
 
 @register_analyzer
+class FlowAnalyticsAnalyzer(Analyzer):
+    name = "flow_analytics"
+    version = "1.0"
+
+    def __init__(self, top_n: int = 5):
+        self.top_n = max(1, top_n)
+
+    def on_packet(self, packet, flow_key, flow_state, context) -> None:
+        return None
+
+    def _heavy_hitters(self, flows, key: str) -> List[Dict[str, object]]:
+        sorted_flows = sorted(
+            flows,
+            key=lambda f: (-getattr(f, key), -f.packets_total, f.flow_id)
+        )
+        hitters = []
+        for flow in sorted_flows[:self.top_n]:
+            hitters.append({
+                "flow_id": flow.flow_id,
+                "label": _flow_label(flow),
+                "protocol": flow.ip_protocol,
+                "bytes": flow.bytes_captured_total,
+                "packets": flow.packets_total,
+                "duration_us": flow.duration_us(),
+            })
+        return hitters
