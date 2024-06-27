@@ -123,3 +123,33 @@ class _QuantileTracker:
             self.min_value = value
         if self.max_value is None or value > self.max_value:
             self.max_value = value
+
+        if self.values is not None:
+            self.values.append(value)
+            if len(self.values) > self.max_store:
+                self._promote_to_streaming()
+        else:
+            self.p2_median.add(float(value))
+            self.p2_p95.add(float(value))
+
+    def stats(self) -> dict:
+        if self.min_value is None:
+            return {
+                "min": None,
+                "median": None,
+                "p95": None,
+                "max": None,
+            }
+        if self.values is not None:
+            return {
+                "min": self.min_value,
+                "median": _percentile(self.values, 50.0),
+                "p95": _percentile(self.values, 95.0),
+                "max": self.max_value,
+            }
+        return {
+            "min": self.min_value,
+            "median": self.p2_median.value(),
+            "p95": self.p2_p95.value(),
+            "max": self.max_value,
+        }

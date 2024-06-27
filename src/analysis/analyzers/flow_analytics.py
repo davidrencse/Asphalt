@@ -54,3 +54,26 @@ class FlowAnalyticsAnalyzer(Analyzer):
                 "duration_us": flow.duration_us(),
             })
         return hitters
+
+    def _flow_states(self, flows) -> Dict[str, int]:
+        states = {
+            "tcp_established": 0,
+            "tcp_half_open": 0,
+            "tcp_reset_failed": 0,
+            "udp_paired": 0,
+            "udp_unpaired": 0,
+        }
+        for flow in flows:
+            if flow.ip_protocol == 6 or flow.tcp_seen:
+                if flow.tcp_rst_seen:
+                    states["tcp_reset_failed"] += 1
+                elif flow.tcp_syn_seen and flow.tcp_synack_seen and flow.tcp_ack_seen:
+                    states["tcp_established"] += 1
+                elif flow.tcp_syn_seen:
+                    states["tcp_half_open"] += 1
+            elif flow.ip_protocol == 17 or flow.udp_seen:
+                if flow.has_fwd and flow.has_rev:
+                    states["udp_paired"] += 1
+                else:
+                    states["udp_unpaired"] += 1
+        return states
