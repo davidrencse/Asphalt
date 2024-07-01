@@ -29,3 +29,10 @@ def _select_reader(filepath: str):
             magic = f.read(4)
     except OSError as e:
         raise click.ClickException(f"Failed to open file: {e}")
+
+    if magic == _PCAPNG_MAGIC:
+        return PcapngReader
+    if magic in _PCAP_MAGIC:
+        return PcapReader
+
+    raise click.ClickException("Unsupported capture file format")
