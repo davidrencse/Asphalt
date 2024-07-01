@@ -30,3 +30,11 @@ class PacketChunksAnalyzer(Analyzer):
             "malformed_packets": 0,
             "flows": set(),
         }
+
+    def _finalize_chunk(self) -> None:
+        if not self.current:
+            return
+        payload = dict(self.current)
+        payload["flows"] = len(payload["flows"])
+        self.chunks.append(payload)
+        self.current = None

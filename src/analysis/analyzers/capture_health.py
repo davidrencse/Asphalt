@@ -89,3 +89,15 @@ class CaptureHealthAnalyzer(Analyzer):
             "packets_filtered_out": capture_info.get("packets_filtered_out"),
             "sampling_rate": capture_info.get("sampling_rate"),
         }
+
+        return AnalyzerResult(
+            analyzer=self.name,
+            global_results={
+                "capture_quality": {
+                    "session": session_info,
+                    "drops": drops,
+                },
+                "decode_health": decode_health,
+                "filtering_sampling": filtering,
+            },
+        )
