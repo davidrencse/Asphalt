@@ -153,3 +153,23 @@ class _QuantileTracker:
             "p95": self.p2_p95.value(),
             "max": self.max_value,
         }
+
+
+@register_analyzer
+class PacketSizeStatsAnalyzer(Analyzer):
+    name = "packet_size_stats"
+    version = "1.0"
+
+    def __init__(self):
+        self.captured = _QuantileTracker()
+        self.original = _QuantileTracker()
+        self.hist = {
+            "0-63": 0,
+            "64-127": 0,
+            "128-511": 0,
+            "512-1023": 0,
+            "1024-1514": 0,
+            "jumbo": 0,
+        }
+        self.ipv4_fragments = 0
+        self.ipv6_fragments = 0
