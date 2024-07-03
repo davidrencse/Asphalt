@@ -36,3 +36,22 @@ def _select_reader(filepath: str):
         return PcapReader
 
     raise click.ClickException("Unsupported capture file format")
+
+
+def _parse_analyzers(value: str):
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+@click.command()
+@click.argument("filepath", type=click.Path(exists=True, dir_okay=False))
+@click.option("--limit", "limit", type=int, default=0, show_default=True,
+              help="Max packets to analyze (0 = no limit)")
+@click.option(
+    "--analyzers",
+    "analyzers",
+    default="capture_health,global_stats,protocol_mix,flow_summary,flow_analytics,tcp_handshakes,tcp_reliability,tcp_performance,abnormal_activity,scan_signals,arp_lan_signals,dns_anomalies,packet_chunks,time_series,throughput_peaks,packet_size_stats,l2_l3_breakdown,top_entities",
+    show_default=True,
+    help="Comma-separated analyzer list",
+)
