@@ -55,3 +55,27 @@ def _parse_analyzers(value: str):
     show_default=True,
     help="Comma-separated analyzer list",
 )
+@click.option("--bucket-ms", "bucket_ms", type=int, default=1000, show_default=True,
+              help="Time-series bucket size in milliseconds")
+@click.option("--chunk-size", "chunk_size", type=int, default=200, show_default=True,
+              help="Packet chunk size for packet_chunks analyzer")
+@click.option("--scan-port-threshold", "scan_port_threshold", type=int, default=20, show_default=True,
+              help="Unique dst port threshold for port scan detection")
+@click.option("--rst-ratio-threshold", "rst_ratio_threshold", type=float, default=0.2, show_default=True,
+              help="TCP RST ratio threshold for abnormal detection")
+@click.option("--format", "format", type=click.Choice(["json"]), default="json", show_default=True)
+@click.option("--output", "output", type=click.Path(dir_okay=False),
+              help="Write JSON output to file")
+@click.option("--filter", "filter_expr", help="Filter expression for decoded packets")
+def analyze(filepath: str,
+            limit: int,
+            analyzers: str,
+            bucket_ms: int,
+            chunk_size: int,
+            scan_port_threshold: int,
+            rst_ratio_threshold: float,
+            format: str,
+            output: Optional[str],
+            filter_expr: Optional[str]):
+    """
+    Analyze packets from a PCAP/PCAPNG file.
