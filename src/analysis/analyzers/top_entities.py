@@ -121,3 +121,45 @@ class TopEntitiesAnalyzer(Analyzer):
                 "is_internal": _is_internal_ip(ip),
             })
         return results
+
+    def _mac_entries(self, entries: Dict[str, Dict[str, int]]) -> List[Dict[str, object]]:
+        total_bytes = self.total_bytes
+        total_packets = self.total_packets
+        results = []
+        for mac, stats in _sort_top(entries, self.top_n):
+            bytes_pct = round((stats["bytes"] / total_bytes) * 100.0, 2) if total_bytes else 0.0
+            packets_pct = round((stats["packets"] / total_packets) * 100.0, 2) if total_packets else 0.0
+            results.append({
+                "mac": mac,
+                "vendor": lookup_vendor(mac),
+                "bytes": stats["bytes"],
+                "packets": stats["packets"],
+                "bytes_pct": bytes_pct,
+                "packets_pct": packets_pct,
+            })
+        return results
+
+    def _vendor_distribution(self) -> List[Dict[str, object]]:
+        totals: Dict[str, Dict[str, int]] = defaultdict(lambda: {"bytes": 0, "packets": 0})
+        for mac, stats in self.src_mac.items():
+            vendor = lookup_vendor(mac)
+            totals[vendor]["bytes"] += stats["bytes"]
+            totals[vendor]["packets"] += stats["packets"]
+        for mac, stats in self.dst_mac.items():
+            vendor = lookup_vendor(mac)
+            totals[vendor]["bytes"] += stats["bytes"]
+            totals[vendor]["packets"] += stats["packets"]
+
+        total_bytes = self.total_bytes
+        items = list(totals.items())
+        items.sort(key=lambda item: (-item[1]["bytes"], -item[1]["packets"], item[0]))
+        results = []
+        for vendor, stats in items[:self.top_n]:
+            bytes_pct = round((stats["bytes"] / total_bytes) * 100.0, 2) if total_bytes else 0.0
+            results.append({
+                "vendor": vendor,
+                "bytes": stats["bytes"],
+                "packets": stats["packets"],
+                "bytes_pct": bytes_pct,
+            })
+        return results
