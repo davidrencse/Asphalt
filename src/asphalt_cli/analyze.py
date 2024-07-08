@@ -79,3 +79,31 @@ def analyze(filepath: str,
             filter_expr: Optional[str]):
     """
     Analyze packets from a PCAP/PCAPNG file.
+
+    Example:
+      asphalt analyze capture.pcapng --analyzers global_stats,flow_summary --output report.json
+    """
+    analyzer_names = _parse_analyzers(analyzers)
+    if not analyzer_names:
+        raise click.ClickException("No analyzers specified")
+
+    available = set(list_analyzers())
+    for name in analyzer_names:
+        if name not in available:
+            options = ", ".join(sorted(available))
+            raise click.ClickException(f"Unknown analyzer '{name}'. Available: {options}")
+
+    instances = []
+    for name in analyzer_names:
+        if name == "time_series":
+            instances.append(create_analyzer(name, bucket_ms=bucket_ms))
+        elif name == "packet_chunks":
+            instances.append(create_analyzer(name, chunk_size=chunk_size))
+        elif name == "abnormal_activity":
+            instances.append(create_analyzer(
+                name,
+                scan_port_threshold=scan_port_threshold,
+                rst_ratio_threshold=rst_ratio_threshold,
+            ))
+        else:
+            instances.append(create_analyzer(name))
