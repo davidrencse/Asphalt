@@ -173,3 +173,16 @@ class PacketSizeStatsAnalyzer(Analyzer):
         }
         self.ipv4_fragments = 0
         self.ipv6_fragments = 0
+
+    def _hist_bucket(self, size: int) -> str:
+        if size <= 63:
+            return "0-63"
+        if size <= 127:
+            return "64-127"
+        if size <= 511:
+            return "128-511"
+        if size <= 1023:
+            return "512-1023"
+        if size <= 1514:
+            return "1024-1514"
+        return "jumbo"
