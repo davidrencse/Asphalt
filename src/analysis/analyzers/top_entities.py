@@ -163,3 +163,60 @@ class TopEntitiesAnalyzer(Analyzer):
                 "bytes_pct": bytes_pct,
             })
         return results
+
+    def _port_entries(self, counts: Dict[int, int], total: int) -> List[Dict[str, object]]:
+        items = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+        results = []
+        for port, count in items[:self.top_n]:
+            pct = round((count / total) * 100.0, 2) if total else 0.0
+            results.append({
+                "port": port,
+                "service": _SERVICE_MAP.get(port, "unknown"),
+                "packets": count,
+                "packets_pct": pct,
+            })
+        return results
+
+    def on_end(self, context) -> AnalyzerResult:
+        external_bytes = self.total_bytes - self.internal_bytes
+        external_packets = self.total_packets - self.internal_packets
+
+        internal_bytes_pct = round((self.internal_bytes / self.total_bytes) * 100.0, 2) if self.total_bytes else 0.0
+        external_bytes_pct = round((external_bytes / self.total_bytes) * 100.0, 2) if self.total_bytes else 0.0
+        internal_packets_pct = round((self.internal_packets / self.total_packets) * 100.0, 2) if self.total_packets else 0.0
+        external_packets_pct = round((external_packets / self.total_packets) * 100.0, 2) if self.total_packets else 0.0
+
+        return AnalyzerResult(
+            analyzer=self.name,
+            global_results={
+                "ip_talkers": {
+                    "top_src": self._ip_entries(self.src_ip),
+                    "top_dst": self._ip_entries(self.dst_ip),
+                    "totals": {"bytes": self.total_bytes, "packets": self.total_packets},
+                    "internal_external": {
+                        "basis": "src_ip",
+                        "internal_bytes_pct": internal_bytes_pct,
+                        "external_bytes_pct": external_bytes_pct,
+                        "internal_packets_pct": internal_packets_pct,
+                        "external_packets_pct": external_packets_pct,
+                    },
+                },
+                "mac_talkers": {
+                    "top_src": self._mac_entries(self.src_mac),
+                    "top_dst": self._mac_entries(self.dst_mac),
+                    "vendor_distribution": self._vendor_distribution(),
+                    "totals": {"bytes": self.total_bytes, "packets": self.total_packets},
+                },
+                "ports": {
+                    "percentage_basis": "protocol_packets",
+                    "tcp": {
+                        "total_packets": self.tcp_total,
+                        "top_dst_ports": self._port_entries(self.tcp_ports, self.tcp_total),
+                    },
+                    "udp": {
+                        "total_packets": self.udp_total,
+                        "top_dst_ports": self._port_entries(self.udp_ports, self.udp_total),
+                    },
+                },
+            },
+        )

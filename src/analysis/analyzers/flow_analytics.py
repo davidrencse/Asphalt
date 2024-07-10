@@ -77,3 +77,24 @@ class FlowAnalyticsAnalyzer(Analyzer):
                 else:
                     states["udp_unpaired"] += 1
         return states
+
+    def on_end(self, context) -> AnalyzerResult:
+        flows = list(context.flow_table.values())
+        durations = [flow.duration_us() for flow in flows if flow.packets_total > 0]
+        bytes_per_flow = [flow.bytes_captured_total for flow in flows]
+
+        duration_us = context.stats.get("duration_us", 0) or 0
+        duration_sec = duration_us / 1_000_000.0 if duration_us > 0 else 0.0
+        flow_rate = (len(flows) / duration_sec) if duration_sec > 0 else 0.0
+
+        bytes_avg = (sum(bytes_per_flow) / len(bytes_per_flow)) if bytes_per_flow else 0.0
+        bytes_p95 = _percentile(bytes_per_flow, 95.0)
+
+        summary = {
+            "total_flows": len(flows),
+            "new_flows_per_sec": round(flow_rate, 4),
+            "duration_us_median": _percentile(durations, 50.0),
+            "duration_us_p95": _percentile(durations, 95.0),
+            "bytes_per_flow_avg": round(bytes_avg, 2) if bytes_per_flow else 0.0,
+            "bytes_per_flow_p95": bytes_p95,
+        }
