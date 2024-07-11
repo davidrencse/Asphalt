@@ -38,3 +38,19 @@ class PacketChunksAnalyzer(Analyzer):
         payload["flows"] = len(payload["flows"])
         self.chunks.append(payload)
         self.current = None
+
+    def on_packet(self, packet: AnalysisPacket, flow_key: Optional[FlowKey], flow_state, context) -> None:
+        if self.current is None:
+            self._start_chunk(packet)
+
+        self.current["end_us"] = packet.timestamp_us
+        self.current["packets"] += 1
+        self.current["bytes_captured"] += packet.captured_length
+        self.current["bytes_original"] += packet.original_length
+
+        if packet.l4_protocol == "TCP" or packet.ip_protocol == 6:
+            self.current["tcp_packets"] += 1
+        if packet.l4_protocol == "UDP" or packet.ip_protocol == 17:
+            self.current["udp_packets"] += 1
+        if packet.quality_flags:
+            self.current["malformed_packets"] += 1
