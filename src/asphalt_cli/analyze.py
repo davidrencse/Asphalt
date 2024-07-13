@@ -107,3 +107,29 @@ def analyze(filepath: str,
             ))
         else:
             instances.append(create_analyzer(name))
+
+    reader_cls = _select_reader(filepath)
+    decoder = PacketDecoder()
+    capture_info = {}
+    predicate = None
+    if filter_expr:
+        from utils.filtering import compile_packet_filter
+        predicate = compile_packet_filter(filter_expr)
+
+    try:
+        with reader_cls(filepath) as reader:
+            try:
+                capture_info = reader.get_session_info()
+            except Exception:
+                capture_info = {}
+            engine = AnalysisEngine(instances, capture_path=filepath, capture_info=capture_info)
+            for packet in reader:
+                decoded = decoder.decode(packet)
+                record = decoded.to_dict()
+                if predicate and not predicate(record):
+                    continue
+                engine.process_packet(decoded)
+                if limit > 0 and engine.context.stats["packets_total"] >= limit:
+                    break
+    except Exception as e:
+        raise click.ClickException(str(e))
