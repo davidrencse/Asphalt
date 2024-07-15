@@ -98,3 +98,8 @@ class FlowAnalyticsAnalyzer(Analyzer):
             "bytes_per_flow_avg": round(bytes_avg, 2) if bytes_per_flow else 0.0,
             "bytes_per_flow_p95": bytes_p95,
         }
+
+        heavy_hitters = {
+            "top_by_bytes": self._heavy_hitters(flows, "bytes_captured_total"),
+            "top_by_packets": self._heavy_hitters(flows, "packets_total"),
+        }
