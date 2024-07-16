@@ -133,3 +133,11 @@ def analyze(filepath: str,
                     break
     except Exception as e:
         raise click.ClickException(str(e))
+
+    report = engine.finalize()
+    payload = report.to_json()
+    if output:
+        with open(output, "w", encoding="utf-8") as f:
+            f.write(payload)
+    else:
+        click.echo(payload)
