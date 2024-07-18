@@ -103,3 +103,12 @@ class FlowAnalyticsAnalyzer(Analyzer):
             "top_by_bytes": self._heavy_hitters(flows, "bytes_captured_total"),
             "top_by_packets": self._heavy_hitters(flows, "packets_total"),
         }
+
+        return AnalyzerResult(
+            analyzer=self.name,
+            global_results={
+                "summary": summary,
+                "heavy_hitters": heavy_hitters,
+                "states": self._flow_states(flows),
+            },
+        )
