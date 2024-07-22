@@ -186,3 +186,31 @@ class PacketSizeStatsAnalyzer(Analyzer):
         if size <= 1514:
             return "1024-1514"
         return "jumbo"
+
+    def on_packet(self, packet: AnalysisPacket, flow_key: Optional[FlowKey], flow_state, context) -> None:
+        cap_len = int(packet.captured_length or 0)
+        self.captured.add(cap_len)
+        self.hist[self._hist_bucket(cap_len)] += 1
+
+        original_len = int(packet.original_length or 0)
+        if original_len > 0:
+            self.original.add(original_len)
+
+        if packet.is_ipv4_fragment:
+            self.ipv4_fragments += 1
+        if packet.is_ipv6_fragment:
+            self.ipv6_fragments += 1
+
+    def on_end(self, context) -> AnalyzerResult:
+        return AnalyzerResult(
+            analyzer=self.name,
+            global_results={
+                "captured_length": self.captured.stats(),
+                "original_length": self.original.stats(),
+                "histogram": dict(self.hist),
+                "fragments": {
+                    "ipv4_fragments": self.ipv4_fragments,
+                    "ipv6_fragments": self.ipv6_fragments,
+                },
+            },
+        )

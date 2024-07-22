@@ -54,3 +54,6 @@ class PacketChunksAnalyzer(Analyzer):
             self.current["udp_packets"] += 1
         if packet.quality_flags:
             self.current["malformed_packets"] += 1
+
+        if flow_state is not None:
+            self.current["flows"].add(flow_state.flow_id)
