@@ -5,3 +5,15 @@ from typing import Dict, Optional
 
 # Minimal offline OUI mapping (uppercase hex without separators).
 # Extend as needed without requiring network access.
+OUI_VENDOR_MAP: Dict[str, str] = {
+    "001A2B": "Cisco Systems",
+    "001B63": "Apple",
+    "00259C": "Apple",
+    "3C5A37": "Google",
+    "F4F5D8": "Microsoft",
+    "F0F1A1": "Intel",
+    "B827EB": "Raspberry Pi",
+    "000C29": "VMware",
+    "000D93": "Dell",
+    "0016EA": "Hewlett Packard",
+    "5C514F": "Samsung",
