@@ -17,3 +17,13 @@ OUI_VENDOR_MAP: Dict[str, str] = {
     "000D93": "Dell",
     "0016EA": "Hewlett Packard",
     "5C514F": "Samsung",
+}
+
+
+def normalize_mac(mac: Optional[str]) -> Optional[str]:
+    if not mac:
+        return None
+    cleaned = mac.replace(":", "").replace("-", "").replace(".", "").upper()
+    if len(cleaned) < 12:
+        return None
+    return cleaned
