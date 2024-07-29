@@ -57,3 +57,16 @@ class PacketChunksAnalyzer(Analyzer):
 
         if flow_state is not None:
             self.current["flows"].add(flow_state.flow_id)
+
+        if self.current["packets"] >= self.chunk_size:
+            self._finalize_chunk()
+
+    def on_end(self, context) -> AnalyzerResult:
+        self._finalize_chunk()
+        return AnalyzerResult(
+            analyzer=self.name,
+            time_series={
+                "chunk_size": self.chunk_size,
+                "chunks": self.chunks,
+            },
+        )
