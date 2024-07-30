@@ -27,3 +27,11 @@ def normalize_mac(mac: Optional[str]) -> Optional[str]:
     if len(cleaned) < 12:
         return None
     return cleaned
+
+
+def lookup_vendor(mac: Optional[str]) -> str:
+    normalized = normalize_mac(mac)
+    if not normalized:
+        return "Unknown"
+    oui = normalized[:6]
+    return OUI_VENDOR_MAP.get(oui, "Unknown")
