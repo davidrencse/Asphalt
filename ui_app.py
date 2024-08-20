@@ -944,3 +944,362 @@ class AsphaltApp(QtWidgets.QMainWindow):
             self.branding_progress.setRange(0, 0)  # indeterminate
         if self._home_progress_timer:
             self._home_progress_timer.start()
+
+    def _stop_home_progress(self):
+        if not hasattr(self, "branding_progress"):
+            return
+        if self._home_progress_timer:
+            self._home_progress_timer.stop()
+        if self._home_progress_mode == "time":
+            self.branding_progress.setRange(0, 100)
+            self.branding_progress.setValue(100)
+        else:
+            self.branding_progress.setRange(0, 100)
+            self.branding_progress.setValue(100)
+        self._home_progress_mode = "idle"
+
+    def _update_home_progress(self):
+        if not hasattr(self, "branding_progress"):
+            return
+        if self._home_progress_mode == "time":
+            if not self._capture_started_at or self._capture_duration_s <= 0:
+                return
+            elapsed = time.time() - self._capture_started_at
+            pct = int(min(100, max(0, (elapsed / self._capture_duration_s) * 100.0)))
+            self.branding_progress.setValue(pct)
+    
+    def _build_capture_panel(self):
+        """Build capture utility panel."""
+        panel = QtWidgets.QFrame()
+        panel.setStyleSheet("""
+            QFrame {
+                background-color: %s;
+                border: 1px solid %s;
+            }
+        """ % (BG_PANEL, BORDER_DARK))
+        
+        layout = QtWidgets.QVBoxLayout(panel)
+        layout.setContentsMargins(20, 15, 20, 20)
+        layout.setSpacing(15)
+        
+        header = QtWidgets.QLabel("CAPTURE")
+        header.setStyleSheet("""
+            color: %s;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 8px 0px;
+            border-bottom: 1px solid %s;
+        """ % (FG_TEXT, BORDER_DARK))
+        layout.addWidget(header)
+        
+        # Interface
+        iface_label = QtWidgets.QLabel("INTERFACE")
+        iface_label.setStyleSheet("color: %s; font-size: 11px; text-transform: uppercase;" % FG_MUTED)
+        layout.addWidget(iface_label)
+        default_iface = get_default_scapy_iface()
+        self.interface_edit = QtWidgets.QLineEdit(default_iface)
+        self.interface_edit.setStyleSheet("background-color: %s; border: 1px solid %s; color: %s; padding: 8px;" % (BG_MAIN, BORDER_DARK, FG_TEXT))
+        layout.addWidget(self.interface_edit)
+        
+        # Duration
+        dur_label = QtWidgets.QLabel("DURATION (s)")
+        dur_label.setStyleSheet("color: %s; font-size: 11px; text-transform: uppercase;" % FG_MUTED)
+        layout.addWidget(dur_label)
+        self.duration_edit = QtWidgets.QLineEdit("10")
+        self.duration_edit.setStyleSheet("background-color: %s; border: 1px solid %s; color: %s; padding: 8px;" % (BG_MAIN, BORDER_DARK, FG_TEXT))
+        layout.addWidget(self.duration_edit)
+        
+        # Limit
+        limit_label = QtWidgets.QLabel("PACKET LIMIT")
+        limit_label.setStyleSheet("color: %s; font-size: 11px; text-transform: uppercase;" % FG_MUTED)
+        layout.addWidget(limit_label)
+        self.limit_edit = QtWidgets.QLineEdit("1000")
+        self.limit_edit.setStyleSheet("background-color: %s; border: 1px solid %s; color: %s; padding: 8px;" % (BG_MAIN, BORDER_DARK, FG_TEXT))
+        layout.addWidget(self.limit_edit)
+        
+        # Filter
+        filter_label = QtWidgets.QLabel("FILTER (BPF)")
+        filter_label.setStyleSheet("color: %s; font-size: 11px; text-transform: uppercase;" % FG_MUTED)
+        layout.addWidget(filter_label)
+        self.filter_edit = QtWidgets.QLineEdit()
+        self.filter_edit.setPlaceholderText("tcp port 80")
+        self.filter_edit.setStyleSheet("background-color: %s; border: 1px solid %s; color: %s; padding: 8px;" % (BG_MAIN, BORDER_DARK, FG_TEXT))
+        self.filter_edit.textChanged.connect(self.apply_filter)
+        layout.addWidget(self.filter_edit)
+        
+        # Buttons
+        btn_layout = QtWidgets.QHBoxLayout()
+        self.start_btn = QtWidgets.QPushButton("START")
+        self.start_btn.setStyleSheet("background-color: %s; color: %s; border: 1px solid %s; padding: 10px; font-weight: 600; text-transform: uppercase;" % (ACCENT_BTN_BG, ACCENT_BTN_FG, ACCENT))
+        self.start_btn.clicked.connect(self.start_capture)
+        btn_layout.addWidget(self.start_btn)
+        
+        self.stop_btn = QtWidgets.QPushButton("STOP")
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.setStyleSheet("background-color: transparent; color: %s; border: 1px solid %s; padding: 10px; font-weight: 600; text-transform: uppercase;" % (FG_TEXT, BORDER_DARK))
+        self.stop_btn.clicked.connect(self.stop_capture)
+        btn_layout.addWidget(self.stop_btn)
+        layout.addLayout(btn_layout)
+        
+        # Status
+        self.status_label = QtWidgets.QLabel("IDLE")
+        self.status_label.setStyleSheet("color: %s; font-size: 11px;" % WARN)
+        layout.addWidget(self.status_label)
+
+        # Export
+        export_layout = QtWidgets.QHBoxLayout()
+        self.download_btn = QtWidgets.QPushButton("EXPORT CAPTURE")
+        self.download_btn.setEnabled(False)
+        self.download_btn.setStyleSheet("background-color: transparent; color: %s; border: 1px solid %s; padding: 8px; font-weight: 600; text-transform: uppercase;" % (FG_TEXT, BORDER_DARK))
+        self.download_btn.clicked.connect(self.download_capture)
+        export_layout.addWidget(self.download_btn)
+
+        self.export_analysis_btn = QtWidgets.QPushButton("EXPORT ANALYSIS")
+        self.export_analysis_btn.setEnabled(False)
+        self.export_analysis_btn.setStyleSheet("background-color: transparent; color: %s; border: 1px solid %s; padding: 8px; font-weight: 600; text-transform: uppercase;" % (FG_TEXT, BORDER_DARK))
+        self.export_analysis_btn.clicked.connect(self.export_analysis)
+        export_layout.addWidget(self.export_analysis_btn)
+        layout.addLayout(export_layout)
+        
+        return panel
+    
+    def _build_decode_panel(self):
+        """Build decode utility panel."""
+        panel = QtWidgets.QFrame()
+        panel.setStyleSheet("""
+            QFrame {
+                background-color: %s;
+                border: 1px solid %s;
+            }
+        """ % (BG_PANEL, BORDER_DARK))
+        
+        layout = QtWidgets.QVBoxLayout(panel)
+        layout.setContentsMargins(20, 15, 20, 20)
+        layout.setSpacing(15)
+        
+        header = QtWidgets.QLabel("DECODE")
+        header.setStyleSheet("""
+            color: %s;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 8px 0px;
+            border-bottom: 1px solid %s;
+        """ % (FG_TEXT, BORDER_DARK))
+        layout.addWidget(header)
+        
+        file_label = QtWidgets.QLabel("PCAP/PCAPNG FILE")
+        file_label.setStyleSheet("color: %s; font-size: 11px; text-transform: uppercase;" % FG_MUTED)
+        layout.addWidget(file_label)
+        
+        file_layout = QtWidgets.QHBoxLayout()
+        self.decode_file_edit = QtWidgets.QLineEdit()
+        self.decode_file_edit.setPlaceholderText("Select file...")
+        self.decode_file_edit.setStyleSheet("background-color: %s; border: 1px solid %s; color: %s; padding: 8px;" % (BG_MAIN, BORDER_DARK, FG_TEXT))
+        file_layout.addWidget(self.decode_file_edit)
+        
+        browse_btn = QtWidgets.QPushButton("BROWSE")
+        browse_btn.setStyleSheet("background-color: %s; color: %s; border: 1px solid %s; padding: 8px; font-weight: 600; text-transform: uppercase;" % (ACCENT_BTN_BG, ACCENT_BTN_FG, ACCENT))
+        browse_btn.clicked.connect(self._browse_decode_file)
+        file_layout.addWidget(browse_btn)
+        layout.addLayout(file_layout)
+        
+        format_label = QtWidgets.QLabel("OUTPUT FORMAT")
+        format_label.setStyleSheet("color: %s; font-size: 11px; text-transform: uppercase;" % FG_MUTED)
+        layout.addWidget(format_label)
+        self.format_combo = QtWidgets.QComboBox()
+        self.format_combo.addItems(["JSON", "TABLE"])
+        self.format_combo.setStyleSheet("background-color: %s; border: 1px solid %s; color: %s; padding: 8px;" % (BG_MAIN, BORDER_DARK, FG_TEXT))
+        layout.addWidget(self.format_combo)
+        
+        self.decode_btn = QtWidgets.QPushButton("DECODE")
+        self.decode_btn.setStyleSheet("background-color: %s; color: %s; border: 1px solid %s; padding: 10px; font-weight: 600; text-transform: uppercase;" % (ACCENT_BTN_BG, ACCENT_BTN_FG, ACCENT))
+        self.decode_btn.clicked.connect(self._decode_file)
+        layout.addWidget(self.decode_btn)
+        
+        return panel
+    
+    def _build_analyze_panel(self):
+        """Build analyze utility panel."""
+        panel = QtWidgets.QFrame()
+        panel.setStyleSheet("""
+            QFrame {
+                background-color: %s;
+                border: 1px solid %s;
+            }
+        """ % (BG_PANEL, BORDER_DARK))
+        
+        layout = QtWidgets.QVBoxLayout(panel)
+        layout.setContentsMargins(20, 15, 20, 20)
+        layout.setSpacing(15)
+        
+        header = QtWidgets.QLabel("ANALYZE")
+        header.setStyleSheet("""
+            color: %s;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 8px 0px;
+            border-bottom: 1px solid %s;
+        """ % (FG_TEXT, BORDER_DARK))
+        layout.addWidget(header)
+        
+        file_label = QtWidgets.QLabel("PCAP/PCAPNG FILE")
+        file_label.setStyleSheet("color: %s; font-size: 11px; text-transform: uppercase;" % FG_MUTED)
+        layout.addWidget(file_label)
+        
+        file_layout = QtWidgets.QHBoxLayout()
+        self.analyze_file_edit = QtWidgets.QLineEdit()
+        self.analyze_file_edit.setPlaceholderText("Select file...")
+        self.analyze_file_edit.setStyleSheet("background-color: %s; border: 1px solid %s; color: %s; padding: 8px;" % (BG_MAIN, BORDER_DARK, FG_TEXT))
+        file_layout.addWidget(self.analyze_file_edit)
+        
+        browse_btn = QtWidgets.QPushButton("BROWSE")
+        browse_btn.setStyleSheet("background-color: %s; color: %s; border: 1px solid %s; padding: 8px; font-weight: 600; text-transform: uppercase;" % (ACCENT_BTN_BG, ACCENT_BTN_FG, ACCENT))
+        browse_btn.clicked.connect(self._browse_analyze_file)
+        file_layout.addWidget(browse_btn)
+        layout.addLayout(file_layout)
+        
+        analyzers_label = QtWidgets.QLabel("ANALYZERS")
+        analyzers_label.setStyleSheet("color: %s; font-size: 11px; text-transform: uppercase;" % FG_MUTED)
+        layout.addWidget(analyzers_label)
+        
+        # Analyzers list (scrollable)
+        from analysis.registry import list_analyzers
+        analyzers_list = QtWidgets.QListWidget()
+        analyzers_list.setStyleSheet("background-color: %s; border: 1px solid %s; color: %s;" % (BG_MAIN, BORDER_DARK, FG_TEXT))
+        analyzers_list.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
+        for analyzer in sorted(list_analyzers()):
+            item = QtWidgets.QListWidgetItem(analyzer)
+            item.setCheckState(QtCore.Qt.Checked)
+            analyzers_list.addItem(item)
+        analyzers_list.setMaximumHeight(150)
+        layout.addWidget(analyzers_list)
+        self.analyzers_list = analyzers_list
+        
+        bucket_label = QtWidgets.QLabel("BUCKET SIZE (ms)")
+        bucket_label.setStyleSheet("color: %s; font-size: 11px; text-transform: uppercase;" % FG_MUTED)
+        layout.addWidget(bucket_label)
+        self.bucket_ms_edit = QtWidgets.QLineEdit("1000")
+        self.bucket_ms_edit.setStyleSheet("background-color: %s; border: 1px solid %s; color: %s; padding: 8px;" % (BG_MAIN, BORDER_DARK, FG_TEXT))
+        layout.addWidget(self.bucket_ms_edit)
+        
+        self.analyze_btn = QtWidgets.QPushButton("ANALYZE")
+        self.analyze_btn.setStyleSheet("background-color: %s; color: %s; border: 1px solid %s; padding: 10px; font-weight: 600; text-transform: uppercase;" % (ACCENT_BTN_BG, ACCENT_BTN_FG, ACCENT))
+        self.analyze_btn.clicked.connect(self._analyze_file)
+        layout.addWidget(self.analyze_btn)
+        
+        return panel
+    
+    def _build_stats_panel(self):
+        """Build top domains display panel."""
+        panel = QtWidgets.QFrame()
+        panel.setStyleSheet("""
+            QFrame {
+                background-color: %s;
+                border: 1px solid %s;
+            }
+        """ % (BG_PANEL, BORDER_DARK))
+        
+        layout = QtWidgets.QVBoxLayout(panel)
+        layout.setContentsMargins(20, 15, 20, 20)
+        layout.setSpacing(15)
+        
+        header = QtWidgets.QLabel("STATISTICS")
+        header.setStyleSheet("""
+            color: %s;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 8px 0px;
+            border-bottom: 1px solid %s;
+        """ % (FG_TEXT, BORDER_DARK))
+        layout.addWidget(header)
+        
+        stats_grid = QtWidgets.QGridLayout()
+        stats_grid.setSpacing(20)
+        
+        # Placeholder stats (top domain + upload/download + empty slots)
+        self.top_domain_labels = [
+            self._value_label("-"),
+            self._value_label("-"),
+            self._value_label("-"),
+            self._value_label("-"),
+            self._value_label("-"),
+            self._value_label("-"),
+            self._value_label("-"),
+            self._value_label("-"),
+        ]
+
+        stats_grid.addWidget(self._stat_block("TOP DOMAIN", self.top_domain_labels[0]), 0, 0)
+        stats_grid.addWidget(self._stat_block("UPLOAD / DOWNLOAD", self.top_domain_labels[1]), 0, 1)
+        stats_grid.addWidget(self._stat_block("DOWNLOAD / UPLOAD SPEED", self.top_domain_labels[2]), 0, 2)
+        stats_grid.addWidget(self._stat_block("SEARCH QUERIES", self.top_domain_labels[3]), 0, 3)
+        stats_grid.addWidget(self._stat_block("NETWORK QUALITY", self.top_domain_labels[4]), 1, 0)
+        stats_grid.addWidget(self._stat_block("UNUSUAL PORTS", self.top_domain_labels[5]), 1, 1)
+        stats_grid.addWidget(self._stat_block("TOP EXTERNAL IP", self.top_domain_labels[6]), 1, 2)
+        stats_grid.addWidget(self._stat_block("—", self.top_domain_labels[7]), 1, 3)
+        
+        layout.addLayout(stats_grid)
+        
+        return panel
+    
+    def _build_footer_legacy(self):
+        """Build footer like reference image."""
+        footer = QtWidgets.QFrame()
+        footer.setObjectName("footer")
+        footer.setStyleSheet("""
+            QFrame#footer {
+                background-color: %s;
+                border-top: 1px solid %s;
+            }
+        """ % (BG_HEADER, BORDER_DARK))
+        
+        layout = QtWidgets.QHBoxLayout(footer)
+        layout.setContentsMargins(40, 15, 40, 15)
+        layout.setSpacing(40)
+        
+        # Left: Logo and brand
+        left_section = QtWidgets.QWidget()
+        left_layout = QtWidgets.QVBoxLayout(left_section)
+        left_layout.setSpacing(5)
+        
+        logo_label = QtWidgets.QLabel("⚙")
+        logo_label.setStyleSheet("font-size: 24px;")
+        left_layout.addWidget(logo_label)
+        
+        trademark_label = QtWidgets.QLabel("TRADEMARK")
+        trademark_label.setStyleSheet("color: %s; font-size: 10px; text-transform: uppercase;" % FG_MUTED)
+        left_layout.addWidget(trademark_label)
+        
+        brand_label = QtWidgets.QLabel("ASPHALT.NETWORK")
+        brand_label.setStyleSheet("color: %s; font-size: 14px; font-weight: 600; text-transform: uppercase;" % FG_TEXT)
+        left_layout.addWidget(brand_label)
+        
+        layout.addWidget(left_section)
+        
+        # Middle: Company info
+        middle_section = QtWidgets.QWidget()
+        middle_layout = QtWidgets.QVBoxLayout(middle_section)
+        middle_layout.setSpacing(4)
+        
+        company_label = QtWidgets.QLabel("COMPANY")
+        company_label.setStyleSheet("color: %s; font-size: 10px; text-transform: uppercase;" % FG_MUTED)
+        middle_layout.addWidget(company_label)
+        
+        company_value = QtWidgets.QLabel("ASPHALT.NETWORK.STUDIO")
+        company_value.setStyleSheet("color: %s; font-size: 11px;" % FG_TEXT)
+        middle_layout.addWidget(company_value)
+        
+        date_label = QtWidgets.QLabel("DATE")
+        date_label.setStyleSheet("color: %s; font-size: 10px; text-transform: uppercase; margin-top: 5px;" % FG_MUTED)
+        middle_layout.addWidget(date_label)
+        
+        self.footer_date = QtWidgets.QLabel(datetime.now().strftime("%d/%m/%Y"))
+        self.footer_date.setStyleSheet("color: %s; font-size: 11px;" % FG_TEXT)
+        middle_layout.addWidget(self.footer_date)
