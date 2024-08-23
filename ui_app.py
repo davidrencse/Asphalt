@@ -1303,3 +1303,781 @@ class AsphaltApp(QtWidgets.QMainWindow):
         self.footer_date = QtWidgets.QLabel(datetime.now().strftime("%d/%m/%Y"))
         self.footer_date.setStyleSheet("color: %s; font-size: 11px;" % FG_TEXT)
         middle_layout.addWidget(self.footer_date)
+        
+        time_label = QtWidgets.QLabel("TIME")
+        time_label.setStyleSheet("color: %s; font-size: 10px; text-transform: uppercase; margin-top: 5px;" % FG_MUTED)
+        middle_layout.addWidget(time_label)
+        
+        self.footer_time = QtWidgets.QLabel(datetime.now().strftime("%H:%M:%S"))
+        self.footer_time.setStyleSheet("color: %s; font-size: 11px;" % FG_TEXT)
+        middle_layout.addWidget(self.footer_time)
+        
+        # Update time every second
+        timer = QtCore.QTimer(self)
+        timer.timeout.connect(lambda: self.footer_time.setText(datetime.now().strftime("%H:%M:%S")))
+        timer.start(1000)
+        
+        layout.addWidget(middle_section)
+        
+        # Right: Description
+        right_section = QtWidgets.QWidget()
+        right_layout = QtWidgets.QVBoxLayout(right_section)
+        right_layout.setSpacing(4)
+        
+        desc_label = QtWidgets.QLabel("DESCRIPTION")
+        desc_label.setStyleSheet("color: %s; font-size: 10px; text-transform: uppercase;" % FG_MUTED)
+        right_layout.addWidget(desc_label)
+        
+        desc_text = QtWidgets.QLabel(
+            "ASPHALT is a production-grade network diagnostics platform combining "
+            "Wireshark-level packet capture capabilities with an opinionated analytics "
+            "and diagnostics layer. It provides full-fidelity packet capture, real-time "
+            "protocol decoding, configurable analysis pipelines, and a unified diagnostic UI."
+        )
+        desc_text.setStyleSheet("color: %s; font-size: 9px; line-height: 1.4;" % FG_MUTED)
+        desc_text.setWordWrap(True)
+        desc_text.setMaximumWidth(400)
+        right_layout.addWidget(desc_text)
+        
+        layout.addWidget(right_section)
+        
+        # Far right: Copyright
+        copyright_section = QtWidgets.QWidget()
+        copyright_layout = QtWidgets.QVBoxLayout(copyright_section)
+        copyright_layout.setSpacing(4)
+        
+        note_label = QtWidgets.QLabel("NOTE")
+        note_label.setStyleSheet("color: %s; font-size: 10px; text-transform: uppercase;" % FG_MUTED)
+        copyright_layout.addWidget(note_label)
+        
+        copyright_text = QtWidgets.QLabel(
+            "CONTENTS OF THIS APPLICATION ARE THE PROPERTY OF ASPHALT.NETWORK.STUDIO. "
+            "NO PART OF THIS SITE MAY BE REPRODUCED WITHOUT CONSENT. "
+            "COPYRIGHT © 2024. ALL RIGHTS RESERVED."
+        )
+        copyright_text.setStyleSheet("color: %s; font-size: 9px; line-height: 1.4;" % FG_MUTED)
+        copyright_text.setWordWrap(True)
+        copyright_text.setMaximumWidth(300)
+        copyright_layout.addWidget(copyright_text)
+        
+        layout.addWidget(copyright_section)
+        layout.addStretch()
+        
+        return footer
+
+    def _build_footer(self):
+        """Build compact footer."""
+        footer = QtWidgets.QFrame()
+        footer.setObjectName("footer")
+        footer.setStyleSheet("""
+            QFrame#footer {
+                background-color: %s;
+                border-top: 1px solid %s;
+            }
+        """ % (BG_HEADER, BORDER_DARK))
+
+        layout = QtWidgets.QHBoxLayout(footer)
+        layout.setContentsMargins(40, 10, 40, 10)
+        layout.setSpacing(30)
+
+        left_section = QtWidgets.QWidget()
+        left_layout = QtWidgets.QVBoxLayout(left_section)
+        left_layout.setSpacing(4)
+
+        date_label = QtWidgets.QLabel("DATE")
+        date_label.setStyleSheet("color: %s; font-size: 10px; text-transform: uppercase;" % FG_MUTED)
+        left_layout.addWidget(date_label)
+
+        self.footer_date = QtWidgets.QLabel(datetime.now().strftime("%d/%m/%Y"))
+        self.footer_date.setStyleSheet("color: %s; font-size: 11px;" % FG_TEXT)
+        left_layout.addWidget(self.footer_date)
+
+        time_label = QtWidgets.QLabel("TIME")
+        time_label.setStyleSheet("color: %s; font-size: 10px; text-transform: uppercase; margin-top: 5px;" % FG_MUTED)
+        left_layout.addWidget(time_label)
+
+        self.footer_time = QtWidgets.QLabel(datetime.now().strftime("%H:%M:%S"))
+        self.footer_time.setStyleSheet("color: %s; font-size: 11px;" % FG_TEXT)
+        left_layout.addWidget(self.footer_time)
+
+        timer = QtCore.QTimer(self)
+        timer.timeout.connect(lambda: self.footer_time.setText(datetime.now().strftime("%H:%M:%S")))
+        timer.start(1000)
+
+        layout.addWidget(left_section)
+
+        right_section = QtWidgets.QWidget()
+        right_layout = QtWidgets.QVBoxLayout(right_section)
+        right_layout.setSpacing(4)
+
+        desc_label = QtWidgets.QLabel("DESCRIPTION")
+        desc_label.setStyleSheet("color: %s; font-size: 10px; text-transform: uppercase;" % FG_MUTED)
+        right_layout.addWidget(desc_label)
+
+        desc_text = QtWidgets.QLabel(
+            "ASPHALT is a production-grade network diagnostics platform combining "
+            "Wireshark-level packet capture capabilities with an opinionated analytics "
+            "and diagnostics layer. It provides full-fidelity packet capture, real-time "
+            "protocol decoding, configurable analysis pipelines, and a unified diagnostic UI."
+        )
+        desc_text.setStyleSheet("color: %s; font-size: 9px; line-height: 1.4;" % FG_MUTED)
+        desc_text.setWordWrap(True)
+        desc_text.setMaximumWidth(420)
+        right_layout.addWidget(desc_text)
+
+        layout.addWidget(right_section)
+        layout.addStretch()
+
+        return footer
+    
+    def _browse_decode_file(self):
+        """Browse for decode file."""
+        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Select PCAP/PCAPNG File", "", "PCAP Files (*.pcap *.pcapng);;All Files (*)"
+        )
+        if file_path:
+            self.decode_file_edit.setText(file_path)
+    
+    def _browse_analyze_file(self):
+        """Browse for analyze file."""
+        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Select PCAP/PCAPNG File", "", "PCAP Files (*.pcap *.pcapng);;All Files (*)"
+        )
+        if file_path:
+            self.analyze_file_edit.setText(file_path)
+    
+    def _decode_file(self):
+        """Decode selected file."""
+        file_path = (self.decode_file_edit.text() or "").strip()
+        if not file_path:
+            QtWidgets.QMessageBox.warning(self, "Error", "Please select a file")
+            return
+
+        if hasattr(self, "decode_btn"):
+            self.decode_btn.setEnabled(False)
+        if hasattr(self, "analyze_btn"):
+            self.analyze_btn.setEnabled(False)
+
+        self.status_label.setText(f"Decoding {os.path.basename(file_path)}...")
+        thread = threading.Thread(target=self._decode_file_thread, args=(file_path,), daemon=True)
+        thread.start()
+    
+    def _analyze_file(self):
+        """Analyze selected file."""
+        file_path = (self.analyze_file_edit.text() or "").strip()
+        if not file_path:
+            QtWidgets.QMessageBox.warning(self, "Error", "Please select a file")
+            return
+        
+        selected_analyzers = []
+        for i in range(self.analyzers_list.count()):
+            item = self.analyzers_list.item(i)
+            if item.checkState() == QtCore.Qt.Checked:
+                selected_analyzers.append(item.text())
+        
+        if not selected_analyzers:
+            QtWidgets.QMessageBox.warning(self, "Error", "Please select at least one analyzer")
+            return
+        
+        bucket_ms = _safe_int(self.bucket_ms_edit.text()) or 1000
+
+        if hasattr(self, "analyze_btn"):
+            self.analyze_btn.setEnabled(False)
+        if hasattr(self, "decode_btn"):
+            self.decode_btn.setEnabled(False)
+
+        self.status_label.setText(f"Analyzing {os.path.basename(file_path)}...")
+        thread = threading.Thread(
+            target=self._analyze_file_thread,
+            args=(file_path, selected_analyzers, bucket_ms),
+            daemon=True,
+        )
+        thread.start()
+
+    def _decode_file_thread(self, file_path: str):
+        try:
+            thresholds = self._get_thresholds()
+            packets, analysis = _decode_capture_file(
+                file_path,
+                analyzer_names=DEFAULT_ANALYZERS,
+                bucket_ms=1000,
+                chunk_size=200,
+                scan_port_threshold=int(thresholds["scan_ports_warn"]),
+                rst_ratio_threshold=float(thresholds["abnormal_rst_ratio"]) / 100.0,
+            )
+            self.latest_packets = packets
+            self.latest_analysis = analysis
+            self._packet_search_cache = self._build_packet_search_cache(packets)
+            self._packet_search_cache_id = id(packets)
+            self._packet_search_cache_len = len(packets)
+            self.ui_call.emit(self.refresh_all)
+            self.ui_call.emit(
+                lambda: self.status_label.setText(f"Decoded {len(packets)} packets from file")
+            )
+        except Exception as exc:
+            msg = str(exc)
+            self.ui_call.emit(lambda: self.status_label.setText(msg))
+            self.ui_call.emit(lambda: QtWidgets.QMessageBox.critical(self, "Decode failed", msg))
+        finally:
+            if hasattr(self, "decode_btn"):
+                self.ui_call.emit(lambda: self.decode_btn.setEnabled(True))
+            if hasattr(self, "analyze_btn"):
+                self.ui_call.emit(lambda: self.analyze_btn.setEnabled(True))
+
+    def _analyze_file_thread(self, file_path: str, selected_analyzers, bucket_ms: int):
+        try:
+            thresholds = self._get_thresholds()
+            analyzer_names = list(dict.fromkeys(list(selected_analyzers) + list(REQUIRED_UI_ANALYZERS)))
+            packets, analysis = _decode_capture_file(
+                file_path,
+                analyzer_names=analyzer_names,
+                bucket_ms=bucket_ms,
+                chunk_size=200,
+                scan_port_threshold=int(thresholds["scan_ports_warn"]),
+                rst_ratio_threshold=float(thresholds["abnormal_rst_ratio"]) / 100.0,
+            )
+            self.latest_packets = packets
+            self.latest_analysis = analysis
+            self._packet_search_cache = self._build_packet_search_cache(packets)
+            self._packet_search_cache_id = id(packets)
+            self._packet_search_cache_len = len(packets)
+            self.ui_call.emit(self.refresh_all)
+            self.ui_call.emit(
+                lambda: self.status_label.setText(
+                    f"Analyzed {len(packets)} packets with {len(selected_analyzers)} analyzers"
+                )
+            )
+        except Exception as exc:
+            msg = str(exc)
+            self.ui_call.emit(lambda: self.status_label.setText(msg))
+            self.ui_call.emit(lambda: QtWidgets.QMessageBox.critical(self, "Analyze failed", msg))
+        finally:
+            if hasattr(self, "analyze_btn"):
+                self.ui_call.emit(lambda: self.analyze_btn.setEnabled(True))
+            if hasattr(self, "decode_btn"):
+                self.ui_call.emit(lambda: self.decode_btn.setEnabled(True))
+    
+    def _build_title_bar(self):
+        bar = QtWidgets.QFrame()
+        bar.setObjectName("titlebar")
+        bar.setFixedHeight(36)
+
+        layout = QtWidgets.QHBoxLayout(bar)
+        layout.setContentsMargins(10, 0, 8, 0)
+        layout.setSpacing(8)
+
+        title = QtWidgets.QLabel("Asphalt")
+        title.setObjectName("titlebarTitle")
+        layout.addWidget(title)
+        layout.addStretch(1)
+
+        self.btn_min = QtWidgets.QPushButton("_")
+        self.btn_min.setObjectName("titlebarBtn")
+        self.btn_min.setFixedSize(36, 24)
+        self.btn_min.clicked.connect(self.showMinimized)
+
+        self.btn_max = QtWidgets.QPushButton("[]")
+        self.btn_max.setObjectName("titlebarBtn")
+        self.btn_max.setFixedSize(36, 24)
+        self.btn_max.clicked.connect(self._toggle_max_restore)
+
+        self.btn_close = QtWidgets.QPushButton("X")
+        self.btn_close.setObjectName("titlebarClose")
+        self.btn_close.setFixedSize(36, 24)
+        self.btn_close.clicked.connect(self.close)
+
+        layout.addWidget(self.btn_min)
+        layout.addWidget(self.btn_max)
+        layout.addWidget(self.btn_close)
+
+        bar.mousePressEvent = self._titlebar_mouse_press
+        bar.mouseMoveEvent = self._titlebar_mouse_move
+        bar.mouseReleaseEvent = self._titlebar_mouse_release
+        bar.mouseDoubleClickEvent = self._titlebar_mouse_double_click
+        return bar
+
+    def _toggle_max_restore(self):
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
+        self._update_window_controls()
+
+    def _update_window_controls(self):
+        if self.isMaximized():
+            self.btn_max.setText("O")
+        else:
+            self.btn_max.setText("[]")
+
+    def _titlebar_mouse_press(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def _titlebar_mouse_move(self, event):
+        if event.buttons() & QtCore.Qt.LeftButton and self._drag_pos is not None:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+
+    def _titlebar_mouse_release(self, event):
+        self._drag_pos = None
+        event.accept()
+
+    def _titlebar_mouse_double_click(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            self._toggle_max_restore()
+            event.accept()
+
+    def changeEvent(self, event):
+        if event.type() == QtCore.QEvent.WindowStateChange:
+            self._update_window_controls()
+        super().changeEvent(event)
+
+    def _resolve_scapy_interface(self, requested):
+        try:
+            from capture.scapy_backend import ScapyBackend
+        except Exception:
+            return requested
+        try:
+            backend = ScapyBackend()
+            interfaces = backend.list_interfaces()
+        except Exception:
+            return requested
+
+        if not interfaces:
+            return requested
+
+        req = (requested or "").strip()
+        if req and req.startswith(r"\Device\NPF_"):
+            return req
+
+        # Try match by display name / description / name
+        for iface in interfaces:
+            name = (iface.get("name") or "").strip()
+            display = (iface.get("display_name") or "").strip()
+            desc = (iface.get("description") or "").strip()
+            if req and (req.lower() == name.lower() or req.lower() == display.lower() or req.lower() == desc.lower()):
+                return name
+            if req and req.lower() in desc.lower():
+                return name
+
+        # Fallback: first interface with IPs (non-loopback)
+        for iface in interfaces:
+            name = iface.get("name") or ""
+            ips = iface.get("ips") or []
+            if name.startswith(r"\Device\NPF_") and ips and "127.0.0.1" not in ips:
+                return name
+
+        # Final fallback: first NPF interface
+        for iface in interfaces:
+            name = iface.get("name") or ""
+            if name.startswith(r"\Device\NPF_"):
+                return name
+
+        return requested
+
+    def _list_scapy_interfaces(self):
+        try:
+            from capture.scapy_backend import ScapyBackend
+        except Exception:
+            return []
+        try:
+            backend = ScapyBackend()
+            interfaces = backend.list_interfaces()
+        except Exception:
+            return []
+        names = []
+        for iface in interfaces:
+            name = iface.get("name") or ""
+            ips = iface.get("ips") or []
+            if name.startswith(r"\Device\NPF_") and "127.0.0.1" not in ips:
+                names.append(name)
+        if not names:
+            for iface in interfaces:
+                name = iface.get("name") or ""
+                if name.startswith(r"\Device\NPF_"):
+                    names.append(name)
+        return names
+
+    def _apply_theme(self):
+        palette = self.palette()
+        palette.setColor(QtGui.QPalette.Window, QtGui.QColor(BG_MAIN))
+        palette.setColor(QtGui.QPalette.WindowText, QtGui.QColor(FG_TEXT))
+        palette.setColor(QtGui.QPalette.Base, QtGui.QColor(BG_PANEL))
+        palette.setColor(QtGui.QPalette.Text, QtGui.QColor(FG_TEXT))
+        palette.setColor(QtGui.QPalette.Button, QtGui.QColor(BG_PANEL))
+        palette.setColor(QtGui.QPalette.ButtonText, QtGui.QColor(FG_TEXT))
+        self.setPalette(palette)
+        self.setStyleSheet(
+            "QFrame#chrome { background: %s; border: 1px solid %s; }"
+            "QFrame#body { background: %s; }"
+            "QFrame#titlebar { background: %s; }"
+            "QLabel#titlebarTitle { color: %s; font-weight: 600; }"
+            "QPushButton#titlebarBtn { background: %s; color: %s; border: 1px solid %s; }"
+            "QPushButton#titlebarBtn:hover { background: %s; }"
+            "QPushButton#titlebarClose { background: %s; color: %s; border: 1px solid %s; }"
+            "QPushButton#titlebarClose:hover { background: %s; }"
+            "QPushButton#overviewClearBtn { background: %s; color: %s; border: 1px solid %s; padding: 4px 10px; }"
+            "QPushButton#overviewClearBtn:hover { background: %s; }"
+            % (
+                BG_MAIN,
+                BORDER_DARK,
+                BG_MAIN,
+                TITLEBAR_BG,
+                FG_TEXT,
+                TITLEBAR_BTN_BG,
+                FG_TEXT,
+                BORDER_DARK,
+                TITLEBAR_BTN_HOVER,
+                TITLEBAR_BTN_DANGER,
+                FG_TEXT,
+                BORDER_DARK,
+                TITLEBAR_BTN_DANGER_HOVER,
+                ACCENT_BTN_BG,
+                ACCENT_BTN_FG,
+                BORDER_DARK,
+                BG_CARD,
+            )
+        )
+
+    def _get_global_totals(self, analysis):
+        gs = analysis.get("global_results", {}).get("global_stats", {})
+        totals = {}
+        if isinstance(gs, dict):
+            raw_totals = gs.get("totals")
+            if isinstance(raw_totals, dict):
+                totals.update(raw_totals)
+            else:
+                # normalize from flat keys
+                if "packets_total" in gs:
+                    totals["packets"] = gs.get("packets_total")
+                if "bytes_captured_total" in gs:
+                    totals["bytes_captured"] = gs.get("bytes_captured_total")
+                if "bytes_original_total" in gs:
+                    totals["bytes_original"] = gs.get("bytes_original_total")
+                if "duration_us" in gs:
+                    totals["duration_us"] = gs.get("duration_us")
+
+            ip_versions = gs.get("ip_versions") or gs.get("distributions", {}).get("ip_versions")
+            if isinstance(ip_versions, dict):
+                totals["ipv4_packets"] = ip_versions.get("4") or ip_versions.get(4)
+                totals["ipv6_packets"] = ip_versions.get("6") or ip_versions.get(6)
+
+            l4 = gs.get("l4_protocols") or gs.get("distributions", {}).get("l4_protocols")
+            if isinstance(l4, dict):
+                totals["tcp_packets"] = l4.get("TCP") or l4.get("tcp")
+                totals["udp_packets"] = l4.get("UDP") or l4.get("udp")
+
+        # fallback to engine stats
+        stats = analysis.get("stats", {})
+        if isinstance(stats, dict):
+            totals.setdefault("packets", stats.get("packets_total"))
+            totals.setdefault("bytes_captured", stats.get("bytes_captured_total"))
+            totals.setdefault("bytes_original", stats.get("bytes_original_total"))
+            totals.setdefault("duration_us", stats.get("duration_us"))
+
+        return totals
+
+    def _compute_totals_from_packets(self, packets):
+        totals = {
+            "packets": 0,
+            "bytes_captured": 0,
+            "bytes_original": 0,
+            "ipv4_packets": 0,
+            "ipv6_packets": 0,
+            "tcp_packets": 0,
+            "udp_packets": 0,
+            "duration_us": 0,
+        }
+        if not packets:
+            return totals
+
+        first_ts = None
+        last_ts = None
+        for pkt in packets:
+            if not isinstance(pkt, dict):
+                continue
+            totals["packets"] += 1
+            totals["bytes_captured"] += int(pkt.get("captured_length") or 0)
+            totals["bytes_original"] += int(pkt.get("original_length") or 0)
+            ip_version = pkt.get("ip_version")
+            if ip_version == 4:
+                totals["ipv4_packets"] += 1
+            elif ip_version == 6:
+                totals["ipv6_packets"] += 1
+            l4 = (pkt.get("l4_protocol") or "").upper()
+            if l4 == "TCP" or pkt.get("ip_protocol") == 6:
+                totals["tcp_packets"] += 1
+            elif l4 == "UDP" or pkt.get("ip_protocol") == 17:
+                totals["udp_packets"] += 1
+            ts = pkt.get("timestamp_us")
+            if ts is None:
+                continue
+            try:
+                ts_val = int(ts)
+            except (TypeError, ValueError):
+                continue
+            if first_ts is None or ts_val < first_ts:
+                first_ts = ts_val
+            if last_ts is None or ts_val > last_ts:
+                last_ts = ts_val
+
+        if first_ts is not None and last_ts is not None:
+            totals["duration_us"] = max(0, last_ts - first_ts)
+        return totals
+
+    def _label(self, text):
+        label = QtWidgets.QLabel(text)
+        label.setStyleSheet("color: %s;" % FG_MUTED)
+        return label
+
+    def _value_label(self, text=""):
+        label = QtWidgets.QLabel(text)
+        label.setStyleSheet("color: %s; font-weight: 600;" % FG_TEXT)
+        label.setWordWrap(True)
+        return label
+
+    def _stat_block(self, title, value_label, width=None):
+        frame = QtWidgets.QFrame()
+        frame.setStyleSheet("background-color: %s;" % BG_PANEL)
+        if width:
+            frame.setFixedWidth(width)
+        layout = QtWidgets.QVBoxLayout(frame)
+        layout.setContentsMargins(8, 6, 8, 6)
+        title_label = QtWidgets.QLabel(title)
+        title_label.setStyleSheet("color: %s;" % FG_MUTED)
+        layout.addWidget(title_label)
+        layout.addWidget(value_label)
+        return frame
+
+    def _make_section(self, title):
+        box = QtWidgets.QGroupBox(title)
+        box.setStyleSheet("""
+            QGroupBox {
+                color: %s;
+                font-weight: 600;
+                font-size: 12px;
+                text-transform: uppercase;
+                border: 1px solid %s;
+                margin-top: 6px;
+                background-color: %s;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 4px;
+                color: %s;
+                font-weight: 600;
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+        """ % (FG_TEXT, BORDER_DARK, BG_PANEL, FG_TEXT))
+        layout = QtWidgets.QVBoxLayout(box)
+        layout.setContentsMargins(10, 10, 10, 10)
+        return box, layout
+
+    def _make_scroll_page(self):
+        page = QtWidgets.QWidget()
+        outer = QtWidgets.QVBoxLayout(page)
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        outer.addWidget(scroll)
+        content = QtWidgets.QWidget()
+        scroll.setWidget(content)
+        vbox = QtWidgets.QVBoxLayout(content)
+        vbox.setContentsMargins(10, 10, 10, 10)
+        vbox.setSpacing(10)
+        return page, vbox
+
+    def _make_kv_table(self, min_rows=10):
+        table = QtWidgets.QTableWidget(0, 2)
+        table.setHorizontalHeaderLabels(["Key", "Value"])
+        table.horizontalHeader().setStretchLastSection(True)
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        table.setStyleSheet("background-color: %s; color: %s;" % (BG_PANEL, FG_TEXT))
+        table.setMinimumHeight(min_rows * 24 + 32)
+        return table
+
+    def _make_table(self, columns, min_rows=10):
+        table = QtWidgets.QTableWidget(0, len(columns))
+        table.setHorizontalHeaderLabels(columns)
+        table.horizontalHeader().setStretchLastSection(True)
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        table.setStyleSheet("background-color: %s; color: %s;" % (BG_PANEL, FG_TEXT))
+        table.setMinimumHeight(min_rows * 24 + 32)
+        return table
+
+    def _set_kv_rows(self, table, rows):
+        table.setRowCount(0)
+        for row in rows:
+            r = table.rowCount()
+            table.insertRow(r)
+            table.setItem(r, 0, QtWidgets.QTableWidgetItem(str(row[0])))
+            table.setItem(r, 1, QtWidgets.QTableWidgetItem(str(row[1])))
+
+    def _set_dynamic_rows(self, table, items, columns=None):
+        if columns is None:
+            keys = set()
+            for item in items:
+                if isinstance(item, dict):
+                    keys.update(item.keys())
+            columns = sorted(keys) if keys else ["value"]
+        table.setColumnCount(len(columns))
+        table.setHorizontalHeaderLabels(columns)
+        table.setRowCount(0)
+        for item in items:
+            r = table.rowCount()
+            table.insertRow(r)
+            if isinstance(item, dict):
+                for idx, col in enumerate(columns):
+                    table.setItem(r, idx, QtWidgets.QTableWidgetItem(str(item.get(col, ""))))
+            else:
+                table.setItem(r, 0, QtWidgets.QTableWidgetItem(str(item)))
+
+    def _set_json_text(self, editor, obj):
+        try:
+            editor.setPlainText(json.dumps(obj, indent=2))
+        except Exception:
+            editor.setPlainText(str(obj))
+
+    def _make_json_panel(self, title):
+        box, layout = self._make_section(title)
+        editor = QtWidgets.QPlainTextEdit()
+        editor.setReadOnly(True)
+        editor.setStyleSheet("background-color: %s; color: %s;" % (BG_PANEL, FG_TEXT))
+        layout.addWidget(QtWidgets.QLabel("Complete analyzer output for verification and debugging."))
+        layout.addWidget(editor)
+        return box, editor
+    def _build_raw_data_tab(self):
+        layout = QtWidgets.QVBoxLayout(self.raw_data_tab)
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        layout.addWidget(scroll)
+
+        content = QtWidgets.QWidget()
+        scroll.setWidget(content)
+        vbox = QtWidgets.QVBoxLayout(content)
+        vbox.setContentsMargins(10, 10, 10, 10)
+        vbox.setSpacing(10)
+
+        self.raw_cards = {}
+
+        # Capture health
+        box, box_layout = self._make_section("Capture health and integrity")
+        grid = QtWidgets.QGridLayout()
+        box_layout.addLayout(grid)
+        self.raw_cards["capture_quality"] = self._info_card_var("Capture Quality")
+        self.raw_cards["decode_health"] = self._info_card_var("Decode Health")
+        self.raw_cards["filtering"] = self._info_card_var("Filtering and Sampling")
+        grid.addWidget(self.raw_cards["capture_quality"], 0, 0)
+        grid.addWidget(self.raw_cards["decode_health"], 0, 1)
+        grid.addWidget(self.raw_cards["filtering"], 0, 2)
+        vbox.addWidget(box)
+
+        # Thresholds
+        box, box_layout = self._make_section("Thresholds")
+        form = QtWidgets.QFormLayout()
+        form.setLabelAlignment(QtCore.Qt.AlignLeft)
+        form.setFormAlignment(QtCore.Qt.AlignTop)
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(6)
+        box_layout.addLayout(form)
+
+        self.threshold_inputs = {}
+        self.threshold_inputs["drop_warn"] = self._make_threshold_spin(DROP_RATE_WARN, 0, 100, 0.1, 2)
+        form.addRow(self._label("Drop rate warn (%)"), self.threshold_inputs["drop_warn"])
+        self.threshold_inputs["drop_bad"] = self._make_threshold_spin(DROP_RATE_BAD, 0, 100, 0.1, 2)
+        form.addRow(self._label("Drop rate bad (%)"), self.threshold_inputs["drop_bad"])
+        self.threshold_inputs["handshake_warn"] = self._make_threshold_spin(HANDSHAKE_WARN_LO, 0, 100, 0.5, 2)
+        form.addRow(self._label("Handshake warn >= (%)"), self.threshold_inputs["handshake_warn"])
+        self.threshold_inputs["handshake_good"] = self._make_threshold_spin(HANDSHAKE_GOOD_LO, 0, 100, 0.5, 2)
+        form.addRow(self._label("Handshake good >= (%)"), self.threshold_inputs["handshake_good"])
+        self.threshold_inputs["retrans_warn"] = self._make_threshold_spin(RETX_WARN, 0, 100, 0.1, 2)
+        form.addRow(self._label("Retransmission warn (%)"), self.threshold_inputs["retrans_warn"])
+        self.threshold_inputs["retrans_bad"] = self._make_threshold_spin(RETX_BAD, 0, 100, 0.1, 2)
+        form.addRow(self._label("Retransmission bad (%)"), self.threshold_inputs["retrans_bad"])
+        self.threshold_inputs["rst_warn"] = self._make_threshold_spin(RST_WARN, 0, 100, 0.1, 2)
+        form.addRow(self._label("RST warn (%)"), self.threshold_inputs["rst_warn"])
+        self.threshold_inputs["rst_bad"] = self._make_threshold_spin(RST_BAD, 0, 100, 0.1, 2)
+        form.addRow(self._label("RST bad (%)"), self.threshold_inputs["rst_bad"])
+        self.threshold_inputs["scan_ports_warn"] = self._make_threshold_int(SCAN_PORTS_WARN, 1, 100000, 1)
+        form.addRow(self._label("Scan ports warn (count)"), self.threshold_inputs["scan_ports_warn"])
+        self.threshold_inputs["arp_conflict_warn"] = self._make_threshold_int(ARP_CONFLICT_WARN, 0, 100000, 1)
+        form.addRow(self._label("ARP conflict warn (count)"), self.threshold_inputs["arp_conflict_warn"])
+        self.threshold_inputs["nxdomain_warn"] = QtWidgets.QCheckBox("Enable NXDOMAIN spike warning")
+        self.threshold_inputs["nxdomain_warn"].setChecked(bool(NXDOMAIN_SPIKE_WARN))
+        form.addRow(self._label("NXDOMAIN spike warn"), self.threshold_inputs["nxdomain_warn"])
+        self.threshold_inputs["abnormal_rst_ratio"] = self._make_threshold_spin(ABNORMAL_RST_RATIO_THRESHOLD, 0, 100, 0.5, 2)
+        form.addRow(self._label("Abnormal RST ratio threshold (%)"), self.threshold_inputs["abnormal_rst_ratio"])
+        vbox.addWidget(box)
+
+        # Traffic overview
+        box, box_layout = self._make_section("Traffic overview")
+        grid = QtWidgets.QGridLayout()
+        box_layout.addLayout(grid)
+        self.raw_cards["throughput"] = self._info_card_var("Throughput")
+        self.raw_cards["packet_sizes"] = self._info_card_var("Packet Size Stats")
+        self.raw_cards["l2l3"] = self._info_card_var("L2/L3 Breakdown")
+        grid.addWidget(self.raw_cards["throughput"], 0, 0)
+        grid.addWidget(self.raw_cards["packet_sizes"], 0, 1)
+        grid.addWidget(self.raw_cards["l2l3"], 0, 2)
+        vbox.addWidget(box)
+
+        # Top entities
+        box, box_layout = self._make_section("Top entities")
+        grid = QtWidgets.QGridLayout()
+        box_layout.addLayout(grid)
+        self.raw_cards["top_talkers"] = self._info_card_var("Top Talkers")
+        self.raw_cards["top_macs"] = self._info_card_var("Top MAC Addresses")
+        self.raw_cards["top_ports"] = self._info_card_var("Top Ports and Services")
+        grid.addWidget(self.raw_cards["top_talkers"], 0, 0)
+        grid.addWidget(self.raw_cards["top_macs"], 0, 1)
+        grid.addWidget(self.raw_cards["top_ports"], 0, 2)
+        vbox.addWidget(box)
+
+        # Flow analytics
+        box, box_layout = self._make_section("Flow analytics")
+        grid = QtWidgets.QGridLayout()
+        box_layout.addLayout(grid)
+        self.raw_cards["flow_summary"] = self._info_card_var("Flow Summary")
+        self.raw_cards["flow_heavy"] = self._info_card_var("Heavy Hitters")
+        self.raw_cards["flow_states"] = self._info_card_var("Flow States")
+        grid.addWidget(self.raw_cards["flow_summary"], 0, 0)
+        grid.addWidget(self.raw_cards["flow_heavy"], 0, 1)
+        grid.addWidget(self.raw_cards["flow_states"], 0, 2)
+        vbox.addWidget(box)
+
+        # TCP health
+        box, box_layout = self._make_section("TCP health")
+        grid = QtWidgets.QGridLayout()
+        box_layout.addLayout(grid)
+        self.raw_cards["tcp_handshake"] = self._info_card_var("TCP Handshakes")
+        self.raw_cards["tcp_reliability"] = self._info_card_var("TCP Reliability")
+        self.raw_cards["tcp_performance"] = self._info_card_var("TCP Performance")
+        grid.addWidget(self.raw_cards["tcp_handshake"], 0, 0)
+        grid.addWidget(self.raw_cards["tcp_reliability"], 0, 1)
+        grid.addWidget(self.raw_cards["tcp_performance"], 0, 2)
+        vbox.addWidget(box)
+
+        # Security signals
+        box, box_layout = self._make_section("Security signals")
+        grid = QtWidgets.QGridLayout()
+        box_layout.addLayout(grid)
+        self.raw_cards["scan_signals"] = self._info_card_var("Scan Signals")
+        self.raw_cards["arp_lan"] = self._info_card_var("ARP / LAN Signals")
+        self.raw_cards["dns_anomalies"] = self._info_card_var("DNS Anomalies")
+        grid.addWidget(self.raw_cards["scan_signals"], 0, 0)
+        grid.addWidget(self.raw_cards["arp_lan"], 0, 1)
+        grid.addWidget(self.raw_cards["dns_anomalies"], 0, 2)
+        vbox.addWidget(box)
+
+        # Other analyzers (fallback)
+        box, box_layout = self._make_section("Other analyzers")
+        self.raw_other_table = self._make_kv_table(min_rows=12)
+        box_layout.addWidget(self.raw_other_table)
+        vbox.addWidget(box)
