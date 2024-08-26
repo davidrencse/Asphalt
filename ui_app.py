@@ -2081,3 +2081,628 @@ class AsphaltApp(QtWidgets.QMainWindow):
         self.raw_other_table = self._make_kv_table(min_rows=12)
         box_layout.addWidget(self.raw_other_table)
         vbox.addWidget(box)
+
+        vbox.addStretch(1)
+
+    def _info_card_var(self, title):
+        frame = QtWidgets.QFrame()
+        frame.setStyleSheet("background-color: %s;" % BG_CARD)
+        layout = QtWidgets.QVBoxLayout(frame)
+        layout.setContentsMargins(8, 8, 8, 8)
+        label = QtWidgets.QLabel(title)
+        label.setStyleSheet("color: %s; font-weight: 600;" % FG_MUTED)
+        value = QtWidgets.QLabel("-")
+        value.setWordWrap(True)
+        value.setStyleSheet("color: %s;" % FG_TEXT)
+        layout.addWidget(label)
+        layout.addWidget(value)
+        frame.value_label = value
+        return frame
+
+    def _make_threshold_spin(self, value, minimum, maximum, step, decimals):
+        spin = QtWidgets.QDoubleSpinBox()
+        spin.setRange(minimum, maximum)
+        spin.setDecimals(decimals)
+        spin.setSingleStep(step)
+        spin.setValue(float(value))
+        spin.setFixedWidth(140)
+        return spin
+
+    def _make_threshold_int(self, value, minimum, maximum, step):
+        spin = QtWidgets.QSpinBox()
+        spin.setRange(minimum, maximum)
+        spin.setSingleStep(step)
+        spin.setValue(int(value))
+        spin.setFixedWidth(140)
+        return spin
+
+    def _get_thresholds(self):
+        def get_value(key, default):
+            widget = getattr(self, "threshold_inputs", {}).get(key)
+            if widget is None:
+                return default
+            if isinstance(widget, QtWidgets.QCheckBox):
+                return widget.isChecked()
+            try:
+                return widget.value()
+            except Exception:
+                return default
+
+        return {
+            "drop_warn": get_value("drop_warn", DROP_RATE_WARN),
+            "drop_bad": get_value("drop_bad", DROP_RATE_BAD),
+            "handshake_warn": get_value("handshake_warn", HANDSHAKE_WARN_LO),
+            "handshake_good": get_value("handshake_good", HANDSHAKE_GOOD_LO),
+            "retrans_warn": get_value("retrans_warn", RETX_WARN),
+            "retrans_bad": get_value("retrans_bad", RETX_BAD),
+            "rst_warn": get_value("rst_warn", RST_WARN),
+            "rst_bad": get_value("rst_bad", RST_BAD),
+            "scan_ports_warn": get_value("scan_ports_warn", SCAN_PORTS_WARN),
+            "arp_conflict_warn": get_value("arp_conflict_warn", ARP_CONFLICT_WARN),
+            "nxdomain_warn": get_value("nxdomain_warn", NXDOMAIN_SPIKE_WARN),
+            "abnormal_rst_ratio": get_value("abnormal_rst_ratio", ABNORMAL_RST_RATIO_THRESHOLD),
+        }
+
+    def _build_technical_info_tab(self):
+        layout = QtWidgets.QVBoxLayout(self.tech_info_tab)
+        self.ti_tabs = QtWidgets.QTabWidget()
+        layout.addWidget(self.ti_tabs)
+
+        self.ti_capture_quality = {}
+        self.ti_traffic_overview = {}
+        self.ti_protocol_mix = {}
+        self.ti_flow_analytics = {}
+        self.ti_tcp_health = {}
+        self.ti_top_entities = {}
+        self.ti_security_signals = {}
+        self.ti_time_series = {}
+
+        self._ti_capture_quality_page()
+        self._ti_traffic_overview_page()
+        self._ti_protocol_mix_page()
+        self._ti_flow_analytics_page()
+        self._ti_tcp_health_page()
+        self._ti_top_entities_page()
+        self._ti_security_signals_page()
+        self._ti_time_series_page()
+
+    def _ti_capture_quality_page(self):
+        page, layout = self._make_scroll_page()
+        box, box_layout = self._make_section("Capture Quality")
+        self.ti_capture_quality["quality"] = self._make_kv_table()
+        box_layout.addWidget(self.ti_capture_quality["quality"])
+        layout.addWidget(box)
+
+        box, editor = self._make_json_panel("Full Analyzer JSON")
+        self.ti_capture_quality["json"] = editor
+        layout.addWidget(box)
+        layout.addStretch(1)
+        self.ti_tabs.addTab(page, "Capture Quality")
+
+    def _ti_traffic_overview_page(self):
+        page, layout = self._make_scroll_page()
+
+        box, box_layout = self._make_section("Throughput and Peaks")
+        self.ti_traffic_overview["throughput_kv"] = self._make_kv_table()
+        box_layout.addWidget(self.ti_traffic_overview["throughput_kv"])
+        layout.addWidget(box)
+
+        box, box_layout = self._make_section("Packet Size Statistics")
+        self.ti_traffic_overview["packet_stats"] = self._make_kv_table()
+        box_layout.addWidget(self.ti_traffic_overview["packet_stats"])
+        self.ti_traffic_overview["hist_table"] = self._make_table(["bucket", "count"])
+        box_layout.addWidget(self.ti_traffic_overview["hist_table"])
+        layout.addWidget(box)
+
+        box, box_layout = self._make_section("L2/L3 Breakdown")
+        self.ti_traffic_overview["l2l3"] = self._make_kv_table()
+        box_layout.addWidget(self.ti_traffic_overview["l2l3"])
+        layout.addWidget(box)
+
+        box, box_layout = self._make_section("Global Totals (context)")
+        self.ti_traffic_overview["totals"] = self._make_kv_table()
+        box_layout.addWidget(self.ti_traffic_overview["totals"])
+        layout.addWidget(box)
+
+        json_tabs = QtWidgets.QTabWidget()
+        self.ti_traffic_overview["json_throughput"] = QtWidgets.QPlainTextEdit()
+        self.ti_traffic_overview["json_packet_sizes"] = QtWidgets.QPlainTextEdit()
+        self.ti_traffic_overview["json_l2l3"] = QtWidgets.QPlainTextEdit()
+        for editor in (self.ti_traffic_overview["json_throughput"], self.ti_traffic_overview["json_packet_sizes"], self.ti_traffic_overview["json_l2l3"]):
+            editor.setReadOnly(True)
+            editor.setStyleSheet("background-color: %s; color: %s;" % (BG_PANEL, FG_TEXT))
+        json_tabs.addTab(self.ti_traffic_overview["json_throughput"], "throughput_peaks")
+        json_tabs.addTab(self.ti_traffic_overview["json_packet_sizes"], "packet_size_stats")
+        json_tabs.addTab(self.ti_traffic_overview["json_l2l3"], "l2_l3_breakdown")
+        layout.addWidget(QtWidgets.QLabel("Complete analyzer output for verification and debugging."))
+        layout.addWidget(json_tabs)
+        layout.addStretch(1)
+        self.ti_tabs.addTab(page, "Traffic Overview")
+    def _ti_protocol_mix_page(self):
+        page, layout = self._make_scroll_page()
+
+        box, box_layout = self._make_section("Totals")
+        self.ti_protocol_mix["totals"] = self._make_kv_table()
+        box_layout.addWidget(self.ti_protocol_mix["totals"])
+        layout.addWidget(box)
+
+        box, box_layout = self._make_section("Protocol Mix")
+        self.ti_protocol_mix["counts"] = self._make_table(["protocol", "count"])
+        self.ti_protocol_mix["percents"] = self._make_table(["protocol", "percent"])
+        self.ti_protocol_mix["extra"] = self._make_kv_table()
+        box_layout.addWidget(self.ti_protocol_mix["counts"])
+        box_layout.addWidget(self.ti_protocol_mix["percents"])
+        box_layout.addWidget(self.ti_protocol_mix["extra"])
+        layout.addWidget(box)
+
+        box, box_layout = self._make_section("Global Distributions")
+        self.ti_protocol_mix["ip_versions"] = self._make_table(["key", "count", "percent"])
+        self.ti_protocol_mix["l4_protocols"] = self._make_table(["key", "count", "percent"])
+        self.ti_protocol_mix["tcp_flags"] = self._make_table(["key", "count", "percent"])
+        self.ti_protocol_mix["decode_flags"] = self._make_table(["key", "count", "percent"])
+        box_layout.addWidget(QtWidgets.QLabel("ip_versions"))
+        box_layout.addWidget(self.ti_protocol_mix["ip_versions"])
+        box_layout.addWidget(QtWidgets.QLabel("l4_protocols"))
+        box_layout.addWidget(self.ti_protocol_mix["l4_protocols"])
+        box_layout.addWidget(QtWidgets.QLabel("tcp_flags"))
+        box_layout.addWidget(self.ti_protocol_mix["tcp_flags"])
+        box_layout.addWidget(QtWidgets.QLabel("decode_quality_flags"))
+        box_layout.addWidget(self.ti_protocol_mix["decode_flags"])
+        layout.addWidget(box)
+
+        json_tabs = QtWidgets.QTabWidget()
+        self.ti_protocol_mix["json_protocol_mix"] = QtWidgets.QPlainTextEdit()
+        self.ti_protocol_mix["json_global_stats"] = QtWidgets.QPlainTextEdit()
+        for editor in (self.ti_protocol_mix["json_protocol_mix"], self.ti_protocol_mix["json_global_stats"]):
+            editor.setReadOnly(True)
+            editor.setStyleSheet("background-color: %s; color: %s;" % (BG_PANEL, FG_TEXT))
+        json_tabs.addTab(self.ti_protocol_mix["json_protocol_mix"], "protocol_mix")
+        json_tabs.addTab(self.ti_protocol_mix["json_global_stats"], "global_stats")
+        layout.addWidget(QtWidgets.QLabel("Complete analyzer output for verification and debugging."))
+        layout.addWidget(json_tabs)
+        layout.addStretch(1)
+        self.ti_tabs.addTab(page, "Protocol Mix")
+
+    def _ti_flow_analytics_page(self):
+        page, layout = self._make_scroll_page()
+
+        box, box_layout = self._make_section("Summary KPIs")
+        self.ti_flow_analytics["summary"] = self._make_kv_table()
+        box_layout.addWidget(self.ti_flow_analytics["summary"])
+        layout.addWidget(box)
+
+        box, box_layout = self._make_section("Heavy Hitters")
+        self.ti_flow_analytics["heavy_bytes"] = self._make_table(["field", "value"], min_rows=14)
+        self.ti_flow_analytics["heavy_packets"] = self._make_table(["field", "value"], min_rows=14)
+        box_layout.addWidget(QtWidgets.QLabel("top_by_bytes"))
+        box_layout.addWidget(self.ti_flow_analytics["heavy_bytes"])
+        box_layout.addWidget(QtWidgets.QLabel("top_by_packets"))
+        box_layout.addWidget(self.ti_flow_analytics["heavy_packets"])
+        layout.addWidget(box)
+
+        box, box_layout = self._make_section("Flow States")
+        self.ti_flow_analytics["states"] = self._make_kv_table(min_rows=14)
+        box_layout.addWidget(self.ti_flow_analytics["states"])
+        layout.addWidget(box)
+
+        box, box_layout = self._make_section("Flow Summary (raw table aggregates)")
+        self.ti_flow_analytics["flow_summary"] = self._make_table(["field", "value"], min_rows=16)
+        box_layout.addWidget(self.ti_flow_analytics["flow_summary"])
+        layout.addWidget(box)
+
+        json_tabs = QtWidgets.QTabWidget()
+        self.ti_flow_analytics["json_flow_analytics"] = QtWidgets.QPlainTextEdit()
+        self.ti_flow_analytics["json_flow_summary"] = QtWidgets.QPlainTextEdit()
+        for editor in (self.ti_flow_analytics["json_flow_analytics"], self.ti_flow_analytics["json_flow_summary"]):
+            editor.setReadOnly(True)
+            editor.setStyleSheet("background-color: %s; color: %s;" % (BG_PANEL, FG_TEXT))
+        json_tabs.addTab(self.ti_flow_analytics["json_flow_analytics"], "flow_analytics")
+        json_tabs.addTab(self.ti_flow_analytics["json_flow_summary"], "flow_summary")
+        layout.addWidget(QtWidgets.QLabel("Complete analyzer output for verification and debugging."))
+        layout.addWidget(json_tabs)
+        layout.addStretch(1)
+        self.ti_tabs.addTab(page, "Flow Analytics")
+
+    def _ti_tcp_health_page(self):
+        page, layout = self._make_scroll_page()
+
+        box, box_layout = self._make_section("Handshakes")
+        self.ti_tcp_health["handshakes"] = self._make_kv_table(min_rows=12)
+        box_layout.addWidget(self.ti_tcp_health["handshakes"])
+        layout.addWidget(box)
+
+        box, box_layout = self._make_section("Reliability")
+        self.ti_tcp_health["reliability"] = self._make_kv_table(min_rows=12)
+        box_layout.addWidget(self.ti_tcp_health["reliability"])
+        layout.addWidget(box)
+
+        box, box_layout = self._make_section("Performance")
+        self.ti_tcp_health["performance"] = self._make_kv_table(min_rows=12)
+        self.ti_tcp_health["mss_table"] = self._make_table(["field", "value"], min_rows=10)
+        box_layout.addWidget(self.ti_tcp_health["performance"])
+        box_layout.addWidget(QtWidgets.QLabel("MSS"))
+        box_layout.addWidget(self.ti_tcp_health["mss_table"])
+        layout.addWidget(box)
+
+        json_tabs = QtWidgets.QTabWidget()
+        self.ti_tcp_health["json_handshakes"] = QtWidgets.QPlainTextEdit()
+        self.ti_tcp_health["json_reliability"] = QtWidgets.QPlainTextEdit()
+        self.ti_tcp_health["json_performance"] = QtWidgets.QPlainTextEdit()
+        for editor in (self.ti_tcp_health["json_handshakes"], self.ti_tcp_health["json_reliability"], self.ti_tcp_health["json_performance"]):
+            editor.setReadOnly(True)
+            editor.setStyleSheet("background-color: %s; color: %s;" % (BG_PANEL, FG_TEXT))
+        json_tabs.addTab(self.ti_tcp_health["json_handshakes"], "tcp_handshakes")
+        json_tabs.addTab(self.ti_tcp_health["json_reliability"], "tcp_reliability")
+        json_tabs.addTab(self.ti_tcp_health["json_performance"], "tcp_performance")
+        layout.addWidget(QtWidgets.QLabel("Complete analyzer output for verification and debugging."))
+        layout.addWidget(json_tabs)
+        layout.addStretch(1)
+        self.ti_tabs.addTab(page, "TCP Health")
+
+    def _ti_top_entities_page(self):
+        page, layout = self._make_scroll_page()
+
+        box, box_layout = self._make_section("IP Talkers")
+        self.ti_top_entities["ip_src"] = self._make_table(["field", "value"], min_rows=14)
+        self.ti_top_entities["ip_dst"] = self._make_table(["field", "value"], min_rows=14)
+        self.ti_top_entities["ip_split"] = self._make_kv_table()
+        box_layout.addWidget(QtWidgets.QLabel("top_src"))
+        box_layout.addWidget(self.ti_top_entities["ip_src"])
+        box_layout.addWidget(QtWidgets.QLabel("top_dst"))
+        box_layout.addWidget(self.ti_top_entities["ip_dst"])
+        box_layout.addWidget(QtWidgets.QLabel("internal_external"))
+        box_layout.addWidget(self.ti_top_entities["ip_split"])
+        layout.addWidget(box)
+
+        box, box_layout = self._make_section("MAC Talkers")
+        self.ti_top_entities["mac_src"] = self._make_table(["field", "value"], min_rows=14)
+        self.ti_top_entities["mac_dst"] = self._make_table(["field", "value"], min_rows=14)
+        box_layout.addWidget(QtWidgets.QLabel("top_src"))
+        box_layout.addWidget(self.ti_top_entities["mac_src"])
+        box_layout.addWidget(QtWidgets.QLabel("top_dst"))
+        box_layout.addWidget(self.ti_top_entities["mac_dst"])
+        layout.addWidget(box)
+
+        box, box_layout = self._make_section("Ports and Services")
+        self.ti_top_entities["tcp_ports"] = self._make_table(["field", "value"], min_rows=14)
+        self.ti_top_entities["udp_ports"] = self._make_table(["field", "value"], min_rows=14)
+        box_layout.addWidget(QtWidgets.QLabel("TCP top_dst_ports"))
+        box_layout.addWidget(self.ti_top_entities["tcp_ports"])
+        box_layout.addWidget(QtWidgets.QLabel("UDP top_dst_ports"))
+        box_layout.addWidget(self.ti_top_entities["udp_ports"])
+        layout.addWidget(box)
+
+        json_tabs = QtWidgets.QTabWidget()
+        self.ti_top_entities["json_top_entities"] = QtWidgets.QPlainTextEdit()
+        self.ti_top_entities["json_ip_talkers"] = QtWidgets.QPlainTextEdit()
+        self.ti_top_entities["json_mac_talkers"] = QtWidgets.QPlainTextEdit()
+        self.ti_top_entities["json_ports"] = QtWidgets.QPlainTextEdit()
+        for editor in (self.ti_top_entities["json_top_entities"], self.ti_top_entities["json_ip_talkers"], self.ti_top_entities["json_mac_talkers"], self.ti_top_entities["json_ports"]):
+            editor.setReadOnly(True)
+            editor.setStyleSheet("background-color: %s; color: %s;" % (BG_PANEL, FG_TEXT))
+        json_tabs.addTab(self.ti_top_entities["json_top_entities"], "top_entities")
+        json_tabs.addTab(self.ti_top_entities["json_ip_talkers"], "ip_talkers")
+        json_tabs.addTab(self.ti_top_entities["json_mac_talkers"], "mac_talkers")
+        json_tabs.addTab(self.ti_top_entities["json_ports"], "ports")
+        layout.addWidget(QtWidgets.QLabel("Complete analyzer output for verification and debugging."))
+        layout.addWidget(json_tabs)
+        layout.addStretch(1)
+        self.ti_tabs.addTab(page, "Top Entities")
+
+    def _ti_security_signals_page(self):
+        page, layout = self._make_scroll_page()
+
+        box, box_layout = self._make_section("Scan Signals")
+        self.ti_security_signals["distinct_ports"] = self._make_kv_table(min_rows=10)
+        self.ti_security_signals["distinct_ips"] = self._make_kv_table(min_rows=10)
+        self.ti_security_signals["syn_ratio"] = self._make_kv_table(min_rows=10)
+        self.ti_security_signals["scan_extra"] = self._make_kv_table(min_rows=10)
+        box_layout.addWidget(self.ti_security_signals["distinct_ports"])
+        box_layout.addWidget(self.ti_security_signals["distinct_ips"])
+        box_layout.addWidget(self.ti_security_signals["syn_ratio"])
+        box_layout.addWidget(self.ti_security_signals["scan_extra"])
+        layout.addWidget(box)
+
+        box, box_layout = self._make_section("ARP / LAN Signals")
+        self.ti_security_signals["multiple_macs"] = self._make_kv_table(min_rows=10)
+        self.ti_security_signals["multiple_examples"] = self._make_table(["field", "value"], min_rows=10)
+        self.ti_security_signals["arp_changes"] = self._make_kv_table(min_rows=10)
+        self.ti_security_signals["arp_changes_table"] = self._make_table(["field", "value"], min_rows=10)
+        self.ti_security_signals["arp_extra"] = self._make_kv_table(min_rows=10)
+        box_layout.addWidget(self.ti_security_signals["multiple_macs"])
+        box_layout.addWidget(self.ti_security_signals["multiple_examples"])
+        box_layout.addWidget(self.ti_security_signals["arp_changes"])
+        box_layout.addWidget(self.ti_security_signals["arp_changes_table"])
+        box_layout.addWidget(self.ti_security_signals["arp_extra"])
+        layout.addWidget(box)
+
+        box, box_layout = self._make_section("DNS Anomalies")
+        self.ti_security_signals["entropy"] = self._make_kv_table(min_rows=10)
+        self.ti_security_signals["entropy_samples"] = self._make_table(["field", "value"], min_rows=10)
+        self.ti_security_signals["long_labels"] = self._make_kv_table(min_rows=10)
+        self.ti_security_signals["long_samples"] = self._make_table(["field", "value"], min_rows=10)
+        self.ti_security_signals["nxdomain"] = self._make_kv_table(min_rows=10)
+        self.ti_security_signals["dns_extra"] = self._make_kv_table(min_rows=10)
+        box_layout.addWidget(self.ti_security_signals["entropy"])
+        box_layout.addWidget(self.ti_security_signals["entropy_samples"])
+        box_layout.addWidget(self.ti_security_signals["long_labels"])
+        box_layout.addWidget(self.ti_security_signals["long_samples"])
+        box_layout.addWidget(self.ti_security_signals["nxdomain"])
+        box_layout.addWidget(self.ti_security_signals["dns_extra"])
+        layout.addWidget(box)
+
+        json_tabs = QtWidgets.QTabWidget()
+        self.ti_security_signals["json_scan"] = QtWidgets.QPlainTextEdit()
+        self.ti_security_signals["json_arp"] = QtWidgets.QPlainTextEdit()
+        self.ti_security_signals["json_dns"] = QtWidgets.QPlainTextEdit()
+        for editor in (self.ti_security_signals["json_scan"], self.ti_security_signals["json_arp"], self.ti_security_signals["json_dns"]):
+            editor.setReadOnly(True)
+            editor.setStyleSheet("background-color: %s; color: %s;" % (BG_PANEL, FG_TEXT))
+        json_tabs.addTab(self.ti_security_signals["json_scan"], "scan_signals")
+        json_tabs.addTab(self.ti_security_signals["json_arp"], "arp_lan_signals")
+        json_tabs.addTab(self.ti_security_signals["json_dns"], "dns_anomalies")
+        layout.addWidget(QtWidgets.QLabel("Complete analyzer output for verification and debugging."))
+        layout.addWidget(json_tabs)
+        layout.addStretch(1)
+        self.ti_tabs.addTab(page, "Security Signals")
+
+    def _ti_time_series_page(self):
+        page, layout = self._make_scroll_page()
+
+        box, box_layout = self._make_section("Traffic Over Time")
+        self.ti_time_series["series"] = self._make_table(["field", "value"], min_rows=16)
+        box_layout.addWidget(self.ti_time_series["series"])
+        layout.addWidget(box)
+
+        box, box_layout = self._make_section("Packet Chunks")
+        self.ti_time_series["chunks"] = self._make_table(["field", "value"], min_rows=16)
+        self.ti_time_series["top_bytes"] = self._make_table(["rank", "chunk", "bytes"], min_rows=8)
+        self.ti_time_series["top_packets"] = self._make_table(["rank", "chunk", "packets"], min_rows=8)
+        box_layout.addWidget(self.ti_time_series["chunks"])
+        box_layout.addWidget(QtWidgets.QLabel("Top 3 chunks by bytes"))
+        box_layout.addWidget(self.ti_time_series["top_bytes"])
+        box_layout.addWidget(QtWidgets.QLabel("Top 3 chunks by packets"))
+        box_layout.addWidget(self.ti_time_series["top_packets"])
+        layout.addWidget(box)
+
+        json_tabs = QtWidgets.QTabWidget()
+        self.ti_time_series["json_time_series"] = QtWidgets.QPlainTextEdit()
+        self.ti_time_series["json_packet_chunks"] = QtWidgets.QPlainTextEdit()
+        for editor in (self.ti_time_series["json_time_series"], self.ti_time_series["json_packet_chunks"]):
+            editor.setReadOnly(True)
+            editor.setStyleSheet("background-color: %s; color: %s;" % (BG_PANEL, FG_TEXT))
+        json_tabs.addTab(self.ti_time_series["json_time_series"], "time_series")
+        json_tabs.addTab(self.ti_time_series["json_packet_chunks"], "packet_chunks")
+        layout.addWidget(QtWidgets.QLabel("Complete analyzer output for verification and debugging."))
+        layout.addWidget(json_tabs)
+        layout.addStretch(1)
+        self.ti_tabs.addTab(page, "Time Series & Chunking")
+    def _build_dashboard_tab(self):
+        layout = QtWidgets.QVBoxLayout(self.dashboard_tab)
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        layout.addWidget(scroll)
+
+        content = QtWidgets.QWidget()
+        scroll.setWidget(content)
+        vbox = QtWidgets.QVBoxLayout(content)
+        vbox.setContentsMargins(10, 10, 10, 10)
+        vbox.setSpacing(10)
+
+        # KPI cards
+        kpi_box, kpi_layout = self._make_section("Simplified Dashboard")
+        kpi_grid = QtWidgets.QGridLayout()
+        kpi_layout.addLayout(kpi_grid)
+        self.kpi_cards = {}
+        kpi_defs = [
+            "Total packets",
+            "Total bytes",
+            "Duration",
+            "Peak bps",
+            "TCP handshake completion",
+            "TCP retransmission rate",
+            "Drop rate",
+            "NXDOMAIN spike",
+        ]
+        for idx, title in enumerate(kpi_defs):
+            card = self._kpi_card(title)
+            self.kpi_cards[title] = card
+            row = idx // 4
+            col = idx % 4
+            kpi_grid.addWidget(card, row, col)
+        vbox.addWidget(kpi_box)
+
+        # Charts
+        charts_box, charts_layout = self._make_section("Key charts")
+        self.chart_tabs = QtWidgets.QTabWidget()
+        charts_layout.addWidget(self.chart_tabs)
+        self.chart_frames = {}
+        for name in [
+            "Traffic",
+            "Protocols",
+            "IP Versions",
+            "Talkers",
+            "Top Flows (Bytes)",
+            "Top Flows (Packets)",
+            "Flow States",
+            "TCP",
+            "Packet Sizes",
+        ]:
+            frame = QtWidgets.QWidget()
+            frame.setLayout(QtWidgets.QVBoxLayout())
+            frame.layout().setContentsMargins(6, 6, 6, 6)
+            self.chart_tabs.addTab(frame, name)
+            self.chart_frames[name] = frame
+        vbox.addWidget(charts_box)
+
+        # Diagnostics
+        diag_box, diag_layout = self._make_section("Diagnostics")
+        self.diag_table = self._make_table(["severity", "message"], min_rows=20)
+        diag_layout.addWidget(self.diag_table)
+        vbox.addWidget(diag_box)
+
+        vbox.addStretch(1)
+
+    def _kpi_card(self, title):
+        frame = QtWidgets.QFrame()
+        frame.setStyleSheet("background-color: %s;" % BG_CARD)
+        layout = QtWidgets.QVBoxLayout(frame)
+        layout.setContentsMargins(8, 8, 8, 8)
+        title_label = QtWidgets.QLabel(title)
+        title_label.setStyleSheet("color: %s; font-weight: 600;" % FG_MUTED)
+        value_label = QtWidgets.QLabel("n/a")
+        value_label.setStyleSheet("color: %s; font-size: 14px; font-weight: 600;" % FG_TEXT)
+        sub_label = QtWidgets.QLabel("")
+        sub_label.setStyleSheet("color: %s;" % FG_MUTED)
+        badge = QtWidgets.QLabel("INFO")
+        badge.setAlignment(QtCore.Qt.AlignCenter)
+        badge.setFixedWidth(60)
+        badge.setStyleSheet("background-color: %s; color: %s; padding: 2px;" % (INFO_BADGE, FG_TEXT))
+
+        layout.addWidget(title_label)
+        layout.addWidget(value_label)
+        layout.addWidget(sub_label)
+        layout.addWidget(badge, alignment=QtCore.Qt.AlignLeft)
+
+        frame.value_label = value_label
+        frame.sub_label = sub_label
+        frame.badge_label = badge
+        return frame
+
+    def _set_kpi(self, title, value, severity="INFO", sub=""):
+        card = self.kpi_cards.get(title)
+        if not card:
+            return
+        card.value_label.setText(value)
+        card.sub_label.setText(sub or "")
+        card.badge_label.setText(severity)
+        color = INFO_BADGE
+        if severity == "GOOD":
+            color = GOOD
+        elif severity == "WARN":
+            color = WARN_BADGE
+        elif severity == "BAD":
+            color = BAD
+        card.badge_label.setStyleSheet("background-color: %s; color: %s; padding: 2px;" % (color, FG_TEXT))
+
+    def _sev_from_pct(self, value, good_lt, warn_lt, bad_ge):
+        if value is None:
+            return "INFO"
+        try:
+            val = float(value)
+        except (TypeError, ValueError):
+            return "INFO"
+        if val >= bad_ge:
+            return "BAD"
+        if val >= warn_lt:
+            return "WARN"
+        return "GOOD"
+
+    def _sev_from_bool(self, flag):
+        if flag is None:
+            return "INFO"
+        return "WARN" if bool(flag) else "GOOD"
+
+    def _mpl_clear_frame(self, frame):
+        layout = frame.layout()
+        if layout is None:
+            layout = QtWidgets.QVBoxLayout(frame)
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+    def _mpl_pie(self, frame, labels, values, title):
+        self._mpl_clear_frame(frame)
+        layout = frame.layout()
+        if not self.has_mpl:
+            table = self._make_table(["label", "value"])
+            rows = list(zip(labels, values))
+            self._set_dynamic_rows(table, [{"label": r[0], "value": r[1]} for r in rows], ["label", "value"])
+            layout.addWidget(table)
+            return
+        fig = Figure(figsize=(10, 7))
+        ax = fig.add_subplot(111)
+        ax.pie(values, labels=labels, autopct="%1.1f%%")
+        ax.set_title(title)
+        canvas = FigureCanvas(fig)
+        canvas.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Expanding)
+
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
+        scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        scroll.setWidget(canvas)
+        scroll.setMinimumHeight(520)
+        layout.addWidget(scroll)
+
+    def _mpl_bar(self, frame, labels, values, title, xrot=0, orientation="v", label_fontsize=9, grid=True, xlabel=None):
+        self._mpl_clear_frame(frame)
+        layout = frame.layout()
+        if not self.has_mpl:
+            table = self._make_table(["label", "value"])
+            rows = list(zip(labels, values))
+            self._set_dynamic_rows(table, [{"label": r[0], "value": r[1]} for r in rows], ["label", "value"])
+            layout.addWidget(table)
+            return
+        fig_height = 8
+        if orientation == "h":
+            fig_height = max(4, min(12, 0.45 * max(1, len(labels)) + 2))
+        fig = Figure(figsize=(12, fig_height))
+        ax = fig.add_subplot(111)
+        if orientation == "h":
+            y_pos = list(range(len(labels)))
+            ax.barh(y_pos, values)
+            ax.set_yticks(y_pos)
+            ax.set_yticklabels(labels, fontsize=label_fontsize)
+            ax.invert_yaxis()
+            ax.tick_params(axis='x', labelsize=label_fontsize)
+            fig.subplots_adjust(left=0.28, right=0.98, top=0.92, bottom=0.12)
+        else:
+            ax.bar(labels, values)
+            if xrot:
+                ax.tick_params(axis='x', rotation=xrot, labelsize=label_fontsize)
+            else:
+                ax.tick_params(axis='x', labelsize=label_fontsize)
+            fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.18)
+        ax.set_title(title)
+        if xlabel:
+            ax.set_xlabel(xlabel)
+        if grid:
+            ax.grid(axis='x' if orientation == "h" else 'y', linestyle='--', alpha=0.3)
+        canvas = FigureCanvas(fig)
+        canvas.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Expanding)
+
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
+        scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        scroll.setWidget(canvas)
+        scroll.setMinimumHeight(520)
+        layout.addWidget(scroll)
+
+    def _mpl_line(self, frame, x, series_list, title, xlabel="", ylabel=""):
+        self._mpl_clear_frame(frame)
+        layout = frame.layout()
+        if not self.has_mpl:
+            table = self._make_table(["x"] + [s["name"] for s in series_list])
+            rows = []
+            for idx, label in enumerate(x):
+                row = {"x": label}
+                for s in series_list:
+                    row[s["name"]] = s["y"][idx] if idx < len(s["y"]) else ""
+                rows.append(row)
+            self._set_dynamic_rows(table, rows, ["x"] + [s["name"] for s in series_list])
+            layout.addWidget(table)
+            return
+        fig = Figure(figsize=(12, 8))
+        ax = fig.add_subplot(111)
+        for series in series_list:
+            ax.plot(x, series["y"], label=series["name"])
+        ax.set_title(title)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.legend()
+        canvas = FigureCanvas(fig)
+        canvas.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Expanding)
