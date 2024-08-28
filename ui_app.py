@@ -2706,3 +2706,725 @@ class AsphaltApp(QtWidgets.QMainWindow):
         ax.legend()
         canvas = FigureCanvas(fig)
         canvas.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Expanding)
+
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
+        scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        scroll.setWidget(canvas)
+        scroll.setMinimumHeight(520)
+        layout.addWidget(scroll)
+
+    def _short_flow_label(self, text, max_len=28):
+        if not isinstance(text, str):
+            text = str(text)
+        if len(text) <= max_len:
+            return text
+        head = max(6, (max_len // 2) - 2)
+        tail = max_len - head - 3
+        return f"{text[:head]}...{text[-tail:]}"
+
+    def _render_top_flows(self, frame, items, title, value_key, xlabel):
+        self._mpl_clear_frame(frame)
+        layout = frame.layout()
+        items = [i for i in items if isinstance(i, dict)]
+        if not items:
+            layout.addWidget(QtWidgets.QLabel("No flow data available."))
+            return
+
+        labels = [self._short_flow_label(i.get("label", i.get("flow_id", "?"))) for i in items]
+        values = [i.get(value_key, 0) for i in items]
+
+        if not self.has_mpl:
+            table = self._make_table(["flow", value_key])
+            rows = [{"flow": i.get("label", i.get("flow_id", "?")), value_key: i.get(value_key, 0)} for i in items]
+            self._set_dynamic_rows(table, rows, ["flow", value_key])
+            layout.addWidget(table)
+            return
+
+        fig_height = max(4, min(10, 0.45 * len(labels) + 2))
+        fig = Figure(figsize=(12, fig_height))
+        ax = fig.add_subplot(111)
+        y_pos = list(range(len(labels)))
+        bars = ax.barh(y_pos, values, color="#00d4ff", alpha=0.85)
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(labels, fontsize=8)
+        ax.invert_yaxis()
+        ax.set_xlabel(xlabel)
+        ax.set_title(title)
+        ax.grid(axis='x', linestyle='--', alpha=0.25)
+        for bar, val in zip(bars, values):
+            ax.text(
+                bar.get_width(),
+                bar.get_y() + bar.get_height() / 2,
+                f" {val}",
+                va="center",
+                ha="left",
+                fontsize=8,
+                color="#e6e9ef",
+            )
+        fig.subplots_adjust(left=0.28, right=0.98, top=0.92, bottom=0.12)
+        canvas = FigureCanvas(fig)
+        canvas.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Expanding)
+
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
+        scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        scroll.setWidget(canvas)
+        scroll.setMinimumHeight(360)
+        layout.addWidget(scroll)
+
+        table = self._make_table(["flow", value_key], min_rows=min(10, len(items) + 2))
+        rows = [{"flow": i.get("label", i.get("flow_id", "?")), value_key: i.get(value_key, 0)} for i in items]
+        self._set_dynamic_rows(table, rows, ["flow", value_key])
+        layout.addWidget(table)
+
+    def _mpl_hist(self, frame, bucket_labels, counts, title):
+        self._mpl_clear_frame(frame)
+        layout = frame.layout()
+        if not self.has_mpl:
+            table = self._make_table(["bucket", "count", "percent"])
+            total = sum(c for c in counts if isinstance(c, (int, float)))
+            rows = []
+            for b, c in zip(bucket_labels, counts):
+                pct = (float(c) / total * 100.0) if total else 0.0
+                rows.append({"bucket": b, "count": c, "percent": f"{pct:.1f}%"})
+            self._set_dynamic_rows(table, rows, ["bucket", "count", "percent"])
+            layout.addWidget(table)
+            return
+        fig = Figure(figsize=(12, 9))
+        ax = fig.add_subplot(111)
+        safe_counts = [c if isinstance(c, (int, float)) else 0 for c in counts]
+        total = sum(safe_counts)
+        bars = ax.bar(bucket_labels, safe_counts, color="#7b6cff", alpha=0.85)
+        ax.set_title(title)
+        ax.set_xlabel("Packet size buckets (bytes)")
+        ax.set_ylabel("Packets")
+        ax.tick_params(axis='x', rotation=25, labelsize=9)
+        ax.grid(axis='y', linestyle='--', alpha=0.25)
+        if total:
+            ax.text(0.99, 0.98, f"Total: {int(total):,}", transform=ax.transAxes,
+                    ha="right", va="top", fontsize=9, color="#c7c7c7")
+        for bar, count in zip(bars, safe_counts):
+            if count <= 0:
+                continue
+            pct = (count / total * 100.0) if total else 0.0
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height(),
+                f"{int(count)} ({pct:.1f}%)",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+                color="#e6e9ef",
+            )
+        fig.subplots_adjust(bottom=0.22, top=0.92, left=0.08, right=0.98)
+        canvas = FigureCanvas(fig)
+        canvas.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Expanding)
+
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
+        scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        scroll.setWidget(canvas)
+        scroll.setMinimumHeight(520)
+        layout.addWidget(scroll)
+
+    def _build_packet_tab(self):
+        layout = QtWidgets.QVBoxLayout(self.packet_tab)
+        self.packet_table = QtWidgets.QTableWidget(0, 1)
+        self.packet_table.setHorizontalHeaderLabels(["packet"])
+        self.packet_table.horizontalHeader().setStretchLastSection(True)
+        self.packet_table.verticalHeader().setVisible(False)
+        self.packet_table.setStyleSheet("background-color: %s; color: %s;" % (BG_PANEL, FG_TEXT))
+        layout.addWidget(self.packet_table)
+    def start_capture(self):
+        if hasattr(self, "home_status_label"):
+            self.home_status_label.setText("CAPTURE BEGUN")
+        try:
+            duration = int(self.duration_edit.text().strip() or "0")
+        except ValueError:
+            duration = 0
+        try:
+            limit = int(self.limit_edit.text().strip() or "0")
+        except ValueError:
+            limit = 0
+        self._start_home_progress(duration, limit)
+        # Get backend (default to scapy if combo doesn't exist)
+        if hasattr(self, 'backend_combo'):
+            backend = self.backend_combo.currentText().strip()
+        else:
+            backend = "scapy"
+        interface = self.interface_edit.text().strip()
+        if backend == "scapy" and not interface:
+            interface = get_default_scapy_iface()
+            if interface:
+                self.interface_edit.setText(interface)
+            else:
+                interface = ""
+        if backend == "scapy":
+            resolved = self._resolve_scapy_interface(interface)
+            if resolved:
+                interface = resolved
+                self.interface_edit.setText(interface)
+            else:
+                self.status_label.setText("No valid scapy interface found. Set an NPF interface and try again.")
+                return
+        try:
+            duration = int(self.duration_edit.text().strip() or "0")
+        except ValueError:
+            duration = 0
+        try:
+            limit = int(self.limit_edit.text().strip() or "0")
+        except ValueError:
+            limit = 0
+        if duration > 0:
+            pass
+        if duration <= 0 and limit <= 0:
+            limit = 50
+            self.limit_edit.setText(str(limit))
+        if backend == "scapy" and duration <= 0:
+            duration = 5
+
+        self.start_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
+        self._capture_stop_flag.clear()
+        self.status_label.setText(f"Capturing... backend={backend} duration={duration}s limit={limit}")
+        thread = threading.Thread(target=self._capture_thread, args=(backend, interface, duration, limit), daemon=True)
+        thread.start()
+    
+    def stop_capture(self):
+        """Stop the current capture."""
+        self._capture_stop_flag.set()
+        self.start_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        self.status_label.setText("STOPPED")
+        if hasattr(self, "home_status_label"):
+            self.home_status_label.setText("CAPTURED ENDED")
+        self._stop_home_progress()
+
+    def _capture_thread(self, backend, interface, duration, limit):
+        try:
+            capture_limit = limit if limit > 0 else 0
+            packets = run_capture(backend, interface, duration, capture_limit)
+            note = ""
+            if limit > 0 and len(packets) >= limit:
+                note = f"Capture complete (limit reached: {limit})"
+                if hasattr(self, "home_status_label"):
+                    self.ui_call.emit(lambda: self.home_status_label.setText("LIMIT REACHED"))
+                self.ui_call.emit(self._stop_home_progress)
+            elif duration > 0:
+                note = f"Capture complete ({duration}s)"
+                if hasattr(self, "home_status_label"):
+                    self.ui_call.emit(lambda: self.home_status_label.setText("CAPTURED ENDED"))
+                self.ui_call.emit(self._stop_home_progress)
+            print(f"DEBUG: UI capture returned {len(packets)} packets")
+            self.ui_call.emit(lambda: self.status_label.setText(f"Captured {len(packets)} packets. Analyzing..."))
+            if backend == "scapy" and not packets:
+                # Auto-probe other interfaces once
+                for alt_iface in self._list_scapy_interfaces():
+                    if alt_iface == interface:
+                        continue
+                    packets = run_capture("scapy", alt_iface, max(3, duration), max(10, limit))
+                    print(f"DEBUG: UI probe {alt_iface} -> {len(packets)} packets")
+                    if packets:
+                        interface = alt_iface
+                        self.ui_call.emit(lambda: self.interface_edit.setText(interface))
+                        break
+            thresholds = self._get_thresholds()
+            analysis = run_analysis(
+                packets,
+                scan_port_threshold=int(thresholds["scan_ports_warn"]),
+                rst_ratio_threshold=float(thresholds["abnormal_rst_ratio"]) / 100.0,
+            )
+            print(f"DEBUG: Analysis keys: {list(analysis.keys())}")
+            self.latest_packets = packets
+            self.latest_analysis = analysis
+            self._last_capture_note = note
+            self._packet_search_cache = self._build_packet_search_cache(packets)
+            self._packet_search_cache_id = id(packets)
+            self._packet_search_cache_len = len(packets)
+            self.ui_call.emit(self.refresh_all)
+        except Exception as exc:
+            msg = str(exc)
+            self.ui_call.emit(lambda: self.status_label.setText(msg))
+        finally:
+            self.ui_call.emit(lambda: self.start_btn.setEnabled(True))
+            self.ui_call.emit(lambda: self.stop_btn.setEnabled(False))
+            self.ui_call.emit(self._stop_home_progress)
+
+    def refresh_all(self):
+        print("DEBUG: refresh_all called")
+        if not self.latest_packets:
+            self.status_label.setText(self._last_capture_note or "Capture complete (0 packets)")
+        else:
+            self.status_label.setText(self._last_capture_note or "Capture complete")
+        if hasattr(self, "download_btn"):
+            self.download_btn.setEnabled(bool(self.latest_packets))
+        if hasattr(self, "export_analysis_btn"):
+            self.export_analysis_btn.setEnabled(bool(self.latest_analysis))
+        self.start_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        self.refresh_summary()
+        self.refresh_top_domains()
+        self.refresh_raw_data()
+        self.refresh_technical_information()
+        self.refresh_dashboard()
+        self.refresh_packets()
+        self.refresh_packet_overview()
+
+    def refresh_summary(self):
+        totals = self._get_global_totals(self.latest_analysis)
+        if (not totals.get("packets")) and self.latest_packets:
+            totals = self._compute_totals_from_packets(self.latest_packets)
+        cached = getattr(self, "_cached_quick_counts", None)
+        if isinstance(cached, dict) and cached.get("packet_count") == len(self.latest_packets or []):
+            self.analysis_eth.setText(_fmt_count(cached.get("eth_count")))
+            self.analysis_dns.setText(_fmt_count(cached.get("dns_count")))
+            self.analysis_unique_ips.setText(_fmt_count(cached.get("unique_ip_count")))
+            cached_valid = True
+        else:
+            cached_valid = False
+        packets = totals.get("packets")
+        bytes_total = totals.get("bytes") or totals.get("bytes_captured") or totals.get("bytes_original")
+        duration_us = totals.get("duration_us")
+        self.stat_packets.setText(_fmt_count(packets))
+        if hasattr(self, "stat_packets_panel"):
+            self.stat_packets_panel.setText(_fmt_count(packets))
+        if hasattr(self, "stat_bytes"):
+            self.stat_bytes.setText(_fmt_bytes(bytes_total))
+        if hasattr(self, "stat_duration"):
+            self.stat_duration.setText(_fmt_duration_us(duration_us))
+        ip4 = totals.get("ipv4_packets")
+        ip6 = totals.get("ipv6_packets")
+        self.stat_ip.setText(f"{_fmt_count(ip4)} / {_fmt_count(ip6)}")
+        if hasattr(self, "stat_ip_panel"):
+            self.stat_ip_panel.setText(f"{_fmt_count(ip4)} / {_fmt_count(ip6)}")
+        tcp = totals.get("tcp_packets")
+        udp = totals.get("udp_packets")
+        self.stat_l4.setText(f"{_fmt_count(tcp)} / {_fmt_count(udp)}")
+        if hasattr(self, "stat_l4_panel"):
+            self.stat_l4_panel.setText(f"{_fmt_count(tcp)} / {_fmt_count(udp)}")
+        flows = totals.get("flows") or totals.get("flow_count")
+        if flows is None:
+            flow_analytics = self.latest_analysis.get("global_results", {}).get("flow_analytics", {})
+            summary = flow_analytics.get("summary", {}) if isinstance(flow_analytics, dict) else {}
+            flows = summary.get("total_flows")
+        if flows is None:
+            flow_results = self.latest_analysis.get("flow_results", {}) if isinstance(self.latest_analysis, dict) else {}
+            flow_summary_block = flow_results.get("flow_summary", {}) if isinstance(flow_results, dict) else {}
+            flow_list = flow_summary_block.get("flows", []) if isinstance(flow_summary_block, dict) else []
+            if isinstance(flow_list, list) and flow_list:
+                flows = len(flow_list)
+        self.stat_flows.setText(_fmt_count(flows))
+        if hasattr(self, "stat_flows_panel"):
+            self.stat_flows_panel.setText(_fmt_count(flows))
+
+        tcp_rel = self.latest_analysis.get("global_results", {}).get("tcp_reliability", {})
+        rst_rate = tcp_rel.get("rst_rate") if isinstance(tcp_rel, dict) else None
+        self.stat_rst.setText(_fmt_pct(rst_rate))
+        if hasattr(self, "stat_rst_panel"):
+            self.stat_rst_panel.setText(_fmt_pct(rst_rate))
+
+        capture_health = self.latest_analysis.get("global_results", {}).get("capture_health", {})
+        drops = ((capture_health.get("capture_quality", {}) or {}).get("drops", {}) or {}).get("dropped_packets")
+        self.stat_drops.setText(_fmt_count(drops))
+
+        protocol_mix = self.latest_analysis.get("global_results", {}).get("protocol_mix", {})
+        self.analysis_protocol.setText(f"{len(protocol_mix.get('protocol_counts', {}) or {})} protocols")
+        top_proto = "-"
+        if isinstance(protocol_mix, dict):
+            counts = protocol_mix.get("protocol_counts") or {}
+            if isinstance(counts, dict) and counts:
+                top_proto = max(counts.items(), key=lambda kv: kv[1])[0]
+        if (top_proto == "-" or top_proto is None) and self.latest_packets:
+            proto_counts = {}
+            for pkt in self.latest_packets or []:
+                l4 = pkt.get("l4_protocol")
+                if not l4:
+                    ip_proto = pkt.get("ip_protocol")
+                    if ip_proto == 6:
+                        l4 = "TCP"
+                    elif ip_proto == 17:
+                        l4 = "UDP"
+                if l4:
+                    proto_counts[l4] = proto_counts.get(l4, 0) + 1
+            if proto_counts:
+                top_proto = max(proto_counts.items(), key=lambda kv: kv[1])[0]
+        self.stat_top_proto.setText(str(top_proto))
+        if hasattr(self, "stat_protocols"):
+            if isinstance(protocol_mix, dict) and isinstance(protocol_mix.get("protocol_counts"), dict):
+                self.stat_protocols.setText(_fmt_count(len(protocol_mix.get("protocol_counts") or {})))
+            elif self.latest_packets:
+                proto_counts = {}
+                for pkt in self.latest_packets or []:
+                    l4 = pkt.get("l4_protocol")
+                    if not l4:
+                        ip_proto = pkt.get("ip_protocol")
+                        if ip_proto == 6:
+                            l4 = "TCP"
+                        elif ip_proto == 17:
+                            l4 = "UDP"
+                    if l4:
+                        proto_counts[l4] = proto_counts.get(l4, 0) + 1
+                self.stat_protocols.setText(_fmt_count(len(proto_counts)))
+        bytes_captured = totals.get("bytes") or totals.get("bytes_captured")
+        self.analysis_bytes.setText(_fmt_bytes(bytes_captured))
+        handshake = self.latest_analysis.get("global_results", {}).get("tcp_handshakes", {})
+        if handshake:
+            total = handshake.get("handshakes_total")
+            complete = handshake.get("handshakes_complete")
+            incomplete = handshake.get("handshakes_incomplete")
+            if total is not None and complete is not None:
+                if incomplete is None and total is not None and complete is not None:
+                    try:
+                        incomplete = int(total) - int(complete)
+                    except Exception:
+                        incomplete = None
+                if incomplete is not None:
+                    self.analysis_handshake.setText(f"{_fmt_count(complete)} / {_fmt_count(total)} ({_fmt_count(incomplete)} incomplete)")
+                else:
+                    self.analysis_handshake.setText(f"{_fmt_count(complete)} / {_fmt_count(total)}")
+            else:
+                completion = handshake.get("completion_rate")
+                self.analysis_handshake.setText(f"{_fmt_pct(completion)}")
+        else:
+            self.analysis_handshake.setText("-")
+        ts_obj = self.latest_analysis.get("time_series", {}) if isinstance(self.latest_analysis, dict) else {}
+        packet_chunks = ts_obj.get("packet_chunks") if isinstance(ts_obj, dict) else {}
+        packet_chunks = packet_chunks if isinstance(packet_chunks, dict) else {}
+        chunks = packet_chunks.get("chunks")
+        if chunks is None:
+            chunks = packet_chunks if isinstance(packet_chunks, list) else []
+        count = len(chunks) if isinstance(chunks, list) else 0
+        self.analysis_chunks.setText(_fmt_count(count))
+        if not cached_valid:
+            eth_count = 0
+            dns_count = 0
+            unique_ips = set()
+            for pkt in self.latest_packets or []:
+                if not isinstance(pkt, dict):
+                    continue
+                if pkt.get("is_arp") or pkt.get("src_mac") or pkt.get("dst_mac") or pkt.get("eth_type"):
+                    eth_count += 1
+                if pkt.get("dns_qname") or pkt.get("dns_rcode") is not None or pkt.get("dns_is_query") or pkt.get("dns_is_response"):
+                    dns_count += 1
+                src_ip = pkt.get("src_ip")
+                dst_ip = pkt.get("dst_ip")
+                if src_ip:
+                    unique_ips.add(src_ip)
+                if dst_ip:
+                    unique_ips.add(dst_ip)
+            self.analysis_eth.setText(_fmt_count(eth_count))
+            self.analysis_dns.setText(_fmt_count(dns_count))
+            self.analysis_unique_ips.setText(_fmt_count(len(unique_ips)))
+            self._cached_quick_counts = {
+                "eth_count": eth_count,
+                "dns_count": dns_count,
+                "unique_ip_count": len(unique_ips),
+                "packet_count": len(self.latest_packets or []),
+            }
+
+    def refresh_top_domains(self):
+        if not hasattr(self, "top_domain_labels"):
+            return
+        if not self.latest_packets:
+            for label in self.top_domain_labels:
+                label.setText("-")
+            return
+        counts = {}
+        byte_out = 0
+        byte_in = 0
+        local_candidates = {}
+        local_ips = set()
+        ext_counts = {}
+        try:
+            import socket
+            host = socket.gethostname()
+            for ip in socket.gethostbyname_ex(host)[2]:
+                local_ips.add(ip)
+        except Exception:
+            pass
+        try:
+            from scapy.arch.windows import get_windows_if_list
+            for iface in get_windows_if_list():
+                for ip in iface.get("ips") or []:
+                    local_ips.add(ip)
+        except Exception:
+            pass
+        try:
+            from scapy.all import conf
+            for _dst, _gw, _iface, src in conf.route.routes:
+                if src:
+                    local_ips.add(src)
+        except Exception:
+            pass
+        local_ips = {ip for ip in local_ips if ip and ip not in ("0.0.0.0", "127.0.0.1")}
+        for pkt in self.latest_packets or []:
+            if not isinstance(pkt, dict):
+                continue
+            src_ip = pkt.get("src_ip")
+            dst_ip = pkt.get("dst_ip")
+            if src_ip:
+                local_candidates[src_ip] = local_candidates.get(src_ip, 0) + 1
+            qname = pkt.get("dns_qname")
+            if qname:
+                domain = str(qname).strip().lower().rstrip(".")
+                if domain:
+                    counts[domain] = counts.get(domain, 0) + 1
+        if not local_ips:
+            # Infer local IPs as most frequent src_ip values
+            local_ips = {ip for ip, _cnt in sorted(local_candidates.items(), key=lambda kv: kv[1], reverse=True)[:2]}
+        for pkt in self.latest_packets or []:
+            if not isinstance(pkt, dict):
+                continue
+            src_ip = pkt.get("src_ip")
+            dst_ip = pkt.get("dst_ip")
+            length = int(pkt.get("original_length") or pkt.get("captured_length") or 0)
+            if src_ip in local_ips:
+                byte_out += length
+            elif dst_ip in local_ips:
+                byte_in += length
+            # External IPs (inbound only)
+            if dst_ip in local_ips and src_ip and src_ip not in local_ips:
+                try:
+                    import ipaddress
+                    ip_obj = ipaddress.ip_address(src_ip)
+                    if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_multicast or ip_obj.is_link_local:
+                        continue
+                except Exception:
+                    pass
+                ext_counts[src_ip] = ext_counts.get(src_ip, 0) + 1
+        top = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:1]
+        if top:
+            domain, count = top[0]
+            self.top_domain_labels[0].setText(f"{domain} ({count})")
+        else:
+            self.top_domain_labels[0].setText("-")
+
+        if byte_in or byte_out:
+            direction = "DOWNLOAD" if byte_in >= byte_out else "UPLOAD"
+            self.top_domain_labels[1].setText(f"{direction} ({_fmt_bytes(byte_in)} / {_fmt_bytes(byte_out)})")
+        else:
+            self.top_domain_labels[1].setText("-")
+
+        totals = self._get_global_totals(self.latest_analysis)
+        if (not totals.get("duration_us")) and self.latest_packets:
+            totals = self._compute_totals_from_packets(self.latest_packets)
+        duration_s = (float(totals.get("duration_us") or 0) / 1_000_000) if totals.get("duration_us") else 0.0
+        if duration_s > 0 and (byte_in or byte_out):
+            dl_bps = (byte_in * 8.0) / duration_s
+            ul_bps = (byte_out * 8.0) / duration_s
+            self.top_domain_labels[2].setText(f"DL {_fmt_bps(dl_bps)} / UL {_fmt_bps(ul_bps)}")
+        else:
+            self.top_domain_labels[2].setText("-")
+
+        if top:
+            self.top_domain_labels[3].setText(f"{top[0][0]} ({top[0][1]})")
+        else:
+            self.top_domain_labels[3].setText("-")
+
+        # Network quality score (heuristic)
+        capture_health = self.latest_analysis.get("global_results", {}).get("capture_health", {})
+        capture_quality = capture_health.get("capture_quality", {}) if isinstance(capture_health, dict) else {}
+        drops = capture_quality.get("drops", {}) if isinstance(capture_quality, dict) else {}
+        drop_rate = drops.get("drop_rate")
+        if drop_rate is not None:
+            try:
+                drop_rate = float(drop_rate)
+            except (TypeError, ValueError):
+                drop_rate = None
+        if drop_rate is not None:
+            drop_pct = drop_rate * 100.0 if drop_rate <= 1.0 else drop_rate
+        else:
+            drop_pct = None
+
+        tcp_rel = self.latest_analysis.get("global_results", {}).get("tcp_reliability", {})
+        retrans_rate = tcp_rel.get("retransmission_rate") if isinstance(tcp_rel, dict) else None
+        if retrans_rate is not None:
+            try:
+                retrans_rate = float(retrans_rate)
+            except (TypeError, ValueError):
+                retrans_rate = None
+
+        tcp_hs = self.latest_analysis.get("global_results", {}).get("tcp_handshakes", {})
+        completion = tcp_hs.get("completion_rate") if isinstance(tcp_hs, dict) else None
+        if completion is not None:
+            try:
+                completion = float(completion)
+            except (TypeError, ValueError):
+                completion = None
+
+        decode_health = capture_health.get("decode_health", {}) if isinstance(capture_health, dict) else {}
+        decode_ok = decode_health.get("decode_success_rate") if isinstance(decode_health, dict) else None
+        if decode_ok is not None:
+            try:
+                decode_ok = float(decode_ok)
+            except (TypeError, ValueError):
+                decode_ok = None
+
+        if any(v is not None for v in (drop_pct, retrans_rate, completion, decode_ok)):
+            score = 100.0
+            if drop_pct is not None:
+                score -= min(50.0, drop_pct * 0.5)
+            if retrans_rate is not None:
+                score -= min(40.0, retrans_rate * 100.0 * 0.4)
+            if completion is not None:
+                score -= min(40.0, (1.0 - completion) * 100.0 * 0.4)
+            if decode_ok is not None:
+                score -= min(30.0, (1.0 - decode_ok) * 100.0 * 0.3)
+            score = max(0.0, min(100.0, score))
+            self.top_domain_labels[4].setText(f"{_fmt_number(score, 1)} / 100")
+        else:
+            self.top_domain_labels[4].setText("-")
+
+        # Unusual ports (dst ports not in common list)
+        common_ports = {
+            20, 21, 22, 23, 25, 53, 67, 68, 80, 110, 123, 137, 138, 139, 143, 161, 162,
+            389, 443, 445, 465, 587, 993, 995, 1433, 3306, 3389, 5432, 6379, 8080, 8443,
+            9200, 27017,
+        }
+        port_counts = {}
+        for pkt in self.latest_packets or []:
+            if not isinstance(pkt, dict):
+                continue
+            dst_port = pkt.get("dst_port")
+            if dst_port is None:
+                continue
+            try:
+                port = int(dst_port)
+            except (TypeError, ValueError):
+                continue
+            if port <= 1024 or port in common_ports:
+                continue
+            port_counts[port] = port_counts.get(port, 0) + 1
+        if port_counts:
+            top_ports = sorted(port_counts.items(), key=lambda kv: kv[1], reverse=True)[:3]
+            self.top_domain_labels[5].setText(", ".join(f"{p} ({c})" for p, c in top_ports))
+        else:
+            self.top_domain_labels[5].setText("-")
+
+        if ext_counts:
+            ip, count = max(ext_counts.items(), key=lambda kv: kv[1])
+            self.top_domain_labels[6].setText(f"{ip} ({count})")
+        else:
+            self.top_domain_labels[6].setText("-")
+
+        for idx in range(7, len(self.top_domain_labels)):
+            self.top_domain_labels[idx].setText("-")
+
+    def refresh_raw_data(self):
+        analysis = self.latest_analysis.get("global_results", {})
+
+        capture_health = analysis.get("capture_health", {})
+        capture_quality = capture_health.get("capture_quality", {})
+        decode_health = capture_health.get("decode_health", {})
+        filtering = capture_health.get("filtering", {})
+        self.raw_cards["capture_quality"].value_label.setText(json.dumps(capture_quality, indent=2) if capture_quality else "n/a")
+        self.raw_cards["decode_health"].value_label.setText(json.dumps(decode_health, indent=2) if decode_health else "n/a")
+        self.raw_cards["filtering"].value_label.setText(json.dumps(filtering, indent=2) if filtering else "n/a")
+
+        throughput = analysis.get("throughput_peaks", {})
+        if throughput:
+            self.raw_cards["throughput"].value_label.setText(f"Peak bps: {_fmt_bps(throughput.get('peak_bps'))}\nPeak pps: {_fmt_pps(throughput.get('peak_pps'))}")
+        else:
+            self.raw_cards["throughput"].value_label.setText("n/a")
+
+        packet_sizes = analysis.get("packet_size_stats", {})
+        if packet_sizes:
+            cap = packet_sizes.get("captured_length", {})
+            self.raw_cards["packet_sizes"].value_label.setText(f"min {_fmt_bytes(cap.get('min'))} | p95 {_fmt_bytes(cap.get('p95'))}")
+        else:
+            self.raw_cards["packet_sizes"].value_label.setText("n/a")
+
+        l2l3 = analysis.get("l2_l3_breakdown", {})
+        if l2l3:
+            self.raw_cards["l2l3"].value_label.setText(f"ethernet {l2l3.get('ethernet_frames', 0)}")
+        else:
+            self.raw_cards["l2l3"].value_label.setText("n/a")
+
+        top_entities = analysis.get("top_entities", {})
+        ip_talkers = top_entities.get("ip_talkers", {})
+        mac_talkers = top_entities.get("mac_talkers", {})
+        ports = top_entities.get("ports", {})
+        self.raw_cards["top_talkers"].value_label.setText(f"src {len(ip_talkers.get('top_src', []) or [])}")
+        self.raw_cards["top_macs"].value_label.setText(f"src {len(mac_talkers.get('top_src', []) or [])}")
+        self.raw_cards["top_ports"].value_label.setText(f"tcp {len((ports.get('tcp', {}) or {}).get('top_dst_ports', []) or [])}")
+
+        flow_analytics = analysis.get("flow_analytics", {})
+        summary = flow_analytics.get("summary", {})
+        flow_results = self.latest_analysis.get("flow_results", {}) if isinstance(self.latest_analysis, dict) else {}
+        flow_summary_block = flow_results.get("flow_summary", {}) if isinstance(flow_results, dict) else {}
+        flow_list = flow_summary_block.get("flows", []) if isinstance(flow_summary_block, dict) else []
+        total_flows = summary.get("total_flows", "n/a")
+        if isinstance(flow_list, list) and flow_list:
+            total_flows = len(flow_list)
+        self.raw_cards["flow_summary"].value_label.setText(f"total_flows {total_flows}")
+        self.raw_cards["flow_heavy"].value_label.setText(f"by_bytes {len((flow_analytics.get('heavy_hitters', {}) or {}).get('top_by_bytes', []) or [])}")
+        self.raw_cards["flow_states"].value_label.setText(json.dumps(flow_analytics.get("states", {})) if flow_analytics.get("states") else "n/a")
+
+        tcp_handshakes = analysis.get("tcp_handshakes", {})
+        tcp_reliability = analysis.get("tcp_reliability", {})
+        tcp_performance = analysis.get("tcp_performance", {})
+        if isinstance(tcp_handshakes, dict):
+            total = tcp_handshakes.get("handshakes_total")
+            complete = tcp_handshakes.get("handshakes_complete")
+            incomplete = tcp_handshakes.get("handshakes_incomplete")
+            if total is not None and complete is not None:
+                if incomplete is None and total is not None and complete is not None:
+                    try:
+                        incomplete = int(total) - int(complete)
+                    except Exception:
+                        incomplete = None
+                if incomplete is not None:
+                    text = f"{_fmt_count(complete)} / {_fmt_count(total)} ({_fmt_count(incomplete)} incomplete)"
+                else:
+                    text = f"{_fmt_count(complete)} / {_fmt_count(total)}"
+                self.raw_cards["tcp_handshake"].value_label.setText(text)
+            else:
+                self.raw_cards["tcp_handshake"].value_label.setText(_fmt_pct(tcp_handshakes.get("completion_rate")))
+        else:
+            self.raw_cards["tcp_handshake"].value_label.setText("n/a")
+        self.raw_cards["tcp_reliability"].value_label.setText(_fmt_pct(tcp_reliability.get("retransmission_rate")))
+        self.raw_cards["tcp_performance"].value_label.setText(_fmt_count(tcp_performance.get("zero_window")))
+
+        scan = analysis.get("scan_signals", {})
+        arp = analysis.get("arp_lan_signals", {})
+        dns = analysis.get("dns_anomalies", {})
+        self.raw_cards["scan_signals"].value_label.setText(json.dumps(scan.get("distinct_ports", {})) if scan else "n/a")
+        self.raw_cards["arp_lan"].value_label.setText(json.dumps(arp.get("multiple_macs", {})) if arp else "n/a")
+        self.raw_cards["dns_anomalies"].value_label.setText(json.dumps(dns.get("nxdomain", {})) if dns else "n/a")
+
+        # Render any remaining analyzers not shown above
+        handled = {
+            "capture_health", "throughput_peaks", "packet_size_stats", "l2_l3_breakdown",
+            "top_entities", "flow_analytics", "tcp_handshakes", "tcp_reliability", "tcp_performance",
+            "scan_signals", "arp_lan_signals", "dns_anomalies", "protocol_mix", "flow_summary",
+            "abnormal_activity",
+        }
+        other_rows = []
+        if isinstance(analysis, dict):
+            for key in sorted(analysis.keys()):
+                if key in handled:
+                    continue
+                value = analysis.get(key)
+                try:
+                    value_text = json.dumps(value)
+                except Exception:
+                    value_text = str(value)
+                other_rows.append((key, value_text))
+        # include top-level analysis keys not in global_results
+        top_level = self.latest_analysis
+        for key in sorted(top_level.keys()):
+            if key in ("global_results",):
+                continue
+            if key in handled:
+                continue
+            value = top_level.get(key)
+            try:
+                value_text = json.dumps(value)
+            except Exception:
+                value_text = str(value)
+            other_rows.append((key, value_text))
+        self._set_kv_rows(self.raw_other_table, other_rows)
