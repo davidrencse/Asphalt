@@ -3428,3 +3428,453 @@ class AsphaltApp(QtWidgets.QMainWindow):
                 value_text = str(value)
             other_rows.append((key, value_text))
         self._set_kv_rows(self.raw_other_table, other_rows)
+
+    def refresh_technical_information(self):
+        analysis = self.latest_analysis
+        self._refresh_ti_capture_quality(analysis)
+        self._refresh_ti_traffic_overview(analysis)
+        self._refresh_ti_protocol_mix(analysis)
+        self._refresh_ti_flow_analytics(analysis)
+        self._refresh_ti_tcp_health(analysis)
+        self._refresh_ti_top_entities(analysis)
+        self._refresh_ti_security_signals(analysis)
+        self._refresh_ti_time_series(analysis)
+
+    def refresh_dashboard(self):
+        analysis = self.latest_analysis
+        thresholds = self._get_thresholds()
+        totals = self._get_global_totals(analysis)
+        throughput = analysis.get("global_results", {}).get("throughput_peaks", {})
+        tcp_handshakes = analysis.get("global_results", {}).get("tcp_handshakes", {})
+        tcp_reliability = analysis.get("global_results", {}).get("tcp_reliability", {})
+        capture_health = analysis.get("global_results", {}).get("capture_health", {})
+        drops = (((capture_health.get("capture_quality", {}) or {}).get("drops", {}) or {}).get("drop_rate"))
+        dns = analysis.get("global_results", {}).get("dns_anomalies", {}).get("nxdomain", {})
+        nxdomain_spike = dns.get("spike_detected") if isinstance(dns, dict) else None
+
+        self._set_kpi("Total packets", _fmt_count(totals.get("packets")), "INFO")
+        self._set_kpi("Total bytes", _fmt_bytes(totals.get("bytes") or totals.get("bytes_captured") or totals.get("bytes_original")), "INFO")
+        self._set_kpi("Duration", _fmt_duration_us(totals.get("duration_us")), "INFO")
+        self._set_kpi("Peak bps", _fmt_bps(throughput.get("peak_bps")), "INFO")
+
+        completion = _safe_float(tcp_handshakes.get("completion_rate"))
+        total_hs = tcp_handshakes.get("handshakes_total")
+        complete_hs = tcp_handshakes.get("handshakes_complete")
+        incomplete_hs = tcp_handshakes.get("handshakes_incomplete")
+        completion_sev = self._sev_from_pct(
+            completion,
+            thresholds["handshake_good"],
+            thresholds["handshake_warn"],
+            100.0,
+        )
+        if total_hs is not None and complete_hs is not None:
+            if incomplete_hs is None:
+                try:
+                    incomplete_hs = int(total_hs) - int(complete_hs)
+                except Exception:
+                    incomplete_hs = None
+            if incomplete_hs is not None:
+                display = f"{_fmt_count(complete_hs)} / {_fmt_count(total_hs)} ({_fmt_count(incomplete_hs)} incomplete)"
+            else:
+                display = f"{_fmt_count(complete_hs)} / {_fmt_count(total_hs)}"
+        else:
+            display = _fmt_pct(completion)
+        self._set_kpi("TCP handshakes", display, completion_sev)
+
+        retrans = _safe_float(tcp_reliability.get("retransmission_rate"))
+        retrans_sev = self._sev_from_pct(
+            retrans,
+            thresholds["retrans_warn"],
+            thresholds["retrans_warn"],
+            thresholds["retrans_bad"],
+        )
+        self._set_kpi("TCP retransmission rate", _fmt_pct(retrans), retrans_sev)
+
+        drop_rate = _safe_float(drops)
+        drop_sev = self._sev_from_pct(
+            drop_rate,
+            thresholds["drop_warn"],
+            thresholds["drop_warn"],
+            thresholds["drop_bad"],
+        )
+        self._set_kpi("Drop rate", _fmt_pct(drop_rate), drop_sev)
+
+        if thresholds["nxdomain_warn"]:
+            nx_sev = self._sev_from_bool(nxdomain_spike)
+        else:
+            nx_sev = "INFO"
+        self._set_kpi("NXDOMAIN spike", "yes" if nxdomain_spike else "no", nx_sev)
+
+        self._refresh_dashboard_charts(analysis)
+        self._refresh_dashboard_diagnostics(analysis)
+
+    def refresh_packets(self, packets=None):
+        packets = packets if packets is not None else (self.latest_packets or [])
+        preferred = [
+            "packet_id", "timestamp_us", "stack_summary",
+            "src_ip", "dst_ip", "src_port", "dst_port",
+            "l4_protocol", "ip_version",
+            "captured_length", "original_length",
+            "src_mac", "dst_mac", "eth_type",
+            "tcp_flags_names", "quality_names",
+        ]
+        keys = set()
+        for pkt in packets:
+            if isinstance(pkt, dict):
+                keys.update(pkt.keys())
+        columns = [k for k in preferred if k in keys]
+        for k in sorted(keys):
+            if k not in columns:
+                columns.append(k)
+        if not columns:
+            columns = ["packet"]
+
+        self.packet_table.setRowCount(0)
+        self.packet_table.setColumnCount(len(columns))
+        self.packet_table.setHorizontalHeaderLabels(columns)
+
+        for pkt in packets:
+            r = self.packet_table.rowCount()
+            self.packet_table.insertRow(r)
+            if isinstance(pkt, dict):
+                for c, key in enumerate(columns):
+                    val = pkt.get(key)
+                    if isinstance(val, list):
+                        val = ", ".join(str(x) for x in val)
+                    self.packet_table.setItem(r, c, QtWidgets.QTableWidgetItem(str(val)))
+            else:
+                self.packet_table.setItem(r, 0, QtWidgets.QTableWidgetItem(str(pkt)))
+
+    def apply_filter(self):
+        term = self.filter_edit.text().strip().lower()
+        if not term:
+            self.refresh_packets()
+            self.refresh_packet_overview()
+            return
+        if (
+            len(self._packet_search_cache) != len(self.latest_packets)
+            or getattr(self, "_packet_search_cache_id", None) != id(self.latest_packets)
+            or getattr(self, "_packet_search_cache_len", None) != len(self.latest_packets)
+        ):
+            self._packet_search_cache = self._build_packet_search_cache(self.latest_packets)
+            self._packet_search_cache_id = id(self.latest_packets)
+            self._packet_search_cache_len = len(self.latest_packets)
+        filtered = []
+        for packet, hay in zip(self.latest_packets, self._packet_search_cache):
+            if term in hay:
+                filtered.append(packet)
+        packets = filtered
+        preferred = [
+            "packet_id", "timestamp_us", "stack_summary",
+            "src_ip", "dst_ip", "src_port", "dst_port",
+            "l4_protocol", "ip_version",
+            "captured_length", "original_length",
+            "src_mac", "dst_mac", "eth_type",
+            "tcp_flags_names", "quality_names",
+        ]
+        keys = set()
+        for pkt in packets:
+            if isinstance(pkt, dict):
+                keys.update(pkt.keys())
+        columns = [k for k in preferred if k in keys]
+        for k in sorted(keys):
+            if k not in columns:
+                columns.append(k)
+        if not columns:
+            columns = ["packet"]
+
+        self.packet_table.setRowCount(0)
+        self.packet_table.setColumnCount(len(columns))
+        self.packet_table.setHorizontalHeaderLabels(columns)
+
+        for pkt in packets:
+            r = self.packet_table.rowCount()
+            self.packet_table.insertRow(r)
+            if isinstance(pkt, dict):
+                for c, key in enumerate(columns):
+                    val = pkt.get(key)
+                    if isinstance(val, list):
+                        val = ", ".join(str(x) for x in val)
+                    self.packet_table.setItem(r, c, QtWidgets.QTableWidgetItem(str(val)))
+            else:
+                self.packet_table.setItem(r, 0, QtWidgets.QTableWidgetItem(str(pkt)))
+        self.refresh_packet_overview(packets)
+
+    def _build_packet_search_cache(self, packets):
+        cache = []
+        for packet in packets or []:
+            try:
+                cache.append(json.dumps(packet).lower())
+            except Exception:
+                cache.append(str(packet).lower())
+        return cache
+
+    def refresh_packet_overview(self, packets=None):
+        if isinstance(packets, bool):
+            packets = None
+        packets = packets if packets is not None else (self.latest_packets or [])
+        if not isinstance(packets, (list, tuple)):
+            packets = self.latest_packets or []
+        grouping = "ip" if self.group_ip_btn.isChecked() else "l4"
+        filters = self._get_selected_osi_filters()
+        can_skip = packets is self.latest_packets
+        if can_skip:
+            sig = (
+                id(self.latest_packets),
+                len(self.latest_packets),
+                grouping,
+                tuple(sorted(filters["l2"])),
+                tuple(sorted(filters["l3"])),
+                tuple(sorted(filters["l4"])),
+                tuple(sorted(filters["app"])),
+            )
+            if getattr(self, "_packet_overview_sig", None) == sig:
+                return
+            self._packet_overview_sig = sig
+        packets = self._filter_packets_by_osi(packets)
+        self.packet_overview.clear()
+        self._packet_overview_loaded_ids = set()
+        can_cache = (
+            packets is self.latest_packets
+            and not any(filters.values())
+        )
+        cache_entry = self._packet_group_cache.get(grouping)
+        if can_cache and cache_entry and cache_entry.get("packets_id") == id(self.latest_packets) and cache_entry.get("count") == len(self.latest_packets):
+            groups = cache_entry.get("groups", [])
+        else:
+            groups = self._group_packets(packets, grouping)
+            if can_cache:
+                self._packet_group_cache[grouping] = {
+                    "packets_id": id(self.latest_packets),
+                    "count": len(self.latest_packets),
+                    "groups": groups,
+                }
+        for group_name, group_packets in groups:
+            group_item = QtWidgets.QTreeWidgetItem([group_name])
+            group_item.setFirstColumnSpanned(True)
+            group_item.setFlags(group_item.flags() & ~QtCore.Qt.ItemIsSelectable)
+            group_item.setExpanded(True)
+            self.packet_overview.addTopLevelItem(group_item)
+
+            for pkt in group_packets:
+                row = self._packet_row(pkt)
+                item = QtWidgets.QTreeWidgetItem(row)
+                item.setChildIndicatorPolicy(QtWidgets.QTreeWidgetItem.ShowIndicator)
+                if isinstance(pkt, dict) and "packet_id" in pkt:
+                    item.setData(0, QtCore.Qt.UserRole, pkt.get("packet_id"))
+                item.setData(1, QtCore.Qt.UserRole, pkt)
+                group_item.addChild(item)
+
+        if not self._packet_overview_resized and self.packet_overview.topLevelItemCount() > 0:
+            for col in range(7):
+                self.packet_overview.resizeColumnToContents(col)
+            self._packet_overview_resized = True
+
+    def _filter_packets_by_osi(self, packets):
+        if not isinstance(packets, (list, tuple)):
+            return list(self.latest_packets or [])
+        filters = self._get_selected_osi_filters()
+        if not any(filters.values()):
+            return list(packets)
+        filtered = []
+        for pkt in packets:
+            lens_tags = self._derive_osi_tags_ui(pkt)
+            if not self._packet_matches_osi_filters(lens_tags, filters):
+                continue
+            filtered.append(pkt)
+        return filtered
+
+    def _packet_matches_osi_filters(self, lens_tags, filters):
+        for lens, wanted in filters.items():
+            if not wanted:
+                continue
+            if not (lens_tags.get(lens) or set()):
+                return False
+            if not (lens_tags.get(lens, set()) & wanted):
+                return False
+        return True
+
+    def _get_selected_osi_filters(self):
+        filters = {
+            "l2": set(),
+            "l3": set(),
+            "l4": set(),
+            "app": set(),
+        }
+        if self.osi_l2_eth.isChecked():
+            filters["l2"].add("ethernet")
+        if self.osi_l2_arp.isChecked():
+            filters["l2"].add("arp")
+        if self.osi_l3_ipv4.isChecked():
+            filters["l3"].add("ipv4")
+        if self.osi_l3_ipv6.isChecked():
+            filters["l3"].add("ipv6")
+        if self.osi_l4_tcp.isChecked():
+            filters["l4"].add("tcp")
+        if self.osi_l4_udp.isChecked():
+            filters["l4"].add("udp")
+        if self.osi_app_dns.isChecked():
+            filters["app"].add("dns")
+        return filters
+
+    def _group_packets(self, packets, mode):
+        groups = {}
+        if mode == "ip":
+            for pkt in packets:
+                ip_version = pkt.get("ip_version") if isinstance(pkt, dict) else None
+                if ip_version == 4:
+                    key = "IPv4"
+                elif ip_version == 6:
+                    key = "IPv6"
+                elif pkt.get("is_arp") if isinstance(pkt, dict) else False:
+                    key = "ARP"
+                else:
+                    key = "Other"
+                groups.setdefault(key, []).append(pkt)
+        else:
+            for pkt in packets:
+                proto = pkt.get("l4_protocol") if isinstance(pkt, dict) else None
+                if not proto:
+                    if pkt.get("is_arp") if isinstance(pkt, dict) else False:
+                        proto = "ARP"
+                    elif pkt.get("ip_protocol") == 1:
+                        proto = "ICMP"
+                    elif pkt.get("ip_protocol") == 2:
+                        proto = "IGMP"
+                    else:
+                        proto = "Other"
+                groups.setdefault(proto, []).append(pkt)
+        order = sorted(groups.keys(), key=lambda k: ("Other" in k, k))
+        return [(k, groups[k]) for k in order]
+
+    def _packet_row(self, pkt):
+        if not isinstance(pkt, dict):
+            return ["-", "-", "-", "-", "-", "-", "-", str(pkt)]
+        ts = pkt.get("timestamp_us")
+        time_str = _fmt_ts_utc(ts) if ts else "-"
+        src = pkt.get("src_ip") or pkt.get("src_mac") or "-"
+        dst = pkt.get("dst_ip") or pkt.get("dst_mac") or "-"
+        proto = pkt.get("l4_protocol") or ("ARP" if pkt.get("is_arp") else pkt.get("stack_summary")) or "-"
+        length = pkt.get("captured_length") or pkt.get("original_length") or "-"
+        info = pkt.get("stack_summary") or "-"
+        osi_text = self._fmt_osi_tags(pkt)
+        if pkt.get("dns_qname"):
+            info = f"DNS {pkt.get('dns_qname')}"
+        elif pkt.get("tcp_flags_names"):
+            info = f"TCP {','.join(pkt.get('tcp_flags_names') or [])}"
+        return [
+            str(pkt.get("packet_id", "-")),
+            time_str,
+            str(src),
+            str(dst),
+            str(proto),
+            str(length),
+            osi_text,
+            str(info),
+        ]
+
+    def _add_packet_details(self, parent_item, pkt):
+        if not isinstance(pkt, dict):
+            return
+        self._add_detail_section(parent_item, "Ethernet", [
+            ("src_mac", pkt.get("src_mac")),
+            ("dst_mac", pkt.get("dst_mac")),
+            ("eth_type", pkt.get("eth_type")),
+        ])
+        self._add_detail_section(parent_item, "IP", [
+            ("ip_version", pkt.get("ip_version")),
+            ("src_ip", pkt.get("src_ip")),
+            ("dst_ip", pkt.get("dst_ip")),
+            ("ttl", pkt.get("ttl")),
+        ])
+        self._add_detail_section(parent_item, "Transport", [
+            ("l4_protocol", pkt.get("l4_protocol")),
+            ("src_port", pkt.get("src_port")),
+            ("dst_port", pkt.get("dst_port")),
+            ("tcp_flags", ",".join(pkt.get("tcp_flags_names") or []) if pkt.get("tcp_flags_names") else None),
+            ("tcp_seq", pkt.get("tcp_seq")),
+            ("tcp_ack", pkt.get("tcp_ack")),
+            ("tcp_window", pkt.get("tcp_window")),
+            ("tcp_mss", pkt.get("tcp_mss")),
+        ])
+        self._add_detail_section(parent_item, "DNS", [
+            ("qname", pkt.get("dns_qname")),
+            ("is_query", pkt.get("dns_is_query")),
+            ("is_response", pkt.get("dns_is_response")),
+            ("rcode", pkt.get("dns_rcode")),
+        ])
+        osi_text = self._fmt_osi_tags(pkt)
+        if osi_text and osi_text != "-":
+            self._add_detail_section(parent_item, "OSI Tags", [
+                ("tags", osi_text),
+            ])
+
+    def _add_detail_section(self, parent_item, title, rows):
+        section = QtWidgets.QTreeWidgetItem([title])
+        section.setFirstColumnSpanned(True)
+        section.setFlags(section.flags() & ~QtCore.Qt.ItemIsSelectable)
+        parent_item.addChild(section)
+        for key, value in rows:
+            if value is None or value == "":
+                continue
+            cols = max(1, self.packet_overview.columnCount())
+            row = [""] * cols
+            row[0] = str(key)
+            row[-1] = str(value)
+            item = QtWidgets.QTreeWidgetItem(row)
+            section.addChild(item)
+
+    def _fmt_osi_tags(self, pkt):
+        tags = self._derive_osi_tags_ui(pkt)
+        parts = []
+        if tags.get("l2"):
+            parts.append("L2 " + "/".join(sorted(tags["l2"])))
+        if tags.get("l3"):
+            parts.append("L3 " + "/".join(sorted(tags["l3"])))
+        if tags.get("l4"):
+            parts.append("L4 " + "/".join(sorted(tags["l4"])))
+        if tags.get("app"):
+            parts.append("APP " + "/".join(sorted(tags["app"])))
+        return " | ".join(parts) if parts else "-"
+
+    def _derive_osi_tags_ui(self, pkt):
+        tags = {"l2": set(), "l3": set(), "l4": set(), "app": set()}
+        if not isinstance(pkt, dict):
+            return tags
+
+        cached = pkt.get("_osi_tags_ui")
+        if isinstance(cached, dict):
+            try:
+                return {
+                    "l2": set(cached.get("l2") or []),
+                    "l3": set(cached.get("l3") or []),
+                    "l4": set(cached.get("l4") or []),
+                    "app": set(cached.get("app") or []),
+                }
+            except Exception:
+                pass
+
+        raw_tags = pkt.get("osi_tags") or []
+        if isinstance(raw_tags, str):
+            raw_tags = [raw_tags]
+        for tag in raw_tags:
+            if not isinstance(tag, str):
+                continue
+            raw = tag.strip().lower()
+            if raw.startswith("l2:"):
+                tags["l2"].add(raw.split(":", 1)[1])
+            elif raw.startswith("l3:"):
+                tags["l3"].add(raw.split(":", 1)[1])
+            elif raw.startswith("l4:"):
+                tags["l4"].add(raw.split(":", 1)[1])
+            elif raw.startswith("app:"):
+                tags["app"].add(raw.split(":", 1)[1])
+            else:
+                if raw in ("ethernet", "arp"):
+                    tags["l2"].add(raw)
+                elif raw in ("ipv4", "ipv6"):
+                    tags["l3"].add(raw)
+                elif raw in ("tcp", "udp"):
+                    tags["l4"].add(raw)
+                elif raw in ("dns",):
+                    tags["app"].add(raw)
