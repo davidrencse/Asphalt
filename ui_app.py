@@ -3878,3 +3878,423 @@ class AsphaltApp(QtWidgets.QMainWindow):
                     tags["l4"].add(raw)
                 elif raw in ("dns",):
                     tags["app"].add(raw)
+
+        if not any(tags.values()):
+            if pkt.get("is_arp"):
+                tags["l2"].add("arp")
+            elif pkt.get("src_mac") or pkt.get("dst_mac") or pkt.get("eth_type"):
+                tags["l2"].add("ethernet")
+
+            ip_version = pkt.get("ip_version")
+            if ip_version == 4:
+                tags["l3"].add("ipv4")
+            elif ip_version == 6:
+                tags["l3"].add("ipv6")
+
+            l4 = (pkt.get("l4_protocol") or "").lower()
+            if l4 in ("tcp", "udp"):
+                tags["l4"].add(l4)
+            else:
+                ip_proto = pkt.get("ip_protocol")
+                if ip_proto == 6:
+                    tags["l4"].add("tcp")
+                elif ip_proto == 17:
+                    tags["l4"].add("udp")
+
+            if pkt.get("dns_qname") or pkt.get("dns_rcode") is not None or pkt.get("dns_is_query") or pkt.get("dns_is_response"):
+                tags["app"].add("dns")
+
+        pkt["_osi_tags_ui"] = {
+            "l2": sorted(tags["l2"]),
+            "l3": sorted(tags["l3"]),
+            "l4": sorted(tags["l4"]),
+            "app": sorted(tags["app"]),
+        }
+        return tags
+
+    def _clear_packet_overview_settings(self):
+        # Reset all Packet Overview controls to defaults.
+        blockers = [
+            QtCore.QSignalBlocker(self.group_ip_btn),
+            QtCore.QSignalBlocker(self.group_l4_btn),
+            QtCore.QSignalBlocker(self.osi_l2_eth),
+            QtCore.QSignalBlocker(self.osi_l2_arp),
+            QtCore.QSignalBlocker(self.osi_l3_ipv4),
+            QtCore.QSignalBlocker(self.osi_l3_ipv6),
+            QtCore.QSignalBlocker(self.osi_l4_tcp),
+            QtCore.QSignalBlocker(self.osi_l4_udp),
+            QtCore.QSignalBlocker(self.osi_app_dns),
+        ]
+        try:
+            self.group_ip_btn.setChecked(True)
+            self.group_l4_btn.setChecked(False)
+            for cb in (
+                self.osi_l2_eth, self.osi_l2_arp,
+                self.osi_l3_ipv4, self.osi_l3_ipv6,
+                self.osi_l4_tcp, self.osi_l4_udp,
+                self.osi_app_dns,
+            ):
+                cb.setChecked(False)
+        finally:
+            blockers.clear()
+
+        self.packet_overview.clearSelection()
+        self.packet_overview.collapseAll()
+        self._packet_overview_loaded_ids = set()
+        self._packet_overview_sig = None
+        self.refresh_packet_overview()
+
+    def _on_packet_overview_click(self, item, _column):
+        # Toggle packet rows (depth=1 under group)
+        parent = item.parent()
+        if parent is None:
+            return
+        if parent.parent() is None:
+            item.setExpanded(not item.isExpanded())
+            if item.isExpanded():
+                self._ensure_packet_details(item)
+
+    def _on_packet_overview_expand(self, item):
+        parent = item.parent()
+        if parent is None:
+            return
+        if parent.parent() is None:
+            self._ensure_packet_details(item)
+
+    def _ensure_packet_details(self, item):
+        pkt = item.data(1, QtCore.Qt.UserRole)
+        if not isinstance(pkt, dict):
+            return
+        pkt_id = item.data(0, QtCore.Qt.UserRole)
+        if pkt_id in self._packet_overview_loaded_ids:
+            return
+        if pkt_id is not None:
+            self._packet_overview_loaded_ids.add(pkt_id)
+        self._add_packet_details(item, pkt)
+
+    def download_capture(self):
+        if not self.latest_packets:
+            QtWidgets.QMessageBox.information(self, "No capture", "No packets available to download.")
+            return
+        filename, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Save capture data",
+            "",
+            "JSON files (*.json);;All files (*.*)",
+        )
+        if not filename:
+            return
+        try:
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump(self.latest_packets, f, indent=2)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Save failed", str(exc))
+
+    def export_analysis(self):
+        if not self.latest_analysis:
+            QtWidgets.QMessageBox.information(self, "No analysis", "No analysis available to export.")
+            return
+        filename, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Save analysis report",
+            "",
+            "JSON files (*.json);;All files (*.*)",
+        )
+        if not filename:
+            return
+        try:
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump(self.latest_analysis, f, indent=2)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Save failed", str(exc))
+    def _refresh_ti_capture_quality(self, analysis):
+        capture_health = analysis.get("global_results", {}).get("capture_health", {})
+        capture_health = capture_health if isinstance(capture_health, dict) else {}
+        rows = []
+        for key in sorted(capture_health.keys()):
+            value = capture_health.get(key)
+            if isinstance(value, (dict, list)):
+                value_text = json.dumps(value)
+            else:
+                value_text = str(value)
+            rows.append((key, value_text))
+        self._set_kv_rows(self.ti_capture_quality["quality"], rows)
+        self._set_json_text(self.ti_capture_quality["json"], capture_health if capture_health else {})
+
+    def _refresh_ti_traffic_overview(self, analysis):
+        throughput = analysis.get("global_results", {}).get("throughput_peaks", {})
+        packet_stats = analysis.get("global_results", {}).get("packet_size_stats", {})
+        l2l3 = analysis.get("global_results", {}).get("l2_l3_breakdown", {})
+        totals = self._get_global_totals(analysis)
+
+        throughput_rows = []
+        if isinstance(throughput, dict):
+            for key in sorted(throughput.keys()):
+                value = throughput.get(key)
+                if key in ("bps_now", "bps_avg", "peak_bps"):
+                    value_text = _fmt_bps(value)
+                elif key in ("pps_now", "pps_avg", "peak_pps"):
+                    value_text = _fmt_pps(value)
+                elif key.endswith("timestamp"):
+                    value_text = _fmt_ts_utc(value)
+                else:
+                    value_text = str(value)
+                throughput_rows.append((key, value_text))
+        self._set_kv_rows(self.ti_traffic_overview["throughput_kv"], throughput_rows)
+
+        packet_rows = []
+        if isinstance(packet_stats, dict):
+            cap = packet_stats.get("captured_length", {})
+            orig = packet_stats.get("original_length", {})
+            if isinstance(cap, dict):
+                for key in ["min", "median", "p95", "max"]:
+                    packet_rows.append((f"captured_{key}", _fmt_bytes(cap.get(key))))
+            if isinstance(orig, dict):
+                for key in ["min", "median", "p95", "max"]:
+                    packet_rows.append((f"original_{key}", _fmt_bytes(orig.get(key))))
+            fragments = packet_stats.get("fragments", {})
+            if isinstance(fragments, dict):
+                for key in sorted(fragments.keys()):
+                    packet_rows.append((key, _fmt_count(fragments.get(key))))
+        self._set_kv_rows(self.ti_traffic_overview["packet_stats"], packet_rows)
+
+        hist = {}
+        if isinstance(packet_stats, dict):
+            hist = packet_stats.get("histogram", {})
+        hist_rows = []
+        if isinstance(hist, dict):
+            for key in hist.keys():
+                hist_rows.append({"bucket": key, "count": hist.get(key)})
+        self._set_dynamic_rows(self.ti_traffic_overview["hist_table"], hist_rows, ["bucket", "count"])
+
+        l2_rows = []
+        if isinstance(l2l3, dict):
+            for key in sorted(l2l3.keys()):
+                l2_rows.append((key, _fmt_count(l2l3.get(key))))
+        self._set_kv_rows(self.ti_traffic_overview["l2l3"], l2_rows)
+
+        totals_rows = []
+        if isinstance(totals, dict):
+            for key in sorted(totals.keys()):
+                value = totals.get(key)
+                if key in ("bytes", "bytes_captured", "bytes_original"):
+                    value_text = _fmt_bytes(value)
+                elif key in ("duration_us", "duration"):
+                    value_text = _fmt_duration_us(value)
+                else:
+                    value_text = str(value)
+                totals_rows.append((key, value_text))
+        self._set_kv_rows(self.ti_traffic_overview["totals"], totals_rows)
+
+        self._set_json_text(self.ti_traffic_overview["json_throughput"], throughput if throughput else {})
+        self._set_json_text(self.ti_traffic_overview["json_packet_sizes"], packet_stats if packet_stats else {})
+        self._set_json_text(self.ti_traffic_overview["json_l2l3"], l2l3 if l2l3 else {})
+
+    def _refresh_ti_protocol_mix(self, analysis):
+        totals = self._get_global_totals(analysis)
+        totals_rows = []
+        if isinstance(totals, dict):
+            for key in sorted(totals.keys()):
+                value = totals.get(key)
+                if key in ("bytes", "bytes_captured", "bytes_original"):
+                    value_text = _fmt_bytes(value)
+                elif key in ("duration_us", "duration"):
+                    value_text = _fmt_duration_us(value)
+                else:
+                    value_text = str(value)
+                totals_rows.append((key, value_text))
+        self._set_kv_rows(self.ti_protocol_mix["totals"], totals_rows)
+
+        protocol = analysis.get("global_results", {}).get("protocol_mix", {})
+        protocol_counts = protocol.get("protocol_counts") if isinstance(protocol, dict) else None
+        protocol_pcts = protocol.get("protocol_percentages") if isinstance(protocol, dict) else None
+        counts_rows = []
+        if isinstance(protocol_counts, dict):
+            for key in sorted(protocol_counts.keys()):
+                counts_rows.append({"protocol": key, "count": protocol_counts.get(key)})
+        self._set_dynamic_rows(self.ti_protocol_mix["counts"], counts_rows, ["protocol", "count"])
+
+        pct_rows = []
+        if isinstance(protocol_pcts, dict):
+            for key in sorted(protocol_pcts.keys()):
+                pct_rows.append({"protocol": key, "percent": _fmt_pct(protocol_pcts.get(key))})
+        elif isinstance(protocol_counts, dict):
+            total = sum(v for v in protocol_counts.values() if isinstance(v, (int, float)))
+            for key in sorted(protocol_counts.keys()):
+                val = protocol_counts.get(key)
+                pct = (float(val) / total * 100.0) if total else 0.0
+                pct_rows.append({"protocol": key, "percent": _fmt_pct(pct)})
+        self._set_dynamic_rows(self.ti_protocol_mix["percents"], pct_rows, ["protocol", "percent"])
+
+        extra_rows = []
+        if isinstance(protocol, dict):
+            for key in sorted(protocol.keys()):
+                if key in ("protocol_counts", "protocol_percentages"):
+                    continue
+                value = protocol.get(key)
+                if isinstance(value, (dict, list)):
+                    value_text = json.dumps(value)
+                else:
+                    value_text = str(value)
+                extra_rows.append((key, value_text))
+        self._set_kv_rows(self.ti_protocol_mix["extra"], extra_rows)
+
+        distributions = analysis.get("global_results", {}).get("global_stats", {}).get("distributions", {})
+        for key, table_key in (
+            ("ip_versions", "ip_versions"),
+            ("l4_protocols", "l4_protocols"),
+            ("tcp_flags", "tcp_flags"),
+            ("decode_quality_flags", "decode_flags"),
+        ):
+            dist = distributions.get(key, {}) if isinstance(distributions, dict) else {}
+            rows = []
+            if isinstance(dist, dict):
+                total = sum(v for v in dist.values() if isinstance(v, (int, float)))
+                for k in sorted(dist.keys()):
+                    val = dist.get(k)
+                    pct = (float(val) / total * 100.0) if total else 0.0
+                    rows.append({"key": k, "count": val, "percent": _fmt_pct(pct)})
+            self._set_dynamic_rows(self.ti_protocol_mix[table_key], rows, ["key", "count", "percent"])
+
+        self._set_json_text(self.ti_protocol_mix["json_protocol_mix"], protocol if protocol else {})
+        self._set_json_text(self.ti_protocol_mix["json_global_stats"], analysis.get("global_results", {}).get("global_stats", {}))
+
+    def _refresh_ti_flow_analytics(self, analysis):
+        flow_analytics = analysis.get("global_results", {}).get("flow_analytics", {})
+        summary = flow_analytics.get("summary", {}) if isinstance(flow_analytics, dict) else {}
+        rows = []
+        if isinstance(summary, dict):
+            for key in sorted(summary.keys()):
+                value = summary.get(key)
+                if key.startswith("duration"):
+                    value_text = _fmt_duration_us(value)
+                elif key.endswith("bytes"):
+                    value_text = _fmt_bytes(value)
+                else:
+                    value_text = str(value)
+                rows.append((key, value_text))
+        self._set_kv_rows(self.ti_flow_analytics["summary"], rows)
+
+        heavy = flow_analytics.get("heavy_hitters", {}) if isinstance(flow_analytics, dict) else {}
+        top_by_bytes = heavy.get("top_by_bytes", []) if isinstance(heavy, dict) else []
+        top_by_packets = heavy.get("top_by_packets", []) if isinstance(heavy, dict) else []
+        self._set_dynamic_rows(self.ti_flow_analytics["heavy_bytes"], top_by_bytes)
+        self._set_dynamic_rows(self.ti_flow_analytics["heavy_packets"], top_by_packets)
+
+        states = flow_analytics.get("states", {}) if isinstance(flow_analytics, dict) else {}
+        state_rows = []
+        if isinstance(states, dict):
+            for key in sorted(states.keys()):
+                state_rows.append((key, str(states.get(key))))
+        self._set_kv_rows(self.ti_flow_analytics["states"], state_rows)
+
+        flow_results = analysis.get("flow_results", {}) if isinstance(analysis, dict) else {}
+        flow_summary_block = flow_results.get("flow_summary", {}) if isinstance(flow_results, dict) else {}
+        flow_list = None
+        if isinstance(flow_summary_block, dict):
+            if isinstance(flow_summary_block.get("flows"), list):
+                flow_list = flow_summary_block.get("flows")
+            else:
+                list_value = []
+                for v in flow_summary_block.values():
+                    if isinstance(v, list):
+                        list_value.extend(v)
+                if list_value:
+                    flow_list = list_value
+        if isinstance(flow_list, list) and flow_list:
+            self._set_dynamic_rows(self.ti_flow_analytics["flow_summary"], flow_list)
+        else:
+            flow_summary = analysis.get("global_results", {}).get("flow_summary", {})
+            if isinstance(flow_summary, dict):
+                if any(isinstance(v, list) for v in flow_summary.values()):
+                    list_value = None
+                    for v in flow_summary.values():
+                        if isinstance(v, list):
+                            list_value = v
+                            break
+                    self._set_dynamic_rows(self.ti_flow_analytics["flow_summary"], list_value or [])
+                else:
+                    rows = [{"field": k, "value": v} for k, v in flow_summary.items()]
+                    self._set_dynamic_rows(self.ti_flow_analytics["flow_summary"], rows, ["field", "value"])
+            else:
+                self._set_dynamic_rows(self.ti_flow_analytics["flow_summary"], [])
+
+        self._set_json_text(self.ti_flow_analytics["json_flow_analytics"], flow_analytics if flow_analytics else {})
+        self._set_json_text(self.ti_flow_analytics["json_flow_summary"], flow_summary_block if flow_summary_block else {})
+
+    def _refresh_ti_tcp_health(self, analysis):
+        hand = analysis.get("global_results", {}).get("tcp_handshakes", {})
+        rel = analysis.get("global_results", {}).get("tcp_reliability", {})
+        perf = analysis.get("global_results", {}).get("tcp_performance", {})
+
+        hand_rows = []
+        if isinstance(hand, dict):
+            for key in sorted(hand.keys()):
+                value = hand.get(key)
+                if key.endswith("_rate") or key.endswith("_pct"):
+                    value_text = _fmt_pct(value)
+                else:
+                    value_text = str(value)
+                hand_rows.append((key, value_text))
+        self._set_kv_rows(self.ti_tcp_health["handshakes"], hand_rows)
+
+        rel_rows = []
+        if isinstance(rel, dict):
+            for key in sorted(rel.keys()):
+                value = rel.get(key)
+                if key.endswith("_rate") or key.endswith("_pct"):
+                    value_text = _fmt_pct(value)
+                else:
+                    value_text = str(value)
+                rel_rows.append((key, value_text))
+        self._set_kv_rows(self.ti_tcp_health["reliability"], rel_rows)
+
+        perf_rows = []
+        mss_list = None
+        if isinstance(perf, dict):
+            mss_list = perf.get("mss_distribution") or perf.get("mss_top_k")
+            for key in sorted(perf.keys()):
+                value = perf.get(key)
+                if isinstance(value, list):
+                    continue
+                if key.startswith("window"):
+                    value_text = _fmt_count(value)
+                else:
+                    value_text = str(value)
+                perf_rows.append((key, value_text))
+        self._set_kv_rows(self.ti_tcp_health["performance"], perf_rows)
+
+        if isinstance(mss_list, list):
+            self._set_dynamic_rows(self.ti_tcp_health["mss_table"], mss_list)
+        else:
+            mss_rows = []
+            if isinstance(perf, dict):
+                for key in ("mss_top_value", "mss_top_pct"):
+                    if key in perf:
+                        value = perf.get(key)
+                        mss_rows.append({"field": key, "value": value})
+            self._set_dynamic_rows(self.ti_tcp_health["mss_table"], mss_rows, ["field", "value"])
+
+        self._set_json_text(self.ti_tcp_health["json_handshakes"], hand if hand else {})
+        self._set_json_text(self.ti_tcp_health["json_reliability"], rel if rel else {})
+        self._set_json_text(self.ti_tcp_health["json_performance"], perf if perf else {})
+
+    def _refresh_ti_top_entities(self, analysis):
+        top = analysis.get("global_results", {}).get("top_entities", {})
+        ip = top.get("ip_talkers", {}) if isinstance(top, dict) else {}
+        mac = top.get("mac_talkers", {}) if isinstance(top, dict) else {}
+        ports = top.get("ports", {}) if isinstance(top, dict) else {}
+
+        self._set_dynamic_rows(self.ti_top_entities["ip_src"], ip.get("top_src", []) if isinstance(ip, dict) else [])
+        self._set_dynamic_rows(self.ti_top_entities["ip_dst"], ip.get("top_dst", []) if isinstance(ip, dict) else [])
+        split = ip.get("internal_external", {}) if isinstance(ip, dict) else {}
+        split_rows = [(k, str(split.get(k))) for k in sorted(split.keys())] if isinstance(split, dict) else []
+        self._set_kv_rows(self.ti_top_entities["ip_split"], split_rows)
+
+        self._set_dynamic_rows(self.ti_top_entities["mac_src"], mac.get("top_src", []) if isinstance(mac, dict) else [])
+        self._set_dynamic_rows(self.ti_top_entities["mac_dst"], mac.get("top_dst", []) if isinstance(mac, dict) else [])
+
+        tcp = ports.get("tcp", {}) if isinstance(ports, dict) else {}
+        udp = ports.get("udp", {}) if isinstance(ports, dict) else {}
+        self._set_dynamic_rows(self.ti_top_entities["tcp_ports"], tcp.get("top_dst_ports", []) if isinstance(tcp, dict) else [])
+        self._set_dynamic_rows(self.ti_top_entities["udp_ports"], udp.get("top_dst_ports", []) if isinstance(udp, dict) else [])
