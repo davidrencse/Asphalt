@@ -4298,3 +4298,421 @@ class AsphaltApp(QtWidgets.QMainWindow):
         udp = ports.get("udp", {}) if isinstance(ports, dict) else {}
         self._set_dynamic_rows(self.ti_top_entities["tcp_ports"], tcp.get("top_dst_ports", []) if isinstance(tcp, dict) else [])
         self._set_dynamic_rows(self.ti_top_entities["udp_ports"], udp.get("top_dst_ports", []) if isinstance(udp, dict) else [])
+
+        self._set_json_text(self.ti_top_entities["json_top_entities"], top if top else {})
+        self._set_json_text(self.ti_top_entities["json_ip_talkers"], ip if ip else {})
+        self._set_json_text(self.ti_top_entities["json_mac_talkers"], mac if mac else {})
+        self._set_json_text(self.ti_top_entities["json_ports"], ports if ports else {})
+
+    def _refresh_ti_security_signals(self, analysis):
+        scan = analysis.get("global_results", {}).get("scan_signals", {})
+        arp = analysis.get("global_results", {}).get("arp_lan_signals", {})
+        dns = analysis.get("global_results", {}).get("dns_anomalies", {})
+
+        def _kv_rows(obj, keys=None):
+            rows = []
+            if isinstance(obj, dict):
+                iterable = keys if keys is not None else sorted(obj.keys())
+                for key in iterable:
+                    if key not in obj:
+                        continue
+                    value = obj.get(key)
+                    if key.endswith("_pct") or key.endswith("_percent") or key.endswith("_rate"):
+                        value_text = _fmt_pct(value)
+                    else:
+                        value_text = str(value)
+                    rows.append((key, value_text))
+            return rows
+
+        distinct_ports = scan.get("distinct_ports", {}) if isinstance(scan, dict) else {}
+        ports_keys = ["src_ip", "max_count"]
+        self._set_kv_rows(self.ti_security_signals["distinct_ports"], _kv_rows(distinct_ports, ports_keys + [k for k in sorted(distinct_ports.keys()) if k not in ports_keys]))
+
+        distinct_ips = scan.get("distinct_ips", {}) if isinstance(scan, dict) else {}
+        self._set_kv_rows(self.ti_security_signals["distinct_ips"], _kv_rows(distinct_ips))
+
+        syn_ratio = scan.get("tcp_syn_ratio", {}) if isinstance(scan, dict) else {}
+        syn_keys = ["syn_count", "synack_count", "ratio", "ratio_note"]
+        self._set_kv_rows(self.ti_security_signals["syn_ratio"], _kv_rows(syn_ratio, syn_keys + [k for k in sorted(syn_ratio.keys()) if k not in syn_keys]))
+
+        scan_extra = []
+        if isinstance(scan, dict):
+            for key in sorted(scan.keys()):
+                if key in ("distinct_ports", "distinct_ips", "tcp_syn_ratio"):
+                    continue
+                value = scan.get(key)
+                if isinstance(value, (dict, list)):
+                    value_text = json.dumps(value)
+                else:
+                    value_text = str(value)
+                scan_extra.append((key, value_text))
+        self._set_kv_rows(self.ti_security_signals["scan_extra"], scan_extra)
+
+        multiple_macs = arp.get("multiple_macs", {}) if isinstance(arp, dict) else {}
+        self._set_kv_rows(self.ti_security_signals["multiple_macs"], _kv_rows(multiple_macs, ["count"] + [k for k in sorted(multiple_macs.keys()) if k != "examples"]))
+        self._set_dynamic_rows(self.ti_security_signals["multiple_examples"], (multiple_macs.get("examples") or [])[:200])
+
+        arp_changes = arp.get("arp_changes", {}) if isinstance(arp, dict) else {}
+        self._set_kv_rows(self.ti_security_signals["arp_changes"], _kv_rows(arp_changes, ["count", "threshold"] + [k for k in sorted(arp_changes.keys()) if k not in ("top_changes",)]))
+        self._set_dynamic_rows(self.ti_security_signals["arp_changes_table"], (arp_changes.get("top_changes") or [])[:200])
+
+        arp_extra = []
+        if isinstance(arp, dict):
+            for key in sorted(arp.keys()):
+                if key in ("multiple_macs", "arp_changes"):
+                    continue
+                value = arp.get(key)
+                if isinstance(value, (dict, list)):
+                    value_text = json.dumps(value)
+                else:
+                    value_text = str(value)
+                arp_extra.append((key, value_text))
+        self._set_kv_rows(self.ti_security_signals["arp_extra"], arp_extra)
+
+        entropy = dns.get("entropy", {}) if isinstance(dns, dict) else {}
+        self._set_kv_rows(self.ti_security_signals["entropy"], _kv_rows(entropy, ["count"] + [k for k in sorted(entropy.keys()) if k != "samples"]))
+        self._set_dynamic_rows(self.ti_security_signals["entropy_samples"], (entropy.get("samples") or [])[:200])
+
+        long_labels = dns.get("long_labels", {}) if isinstance(dns, dict) else {}
+        self._set_kv_rows(self.ti_security_signals["long_labels"], _kv_rows(long_labels, ["count"] + [k for k in sorted(long_labels.keys()) if k != "samples"]))
+        self._set_dynamic_rows(self.ti_security_signals["long_samples"], (long_labels.get("samples") or [])[:200])
+
+        nxdomain = dns.get("nxdomain", {}) if isinstance(dns, dict) else {}
+        self._set_kv_rows(self.ti_security_signals["nxdomain"], _kv_rows(nxdomain))
+
+        dns_extra = []
+        if isinstance(dns, dict):
+            for key in sorted(dns.keys()):
+                if key in ("entropy", "long_labels", "nxdomain"):
+                    continue
+                value = dns.get(key)
+                if isinstance(value, (dict, list)):
+                    value_text = json.dumps(value)
+                else:
+                    value_text = str(value)
+                dns_extra.append((key, value_text))
+        self._set_kv_rows(self.ti_security_signals["dns_extra"], dns_extra)
+
+        self._set_json_text(self.ti_security_signals["json_scan"], scan if scan else {})
+        self._set_json_text(self.ti_security_signals["json_arp"], arp if arp else {})
+        self._set_json_text(self.ti_security_signals["json_dns"], dns if dns else {})
+
+    def _refresh_ti_time_series(self, analysis):
+        raw_time_series = analysis.get("time_series", {})
+        ts_obj = raw_time_series if isinstance(raw_time_series, dict) else {}
+
+        packet_chunks = ts_obj.get("packet_chunks")
+        if packet_chunks is None:
+            packet_chunks = analysis.get("packet_chunks", {})
+        packet_chunks = packet_chunks if isinstance(packet_chunks, dict) else {}
+        chunks = packet_chunks.get("chunks")
+        if chunks is None:
+            chunks = packet_chunks if isinstance(packet_chunks, list) else []
+        chunks = chunks if isinstance(chunks, list) else []
+
+        series = ts_obj.get("time_series") or ts_obj.get("series") or ts_obj.get("buckets") or ts_obj.get("traffic")
+        if series is None and isinstance(raw_time_series, list):
+            series = raw_time_series
+        if series is None:
+            series = ts_obj.get("time_series", {}) or ts_obj
+
+        points = []
+        if isinstance(series, dict):
+            if isinstance(series.get("buckets"), list):
+                points = series.get("buckets")
+            elif isinstance(series.get("series"), list):
+                points = series.get("series")
+            elif isinstance(series.get("time_series"), list):
+                points = series.get("time_series")
+            elif isinstance(series.get("points"), list):
+                points = series.get("points")
+            elif isinstance(series.get("data"), list):
+                points = series.get("data")
+            else:
+                points = [{"bucket": key, "value": value} for key, value in series.items()]
+        elif isinstance(series, list):
+            points = series
+
+        self._set_dynamic_rows(self.ti_time_series["series"], points)
+        self._set_dynamic_rows(self.ti_time_series["chunks"], chunks)
+
+        def _get_numeric(item, keys):
+            for key in keys:
+                value = item.get(key)
+                if isinstance(value, (int, float)):
+                    return value
+            return 0
+
+        def _top_chunks(items, metric_keys, top_n=3):
+            indexed = []
+            for idx, item in enumerate(items):
+                if isinstance(item, dict):
+                    metric = _get_numeric(item, metric_keys)
+                    indexed.append((idx, metric, item))
+            ranked = sorted(indexed, key=lambda x: (-x[1], x[0]))[:top_n]
+            rows = []
+            for rank, (idx, metric, item) in enumerate(ranked, start=1):
+                label = item.get("start_us") or item.get("start") or item.get("bucket") or idx
+                rows.append({"rank": rank, "chunk": label, "bytes": metric})
+            return rows
+
+        top_bytes_rows = _top_chunks(chunks, ["bytes", "bytes_captured", "bytes_total", "bytes_captured_total"])
+        top_packets_rows = _top_chunks(chunks, ["packets", "packets_total"])
+        self._set_dynamic_rows(self.ti_time_series["top_bytes"], top_bytes_rows, ["rank", "chunk", "bytes"])
+        self._set_dynamic_rows(self.ti_time_series["top_packets"], top_packets_rows, ["rank", "chunk", "packets"])
+
+        self._set_json_text(self.ti_time_series["json_time_series"], raw_time_series if raw_time_series else {})
+        self._set_json_text(self.ti_time_series["json_packet_chunks"], packet_chunks if packet_chunks else {})
+
+    def _refresh_dashboard_charts(self, analysis):
+        protocol = analysis.get("global_results", {}).get("protocol_mix", {})
+        counts = protocol.get("protocol_counts") if isinstance(protocol, dict) else None
+        percents = protocol.get("protocol_percentages") if isinstance(protocol, dict) else None
+        labels = []
+        values = []
+        if isinstance(percents, dict) and percents:
+            labels = list(percents.keys())
+            values = [percents[k] for k in labels]
+        elif isinstance(counts, dict) and counts:
+            labels = list(counts.keys())
+            total = sum(v for v in counts.values() if isinstance(v, (int, float)))
+            values = [(float(counts[k]) / total * 100.0) if total else 0.0 for k in labels]
+        self._mpl_pie(self.chart_frames["Protocols"], labels, values, "Protocol Mix")
+
+        gs = analysis.get("global_results", {}).get("global_stats", {})
+        ip_versions = {}
+        if isinstance(gs, dict):
+            ip_versions = gs.get("ip_versions") or (gs.get("distributions", {}) or {}).get("ip_versions") or {}
+        if isinstance(ip_versions, dict) and ip_versions:
+            v4 = ip_versions.get("4") or ip_versions.get(4) or 0
+            v6 = ip_versions.get("6") or ip_versions.get(6) or 0
+            ip_labels = ["IPv4", "IPv6"]
+            ip_values = [v4, v6]
+        else:
+            ip_labels, ip_values = [], []
+        self._mpl_pie(self.chart_frames["IP Versions"], ip_labels, ip_values, "IP Version Mix")
+
+        talkers = analysis.get("global_results", {}).get("top_entities", {}).get("ip_talkers", {}).get("top_src", [])
+        if isinstance(talkers, list):
+            sorted_talkers = sorted([t for t in talkers if isinstance(t, dict)], key=lambda x: x.get("bytes", 0), reverse=True)[:10]
+            labels = [t.get("ip", "?") for t in sorted_talkers]
+            values = [t.get("bytes", 0) for t in sorted_talkers]
+        else:
+            labels, values = [], []
+        self._mpl_bar(
+            self.chart_frames["Talkers"],
+            labels,
+            values,
+            "Top Source IPs by Bytes",
+            orientation="h",
+            label_fontsize=8,
+            xlabel="Bytes",
+        )
+
+        flow_analytics = analysis.get("global_results", {}).get("flow_analytics", {})
+        heavy = flow_analytics.get("heavy_hitters", {}) if isinstance(flow_analytics, dict) else {}
+        top_by_bytes = heavy.get("top_by_bytes", []) if isinstance(heavy, dict) else []
+        top_by_packets = heavy.get("top_by_packets", []) if isinstance(heavy, dict) else []
+        if isinstance(top_by_bytes, list):
+            top_by_bytes = top_by_bytes[:8]
+        if isinstance(top_by_packets, list):
+            top_by_packets = top_by_packets[:8]
+        self._render_top_flows(
+            self.chart_frames["Top Flows (Bytes)"],
+            top_by_bytes if isinstance(top_by_bytes, list) else [],
+            "Top Flows by Bytes",
+            "bytes",
+            "Bytes",
+        )
+        self._render_top_flows(
+            self.chart_frames["Top Flows (Packets)"],
+            top_by_packets if isinstance(top_by_packets, list) else [],
+            "Top Flows by Packets",
+            "packets",
+            "Packets",
+        )
+
+        states = flow_analytics.get("states", {}) if isinstance(flow_analytics, dict) else {}
+        if isinstance(states, dict) and states:
+            state_labels = list(states.keys())
+            state_values = [states[k] for k in state_labels]
+        else:
+            state_labels, state_values = [], []
+        self._mpl_bar(
+            self.chart_frames["Flow States"],
+            state_labels,
+            state_values,
+            "Flow State Breakdown",
+            xrot=30,
+        )
+
+        tcp = analysis.get("global_results", {}).get("tcp_reliability", {})
+        if isinstance(tcp, dict):
+            labels = ["Retrans", "Out-of-order", "Dup ACK", "RST"]
+            values = [tcp.get("retransmission_rate"), tcp.get("out_of_order_rate"), tcp.get("dup_ack_rate"), tcp.get("rst_rate")]
+            values = [v if v is not None else 0 for v in values]
+        else:
+            labels, values = [], []
+        self._mpl_bar(self.chart_frames["TCP"], labels, values, "TCP Reliability Rates", xrot=30)
+
+        packet_stats = analysis.get("global_results", {}).get("packet_size_stats", {})
+        hist = packet_stats.get("histogram", {}) if isinstance(packet_stats, dict) else {}
+        bucket_order = ["0-63", "64-127", "128-511", "512-1023", "1024-1514", "jumbo"]
+        labels = [b for b in bucket_order if b in hist]
+        values = [hist.get(b) for b in labels]
+        self._mpl_hist(self.chart_frames["Packet Sizes"], labels, values, "Packet Size Histogram")
+
+        # Traffic time series
+        ts_obj = analysis.get("time_series", {})
+        series = None
+        if isinstance(ts_obj, dict):
+            series = ts_obj.get("time_series") or ts_obj.get("buckets") or ts_obj.get("series") or ts_obj.get("traffic")
+        if series is None and isinstance(ts_obj, list):
+            series = ts_obj
+        points = []
+        if isinstance(series, list):
+            points = series
+        elif isinstance(series, dict):
+            if isinstance(series.get("buckets"), list):
+                points = series.get("buckets")
+            elif isinstance(series.get("series"), list):
+                points = series.get("series")
+            elif isinstance(series.get("time_series"), list):
+                points = series.get("time_series")
+            elif isinstance(series.get("traffic"), list):
+                points = series.get("traffic")
+
+        x = []
+        packets = []
+        bytes_ = []
+        for idx, p in enumerate(points or []):
+            if not isinstance(p, dict):
+                continue
+            ts = p.get("start_us") or p.get("timestamp_us") or p.get("start") or p.get("bucket_start_us")
+            label = _fmt_ts_utc(ts) if ts else str(idx)
+            x.append(label)
+            packets.append(p.get("packets") or p.get("packet_count") or 0)
+            bytes_.append(p.get("bytes") or p.get("bytes_captured") or p.get("bytes_original") or 0)
+
+        if len(x) > 200:
+            step = max(1, len(x) // 200)
+            x = x[::step]
+            packets = packets[::step]
+            bytes_ = bytes_[::step]
+
+        self._mpl_line(self.chart_frames["Traffic"], x, [{"name": "Packets", "y": packets}, {"name": "Bytes", "y": bytes_}], "Traffic Over Time")
+
+    def _refresh_dashboard_diagnostics(self, analysis):
+        findings = []
+        thresholds = self._get_thresholds()
+
+        def add_line(sev, title, detail):
+            findings.append({"severity": sev, "message": f"[{sev}] {title}  {detail}"})
+
+        capture_quality = analysis.get("global_results", {}).get("capture_health", {}).get("capture_quality", {})
+        drops = None
+        if isinstance(capture_quality, dict):
+            drops = capture_quality.get("drops", {}).get("drop_rate")
+        if drops is None:
+            add_line("INFO", "Drop rate", "not available in this capture.")
+        else:
+            sev = self._sev_from_pct(
+                drops,
+                thresholds["drop_warn"],
+                thresholds["drop_warn"],
+                thresholds["drop_bad"],
+            )
+            add_line(sev, "Drop rate", f"{_fmt_pct(drops)}")
+
+        hand = analysis.get("global_results", {}).get("tcp_handshakes", {})
+        completion = hand.get("completion_rate") if isinstance(hand, dict) else None
+        if completion is None:
+            add_line("INFO", "Handshake completion", "not available in this capture.")
+        else:
+            sev = self._sev_from_pct(
+                completion,
+                thresholds["handshake_good"],
+                thresholds["handshake_warn"],
+                100.0,
+            )
+            total_hs = hand.get("handshakes_total") if isinstance(hand, dict) else None
+            complete_hs = hand.get("handshakes_complete") if isinstance(hand, dict) else None
+            if total_hs is not None and complete_hs is not None:
+                incomplete_hs = hand.get("handshakes_incomplete") if isinstance(hand, dict) else None
+                if incomplete_hs is None:
+                    try:
+                        incomplete_hs = int(total_hs) - int(complete_hs)
+                    except Exception:
+                        incomplete_hs = None
+                if incomplete_hs is not None:
+                    detail = f"{_fmt_count(complete_hs)} / {_fmt_count(total_hs)} ({_fmt_count(incomplete_hs)} incomplete)"
+                else:
+                    detail = f"{_fmt_count(complete_hs)} / {_fmt_count(total_hs)} complete"
+            else:
+                detail = f"{_fmt_pct(completion)}"
+            add_line(sev, "Handshakes", detail)
+
+        tcp_rel = analysis.get("global_results", {}).get("tcp_reliability", {})
+        retr = tcp_rel.get("retransmission_rate") if isinstance(tcp_rel, dict) else None
+        if retr is None:
+            add_line("INFO", "Retransmission rate", "not available in this capture.")
+        else:
+            sev = self._sev_from_pct(
+                retr,
+                thresholds["retrans_warn"],
+                thresholds["retrans_warn"],
+                thresholds["retrans_bad"],
+            )
+            add_line(sev, "Retransmission rate", f"{_fmt_pct(retr)}")
+
+        rst = tcp_rel.get("rst_rate") if isinstance(tcp_rel, dict) else None
+        if rst is None:
+            add_line("INFO", "RST rate", "not available in this capture.")
+        else:
+            sev = self._sev_from_pct(
+                rst,
+                thresholds["rst_warn"],
+                thresholds["rst_warn"],
+                thresholds["rst_bad"],
+            )
+            add_line(sev, "RST rate", f"{_fmt_pct(rst)}")
+
+        scan = analysis.get("global_results", {}).get("scan_signals", {})
+        distinct_ports = scan.get("distinct_ports", {}) if isinstance(scan, dict) else {}
+        max_count = distinct_ports.get("max_count") if isinstance(distinct_ports, dict) else None
+        if max_count is None:
+            add_line("INFO", "Scan signals", "not available in this capture.")
+        else:
+            sev = "WARN" if max_count >= thresholds["scan_ports_warn"] else "GOOD"
+            add_line(sev, "Scan signals", f"max distinct ports {max_count}")
+
+        arp = analysis.get("global_results", {}).get("arp_lan_signals", {})
+        multiple_macs = arp.get("multiple_macs", {}) if isinstance(arp, dict) else {}
+        mac_count = multiple_macs.get("count") if isinstance(multiple_macs, dict) else None
+        if mac_count is None:
+            add_line("INFO", "ARP conflicts", "not available in this capture.")
+        else:
+            sev = "WARN" if mac_count >= thresholds["arp_conflict_warn"] else "GOOD"
+            add_line(sev, "ARP conflicts", f"multiple MACs {mac_count}")
+
+        dns = analysis.get("global_results", {}).get("dns_anomalies", {})
+        nxdomain = dns.get("nxdomain", {}) if isinstance(dns, dict) else {}
+        spike = nxdomain.get("spike_detected") if isinstance(nxdomain, dict) else None
+        if spike is None:
+            add_line("INFO", "NXDOMAIN spike", "not available in this capture.")
+        else:
+            if thresholds["nxdomain_warn"]:
+                sev = "WARN" if spike else "GOOD"
+                detail = "spike detected" if spike else "no spike"
+            else:
+                sev = "INFO"
+                detail = "disabled"
+            add_line(sev, "NXDOMAIN spike", detail)
+
+        self._set_dynamic_rows(self.diag_table, findings, ["severity", "message"])
+
+if __name__ == "__main__":
+    app = QtWidgets.QApplication(sys.argv)
+    win = AsphaltApp()
+    win.show()
+    sys.exit(app.exec())
