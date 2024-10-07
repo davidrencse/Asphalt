@@ -14,3 +14,11 @@ try:
     import scapy
     print("✅ Scapy imported successfully")
     print(f"   Scapy path: {scapy.__file__}")
+except ImportError as e:
+    print(f"❌ Scapy import failed: {e}")
+    sys.exit(1)
+
+# Test 2: Can Scapy find interfaces directly?
+try:
+    from scapy.all import get_if_list
+    print("\n✅ Scapy.get_if_list() imported")
