@@ -6,3 +6,6 @@ AppName=Asphalt
 AppVersion=1.0.0
 AppPublisher=David Ren
 DefaultDirName={pf}\Asphalt
+DefaultGroupName=Asphalt
+OutputDir=dist-installer
+OutputBaseFilename=Asphalt-Setup
