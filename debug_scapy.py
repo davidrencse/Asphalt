@@ -22,3 +22,19 @@ except ImportError as e:
 try:
     from scapy.all import get_if_list
     print("\n✅ Scapy.get_if_list() imported")
+    
+    interfaces = get_if_list()
+    print(f"✅ Scapy found {len(interfaces)} interfaces directly:")
+    for i, iface in enumerate(interfaces):
+        print(f"   {i+1}. {iface}")
+        
+    # Try to get more details
+    from scapy.arch.windows import get_windows_if_list
+    print("\n✅ Trying get_windows_if_list()...")
+    win_ifaces = get_windows_if_list()
+    print(f"   Found {len(win_ifaces)} Windows interfaces:")
+    for iface in win_ifaces:
+        print(f"     Name: {iface.get('name')}")
+        print(f"     Desc: {iface.get('description')}")
+        print(f"     IPs: {iface.get('ips', [])}")
+        print()

@@ -9,3 +9,6 @@ DefaultDirName={pf}\Asphalt
 DefaultGroupName=Asphalt
 OutputDir=dist-installer
 OutputBaseFilename=Asphalt-Setup
+SetupIconFile=..\icon\icon.ico
+UninstallDisplayIcon={app}\Asphalt.exe
+Compression=lzma
