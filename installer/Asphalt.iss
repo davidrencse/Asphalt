@@ -12,3 +12,8 @@ OutputBaseFilename=Asphalt-Setup
 SetupIconFile=..\icon\icon.ico
 UninstallDisplayIcon={app}\Asphalt.exe
 Compression=lzma
+SolidCompression=yes
+WizardStyle=modern
+
+[Files]
+Source: "..\dist\Asphalt.exe"; DestDir: "{app}"; Flags: ignoreversion
