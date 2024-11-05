@@ -21,3 +21,9 @@ Source: "..\dist\Asphalt.exe"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{group}\Asphalt"; Filename: "{app}\Asphalt.exe"; IconFilename: "{app}\Asphalt.exe"
 Name: "{commondesktop}\Asphalt"; Filename: "{app}\Asphalt.exe"; Tasks: desktopicon; IconFilename: "{app}\Asphalt.exe"
+
+[Tasks]
+Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional icons:"
+
+[Run]
+Filename: "{app}\Asphalt.exe"; Description: "Launch Asphalt"; Flags: nowait postinstall skipifsilent
