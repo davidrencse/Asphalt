@@ -17,3 +17,7 @@ WizardStyle=modern
 
 [Files]
 Source: "..\dist\Asphalt.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+[Icons]
+Name: "{group}\Asphalt"; Filename: "{app}\Asphalt.exe"; IconFilename: "{app}\Asphalt.exe"
+Name: "{commondesktop}\Asphalt"; Filename: "{app}\Asphalt.exe"; Tasks: desktopicon; IconFilename: "{app}\Asphalt.exe"
