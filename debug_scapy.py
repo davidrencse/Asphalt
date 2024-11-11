@@ -38,3 +38,15 @@ try:
         print(f"     Desc: {iface.get('description')}")
         print(f"     IPs: {iface.get('ips', [])}")
         print()
+        
+except Exception as e:
+    print(f"\n❌ Scapy interface functions failed: {e}")
+    import traceback
+    traceback.print_exc()
+
+# Test 3: Test our ScapyBackend
+print("\n" + "=" * 60)
+print("Testing ScapyBackend...")
+try:
+    from capture.scapy_backend import ScapyBackend
+    print("✅ ScapyBackend imported successfully")
