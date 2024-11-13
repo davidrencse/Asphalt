@@ -6,3 +6,4 @@ if %ERRORLEVEL% EQU 0 (
     asphalt %*
 ) else (
     python "%~dp0src\asphalt_cli\main.py" %*
+)

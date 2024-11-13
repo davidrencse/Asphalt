@@ -27,3 +27,8 @@ Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Ad
 
 [Run]
 Filename: "{app}\Asphalt.exe"; Description: "Launch Asphalt"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function IsNpcapInstalled(): Boolean;
+begin
+  Result := RegKeyExists(HKLM, 'SOFTWARE\Npcap') or RegKeyExists(HKLM, 'SOFTWARE\WOW6432Node\Npcap');
