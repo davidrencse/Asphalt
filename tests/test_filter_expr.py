@@ -1,0 +1,18 @@
+import unittest
+
+from utils.filtering import compile_packet_filter
+
+
+class FilterExprTests(unittest.TestCase):
+    def setUp(self):
+        self.packet = {
+            "ip_version": 4,
+            "src_ip": "10.0.0.1",
+            "dst_ip": "10.0.0.2",
+            "src_port": 12345,
+            "dst_port": 443,
+            "l4_protocol": "TCP",
+            "tcp_flags_names": ["SYN", "ACK"],
+            "dns_qname": "example.com",
+            "dns_rcode": 3,
+        }
