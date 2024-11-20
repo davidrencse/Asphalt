@@ -16,3 +16,7 @@ class FilterExprTests(unittest.TestCase):
             "dns_qname": "example.com",
             "dns_rcode": 3,
         }
+
+    def test_l4_tcp_and_port(self):
+        pred = compile_packet_filter("l4=tcp and dst_port=443")
+        self.assertTrue(pred(self.packet))
