@@ -32,3 +32,12 @@ Filename: "{app}\Asphalt.exe"; Description: "Launch Asphalt"; Flags: nowait post
 function IsNpcapInstalled(): Boolean;
 begin
   Result := RegKeyExists(HKLM, 'SOFTWARE\Npcap') or RegKeyExists(HKLM, 'SOFTWARE\WOW6432Node\Npcap');
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if (CurStep = ssPostInstall) and (not IsNpcapInstalled()) then
+  begin
+    MsgBox('Npcap is required for live capture. Install it with WinPcap API-compatible mode from https://npcap.com/.', mbInformation, MB_OK);
+  end;
+end;

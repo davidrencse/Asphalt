@@ -50,3 +50,21 @@ print("Testing ScapyBackend...")
 try:
     from capture.scapy_backend import ScapyBackend
     print("✅ ScapyBackend imported successfully")
+    
+    backend = ScapyBackend()
+    print("✅ ScapyBackend instance created")
+    
+    interfaces = backend.list_interfaces()
+    print(f"✅ ScapyBackend found {len(interfaces)} interfaces:")
+    for iface in interfaces:
+        print(f"   {iface['name']}: {iface.get('description', 'No description')}")
+        if iface.get('ips'):
+            print(f"        IPs: {', '.join(iface['ips'])}")
+        
+except Exception as e:
+    print(f"\n❌ ScapyBackend failed: {e}")
+    import traceback
+    traceback.print_exc()
+
+print("\n" + "=" * 60)
+print("Debug complete")
