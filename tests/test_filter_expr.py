@@ -20,3 +20,7 @@ class FilterExprTests(unittest.TestCase):
     def test_l4_tcp_and_port(self):
         pred = compile_packet_filter("l4=tcp and dst_port=443")
         self.assertTrue(pred(self.packet))
+
+    def test_app_dns_and_rcode(self):
+        pred = compile_packet_filter("app=dns and dns_rcode=NXDOMAIN")
+        self.assertTrue(pred(self.packet))
