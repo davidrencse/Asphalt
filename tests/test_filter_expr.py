@@ -28,3 +28,7 @@ class FilterExprTests(unittest.TestCase):
     def test_not_ipv6(self):
         pred = compile_packet_filter("not l3=ipv6")
         self.assertTrue(pred(self.packet))
+
+    def test_tcp_flag(self):
+        pred = compile_packet_filter("tcp_flag=syn")
+        self.assertTrue(pred(self.packet))
