@@ -32,3 +32,7 @@ class FilterExprTests(unittest.TestCase):
     def test_tcp_flag(self):
         pred = compile_packet_filter("tcp_flag=syn")
         self.assertTrue(pred(self.packet))
+
+
+if __name__ == "__main__":
+    unittest.main()
