@@ -17,3 +17,13 @@ This document describes the offline packet-analysis subsystem that runs on decod
 - Analyzer plugins: independent modules that compute results (global, per-flow, time-series).
 - Registry: maps analyzer names to implementations and enables selection via CLI.
 - Models: AnalysisPacket, FlowKey, FlowState, AnalysisReport.
+
+### Analyzer Contract
+
+Each analyzer implements:
+
+- on_start(context)
+- on_packet(packet, flow_key, flow_state, context)
+- on_end(context) -> AnalyzerResult
+
+The engine merges analyzer results into the final report.

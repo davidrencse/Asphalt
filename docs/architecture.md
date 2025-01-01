@@ -54,3 +54,38 @@ WebSocket Events ← Metrics Streaming ← Capture Loop → Packet Processing
 1. **UI Request**: POST `/api/capture/start` with interface and filter
 2. **Privileged Execution**: Capture service starts with elevated privileges
 3. **Storage Setup**: Session manifest and PCAPNG file creation
+4. **Capture Loop**: 
+   - Real-time packet capture with BPF filtering
+   - Time/size-based file rotation
+   - Concurrent indexing of captured packets
+5. **Live Updates**: Metrics streamed via WebSocket to UI
+6. **Clean Shutdown**: Final index build and session summary
+
+### Flow B: Load PCAP → Analyze → Render Sequence Diagram
+
+```
+UI → API Gateway → Storage Manager → Index Builder → Packet Decoder → Flow Tracker
+↓                    ↓                  ↓               ↓                ↓
+Render ← Results ← Task Runner ← Unified Parser ← Analysis Modules ← Flow Context
+```
+
+**Steps:**
+1. **Session Load**: UI requests PCAP analysis with specific profile
+2. **Index Check/ Build**: 
+   - If index exists: load metadata
+   - If missing: decode packets and build search indices
+3. **Analysis Pipeline**:
+   - Filtered packet retrieval via indices
+   - Protocol decoding with flow context
+   - Configurable analysis module execution
+   - Output normalization via unified parser
+4. **Visualization**: 
+   - Schema-conformant data retrieval
+   - UI rendering of graphs and diagnostics
+
+## 1.5 Storage Model (Three-Tier)
+
+### Tier 1: PCAPNG Store
+**Format**: Standard PCAPNG with custom Asphalt blocks
+**Rotation**: Time-based (default 5min) or size-based (default 100MB)
+**Retention**: Configurable policy (time, space, or count-based)
