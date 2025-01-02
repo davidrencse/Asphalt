@@ -49,3 +49,38 @@ It's like a **library catalog card** for each packet:
 
 ### 1. `pcap_ref` - The "GPS Coordinates"
 ```
+"0:4200:4216"
+ │   │    └── Data starts at byte 4216
+ │   └─────── Packet record starts at byte 4200  
+ └─────────── File ID #0 (first file in session)
+```
+**Why?** So we can JUMP directly to the packet without reading the whole file.
+
+### 2. `packet_hash` - The "Fingerprint"
+A unique ID for this exact packet. Like an ISBN for books.
+- Same packet data → Same hash
+- Different packet data → Different hash
+- Used to detect duplicates
+
+### 3. `timestamp_us` - The "When"
+Microseconds since 1970. Allows:
+- "Show packets from 2:00-2:01 PM"
+- "Sort by time"
+- "Find the first/last packet"
+
+### 4. `src_ip`, `dst_ip`, `protocol` - The "Who & What"
+(Placeholders in Sprint 0.2, will be filled later)
+Allows queries like:
+- "Show all traffic to 8.8.8.8"
+- "Find HTTP packets (port 80)"
+- "Show TCP connections"
+
+## What PacketIndexBuilder Actually Does:
+
+```python
+# Input: RawPacket (the actual packet data)
+packet = RawPacket(
+    packet_id=1,
+    timestamp_us=1700000000,
+    data=b'\x00\x01\x02...',  # Actual packet bytes
+    pcap_ref="0:100:116"
