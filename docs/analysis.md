@@ -27,3 +27,14 @@ Each analyzer implements:
 - on_end(context) -> AnalyzerResult
 
 The engine merges analyzer results into the final report.
+
+## Data Models
+
+### AnalysisPacket (decoded representation)
+Fields (subset):
+- packet_id, timestamp_us
+- captured_length, original_length
+- ip_version, src_ip, dst_ip
+- ip_protocol, l4_protocol, src_port, dst_port
+- tcp_flags, ttl, quality_flags
+- payload_bytes (optional, not serialized by default)
