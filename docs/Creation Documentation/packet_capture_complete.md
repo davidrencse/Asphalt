@@ -59,3 +59,49 @@ Duration reached (5s), stopping...
 CAPTURE SUMMARY
 ==================================================
 Session ID:    dummy_1768831947
+Interface:     \Device\NPF_{B517604C-6715-44B9-A8E1-19BC3A8AA3DC}
+Duration:      5.08s
+Total Packets: 333
+Total Bytes:   40,122
+Packet Drops:  0
+PS C:\Users\david\Desktop\all projects\Cybersecurity\Asphalt> asphalt capture --interface "Ethernet" --duration 5 --filter "tcp port 80 or port 443"
+Capture started on 'Ethernet' (session: dummy_1768831958)
+Filter: tcp port 80 or port 443
+Duration: 5 seconds
+Press Ctrl+C to stop
+
+Time   Pkts/s   Total      Drops
+----------------------------------------
+  4.9s       61        245        0
+Duration reached (5s), stopping...
+
+==================================================
+CAPTURE SUMMARY
+==================================================
+Session ID:    dummy_1768831958
+Interface:     Ethernet
+Duration:      5.03s
+Total Packets: 310
+Total Bytes:   37,340
+Packet Drops:  0
+```
+
+## QUICK START
+1. List Available Interfaces
+bash
+
+asphalt capture --interface list
+
+2. Capture Real Traffic (Wi-Fi/Ethernet)
+bash
+
+### Capture Wi-Fi traffic
+asphalt capture --interface "Wi-Fi" --duration 10 --backend scapy
+
+### Capture with filter (web traffic only)
+asphalt capture --interface "Wi-Fi" --duration 10 --filter "tcp port 80 or port 443"
+
+### Capture Ethernet (if connected)
+asphalt capture --interface "Ethernet" --duration 10 --backend scapy
+
+3. Test Mode (No NpCap Required)
