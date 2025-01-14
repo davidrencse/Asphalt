@@ -17,3 +17,18 @@
 
 - Models = **Pizza boxes** (hold data)
 - Interfaces = **Pizza recipes** (define how to make them)
+- Implementations = **Pizza chefs** (actually make the pizza)
+
+### **@abstractmethod**
+- `@abstractmethod` means "child classes MUST implement this"
+- Interface files only contain `pass` for abstract methods
+- Concrete implementations go in separate files (`pcap_reader.py`)
+- Context manager methods (`__enter__`, `__exit__`, `__del__`) can be implemented in the interface because they're always the same
+
+
+### **PCAP File Structure **
+PCAP files have:
+- **24-byte global header** with magic number, version, link type
+- **Magic numbers** determine endianness and timestamp resolution
+- Each packet has: **16-byte header** (timestamp + lengths) + **packet data**
+- **Padding** to 32-bit boundaries (important for file navigation)

@@ -38,3 +38,12 @@ Fields (subset):
 - ip_protocol, l4_protocol, src_port, dst_port
 - tcp_flags, ttl, quality_flags
 - payload_bytes (optional, not serialized by default)
+
+### FlowKey (5-tuple + protocol + direction)
+- src_ip, dst_ip, src_port, dst_port, ip_protocol
+- direction: fwd or rev (relative to canonical flow order)
+
+### FlowState (aggregates and derived metrics)
+- flow_id and canonical endpoints (a_ip:a_port, b_ip:b_port)
+- first_ts_us, last_ts_us, duration_us
+- packets and bytes (captured and original), total and per-direction

@@ -105,3 +105,29 @@ asphalt capture --interface "Wi-Fi" --duration 10 --filter "tcp port 80 or port 
 asphalt capture --interface "Ethernet" --duration 10 --backend scapy
 
 3. Test Mode (No NpCap Required)
+bash
+
+### Always works - uses dummy backend
+asphalt capture --interface dummy0 --duration 5 --backend dummy
+
+### Test with GUID name
+asphalt capture --interface "\Device\NPF_{B517604C-6715-44B9-A8E1-19BC3A8AA3DC}" --duration 5
+
+## SYSTEM ARCHITECTURE
+Backends Available:
+
+    scapy - Real packet capture (requires NpCap on Windows)
+
+        Captures actual network traffic
+
+        Supports BPF filters
+
+        Maps human names → GUID automatically
+
+    dummy - Synthetic packets (always works)
+
+        For testing without network
+
+        Generates fake Ethernet/IP packets
+
+        Useful for development
