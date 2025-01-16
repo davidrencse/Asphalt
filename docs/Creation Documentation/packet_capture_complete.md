@@ -131,3 +131,35 @@ Backends Available:
         Generates fake Ethernet/IP packets
 
         Useful for development
+
+Key Features Working:
+
+    ✅ Live statistics (packets/sec, bytes/sec, drops)
+
+    ✅ BPF filtering (e.g., "tcp port 80", "udp port 53")
+
+    ✅ Queue management (configurable buffer size)
+
+    ✅ Clean shutdown (no resource leaks)
+
+    ✅ Session tracking (unique session IDs)
+
+## PROJECT STRUCTURE
+```text
+
+Asphalt/
+├── src/
+│   ├── capture/                    # Core capture engine
+│   │   ├── icapture_backend.py     # Interface definition
+│   │   ├── scapy_backend.py        # Real capture (Windows/NpCap)
+│   │   ├── dummy_backend.py        # Synthetic packets
+│   │   └── live_source.py          # IPacketSource implementation
+│   ├── cli/                        # Command-line interface
+│   │   ├── main.py                 # CLI entry point
+│   │   └── capture.py              # Capture commands
+│   ├── pcap_loader/                # PCAP/PCAPNG file readers
+│   ├── models/                     # Data models
+│   └── __init__.py
+├── asphalt.py                      # Main launcher
+├── setup.py                        # Package configuration
+└── requirements.txt                # Dependencies

@@ -54,3 +54,51 @@ class PacketIndexRecord:
     packet_id: int          # "Book #42 in this library"
     session_id: str         # "Library: Downtown Branch"
     timestamp_us: int       # "Published: 1998"
+    
+    # SIZE INFO
+    captured_length: int    # "Pages: 300"
+    original_length: int    # "Original manuscript: 350 pages"
+    
+    # LOCATION INFO
+    pcap_ref: str           # "Shelf: A3, Row 4"
+    packet_hash: str        # "ISBN: 978-3-16-148410-0"
+    
+    # CONTENT INFO (PLACEHOLDERS for now)
+    src_ip: str = "0.0.0.0"      # "Author: Unknown" 
+    dst_ip: str = "0.0.0.0"      # "Publisher: Unknown"
+    src_port: int = 0            # "Chapter: 0"
+    dst_port: int = 0            # "Section: 0"
+    protocol: int = 0            # "Genre: Unknown"
+    stack_summary: str = "raw"   # "Tags: Fiction"
+    
+    # VERSION TRACKING
+    schema_version: str = "0.2.0"  # "Catalog system v2.0"
+```
+
+**Why placeholders?** We don't know IP addresses yet (that's for next sprint). But we DEFINE the fields now so everything fits together later.
+
+### 3. `SessionManifest` - The Session Receipt
+
+**What it does**: Keeps a receipt for an entire capture session.
+
+```python
+# Think of this as a "shopping receipt"
+@dataclass
+class SessionManifest:
+    # RECEIPT HEADER
+    session_id: str          # "Transaction #TX-12345"
+    created_at: str          # "Date: 2024-01-15 14:30:00"
+    
+    # WHAT WAS BOUGHT
+    source_type: str         # "Store: Online"
+    source_hash: str         # "Order hash: abc123..."
+    original_path: Optional[str] = None  # "Original URL: ..."
+    
+    # TIMING
+    time_start_us: int       # "Start shopping: 14:30:00"
+    time_end_us: int         # "Finish: 14:45:00"
+    
+    # TOTALS
+    total_packets: int       # "Items: 15"
+    total_bytes_captured: int  # "Weight: 4.2kg"
+    total_bytes_original: int  # "Original weight: 4.5kg"

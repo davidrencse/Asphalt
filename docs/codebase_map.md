@@ -28,3 +28,17 @@ Major components:
 - Analysis engine + analyzers: src/analysis
 - CLI entry points: src/asphalt_cli + run.py/asphalt.py
 - UI entry points: ui_server.py, ui_app.py, ui/ (static), ui-react/ (React prototype)
+
+## Repository Layout
+- src/
+  - asphalt_cli/: CLI commands (capture, decode, capture-decode, analyze)
+  - capture/: live capture backends and packet decode integration
+  - pcap_loader/: PCAP and PCAPNG readers + deterministic index builder
+  - analysis/: analysis engine, flow tracking, analyzers, models
+  - models/: core packet/index/session data structures
+  - utils/: currently minimal placeholders
+- ui/: static HTML/JS UI (served by ui_server.py)
+- ui-react/: React UI prototype (not wired to runtime code)
+- docs/: design and architecture docs
+- testing/: unit and integration tests
+- run.py / asphalt.py / asphalt_launcher.py / asphalt_cli.py: entry points
