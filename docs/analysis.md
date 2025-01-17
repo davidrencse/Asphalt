@@ -47,3 +47,14 @@ Fields (subset):
 - flow_id and canonical endpoints (a_ip:a_port, b_ip:b_port)
 - first_ts_us, last_ts_us, duration_us
 - packets and bytes (captured and original), total and per-direction
+- protocol and quality counters
+
+### AnalysisReport (JSON-serializable output)
+- capture_path, created_at
+- stats (packets_total, bytes_total, duration_us, etc.)
+- global_results (per analyzer)
+- flow_results (per analyzer)
+- time_series (per analyzer)
+- analyzers (name and version)
+
+## Capture Health and Integrity

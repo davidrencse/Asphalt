@@ -163,3 +163,43 @@ Asphalt/
 ├── asphalt.py                      # Main launcher
 ├── setup.py                        # Package configuration
 └── requirements.txt                # Dependencies
+```
+
+## COMMON USAGE EXAMPLES
+Basic Capture:
+```bash
+
+# Capture 30 seconds of all traffic
+asphalt capture --interface "Wi-Fi" --duration 30
+
+# Capture with specific filter
+asphalt capture --interface "Wi-Fi" --duration 60 --filter "tcp port 80"
+
+# Capture DNS traffic
+asphalt capture --interface "Wi-Fi" --duration 30 --filter "udp port 53"
+
+Monitoring Mode:
+```
+
+###  Run until Ctrl+C (no duration)
+asphalt capture --interface "Wi-Fi" --backend scapy
+Press Ctrl+C to stop
+
+Performance Testing:
+```bash
+
+# Test with small buffer to see drops
+asphalt capture --interface dummy0 --duration 5 --buffer-size 10
+
+# Test high packet rates
+asphalt capture --interface dummy0 --duration 10 --backend dummy
+
+# TROUBLESHOOTING
+No Real Interfaces Found?
+bash
+
+# Check if NpCap is installed
+python -c "from scapy.all import get_if_list; print('Interfaces:', get_if_list())"
+
+# Run as Administrator (often required on Windows)
+# Right-click PowerShell/CMD → "Run as Administrator"
