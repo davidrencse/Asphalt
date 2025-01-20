@@ -32,3 +32,13 @@ PCAP files have:
 - **Magic numbers** determine endianness and timestamp resolution
 - Each packet has: **16-byte header** (timestamp + lengths) + **packet data**
 - **Padding** to 32-bit boundaries (important for file navigation)
+
+### **Testing and Import Patterns**
+**Practical Python knowledge**:
+- Python's `sys.path` determines where modules are found
+- Need to add project root to path when running tests
+- `python -m testing.test_packet_index` works better than direct execution
+- Test-driven development: write tests that verify contracts
+
+### **Common Python Mistakes Fixed**
+1. **`os.path.exists()`** needs an argument: `os.path.exists(path)`

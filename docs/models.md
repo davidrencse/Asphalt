@@ -102,3 +102,26 @@ class SessionManifest:
     total_packets: int       # "Items: 15"
     total_bytes_captured: int  # "Weight: 4.2kg"
     total_bytes_original: int  # "Original weight: 4.5kg"
+    
+    # WHERE IT'S STORED
+    file_mapping: Dict[str, str]  # "Bag #1: Frozen, Bag #2: Produce"
+    
+    # SYSTEM INFO
+    schema_version: str = "0.2.0"  # "Receipt format v2.0"
+```
+
+## How Models Work Together
+
+```
+PCAP File (raw bytes)
+     |
+     v
+PcapReader (reads bytes, calculates values)
+     |
+     v
+RawPacket (container holding: timestamp, data, etc.)
+     |
+     v
+PacketIndexBuilder (creates index card for packet)
+     |
+     v
