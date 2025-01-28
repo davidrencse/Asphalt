@@ -42,3 +42,18 @@ PCAP files have:
 
 ### **Common Python Mistakes Fixed**
 1. **`os.path.exists()`** needs an argument: `os.path.exists(path)`
+2. **FileNotFoundError vs FileExistsError**: 
+   - `FileNotFoundError`: file missing when trying to read
+   - `FileExistsError`: file already exists when trying to create
+3. **Store function results**: `self.mmap = mmap.mmap(...)` not just `mmap.mmap(...)`
+4. **Property recursion**: `return self.current_packet_id` calls itself infinitely; use `return self._packet_counter`
+
+
+### The Data Flow Pipeline
+```
+PCAP File (binary)
+     ↓
+PcapReader (opens file, reads bytes) → Implements IPacketSource interface
+     ↓
+RawPacket (container: timestamp, data, pcap_ref, etc.)
+     ↓

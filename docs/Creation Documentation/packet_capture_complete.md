@@ -203,3 +203,49 @@ python -c "from scapy.all import get_if_list; print('Interfaces:', get_if_list()
 
 # Run as Administrator (often required on Windows)
 # Right-click PowerShell/CMD → "Run as Administrator"
+
+"Wi-Fi" or "Ethernet" Not Found?
+```
+
+##  List all interfaces (including GUIDs)
+python -c "
+import sys
+sys.path.insert(0, 'src')
+from capture.scapy_backend import ScapyBackend
+b = ScapyBackend()
+for iface in b.list_interfaces():
+    print(f\"Name: {iface['name']}\")
+    print(f\"  Desc: {iface.get('description', 'N/A')}\")
+"
+
+Permission Errors?
+
+    Install NpCap: https://npcap.com/#download
+
+    Choose: "Install NpCap in WinPcap API-compatible mode"
+
+    Reboot if prompted
+
+    Run asphalt as Administrator
+
+###  PERFORMANCE TIPS
+For High-Speed Networks:
+bash
+
+### Increase buffer size (default: 10000)
+asphalt capture --interface "Wi-Fi" --duration 10 --buffer-size 50000
+
+### Use specific filters to reduce load
+asphalt capture --interface "Wi-Fi" --filter "not port 445 and not port 139"
+
+Minimal Overhead:
+bash
+
+### Disable promiscuous mode (if not needed)
+asphalt capture --interface "Wi-Fi" --duration 10 --no-promisc
+
+### NEXT STEPS
+Immediate Enhancements:
+
+    Add PCAPNG file output:
+    bash

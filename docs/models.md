@@ -125,3 +125,44 @@ RawPacket (container holding: timestamp, data, etc.)
 PacketIndexBuilder (creates index card for packet)
      |
      v
+PacketIndexRecord (searchable index card)
+     |
+     v
+SessionManifestBuilder (creates session receipt)
+     |
+     v
+SessionManifest (complete session receipt)
+```
+
+## Key Model Features Explained
+
+### 1. `@dataclass` - Automatic Boilerplate
+```python
+# WITHOUT @dataclass:
+class RawPacket:
+    def __init__(self, packet_id, timestamp_us, ...):
+        self.packet_id = packet_id
+        self.timestamp_us = timestamp_us
+        # ... 10 more lines
+        
+    def __eq__(self, other):
+        return self.packet_id == other.packet_id
+    # ... more boilerplate
+
+# WITH @dataclass: (Auto-generates all that!)
+@dataclass
+class RawPacket:
+    packet_id: int
+    timestamp_us: int
+    # ... Python handles the rest
+```
+
+### 2. `frozen=True` - Immutability
+```python
+packet = RawPacket(packet_id=1, timestamp_us=1000, ...)
+
+# CANNOT do this (throws error):
+packet.packet_id = 2  # ERROR: "can't set attribute"
+
+# MUST do this instead:
+new_packet = RawPacket(packet_id=2, timestamp_us=1000, ...)
