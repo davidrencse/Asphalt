@@ -166,3 +166,36 @@ packet.packet_id = 2  # ERROR: "can't set attribute"
 
 # MUST do this instead:
 new_packet = RawPacket(packet_id=2, timestamp_us=1000, ...)
+```
+
+**Why?** So packets can't be accidentally changed after creation. This prevents bugs.
+
+### 3. Type Hints - Documentation + Error Checking
+```python
+# BAD: What kind of data is this?
+def process(data):
+    pass  # Is data bytes? str? dict?
+
+# GOOD: Clear what's expected
+def process(packet: RawPacket) -> PacketIndexRecord:
+    pass  # IDE shows error if wrong type passed
+```
+
+### 4. Default Values - Backward Compatibility
+```python
+@dataclass
+class PacketIndexRecord:
+    schema_version: str = "0.2.0"  # Default if not specified
+    src_ip: str = "0.0.0.0"        # Default placeholder
+    
+# Works with old code:
+old_data = {"packet_id": 1, "timestamp_us": 1000}
+record = PacketIndexRecord(**old_data)  # Uses defaults for missing fields
+```
+
+## Common Questions
+
+### Q: Do models parse files?
+**A: NO!** Models are **containers**, not **parsers**. 
+- **Parser** (`pcap_reader.py`): Reads file, calculates values
+- **Model** (`RawPacket`): Stores those values
