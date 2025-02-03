@@ -57,3 +57,19 @@ PcapReader (opens file, reads bytes) → Implements IPacketSource interface
      ↓
 RawPacket (container: timestamp, data, pcap_ref, etc.)
      ↓
+PacketIndexBuilder (creates searchable index)
+     ↓  
+PacketIndexRecord (library card: hash, location, metadata)
+     ↓
+SessionManifestBuilder (creates session receipt)
+     ↓
+SessionManifest (metadata: file hash, time range, packet count)
+```
+
+### Key Design Principles
+
+1. **Single Responsibility**: Each class does ONE thing well
+2. **Immutability**: Models are frozen (`@dataclass(frozen=True)`) to prevent accidental changes
+3. **Determinism**: Same input → same output, critical for testing and reliability
+4. **Contract-First**: Define interfaces before implementations
+5. **Resource Management**: Always close files/memory maps (context managers help)

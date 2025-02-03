@@ -249,3 +249,52 @@ Immediate Enhancements:
 
     Add PCAPNG file output:
     bash
+
+asphalt capture --interface "Wi-Fi" --duration 60 --output capture.pcapng
+
+Add packet decoding (show IP addresses, protocols):
+bash
+
+asphalt capture --interface "Wi-Fi" --duration 10 --decode
+
+Add continuous monitoring:
+bash
+
+asphalt monitor --interface "Wi-Fi" --alerts "port-scan,ddos"
+
+
+## SUCCESS VERIFICATION
+
+Run these tests to confirm everything works:
+bash
+
+### 1. Test dummy backend (always works)
+asphalt capture --interface dummy0 --duration 3 --backend dummy
+
+### 2. Test real capture (requires NpCap)
+asphalt capture --interface "Wi-Fi" --duration 5 --backend scapy
+
+### 3. Test filtering
+asphalt capture --interface "Wi-Fi" --duration 5 --filter "tcp" --backend scapy
+
+### 4. Test statistics
+asphalt capture --interface dummy0 --duration 10 --buffer-size 50
+Should show packet drops when queue fills
+
+### Enable debug output
+python -c "
+import sys
+sys.path.insert(0, 'src')
+from capture.scapy_backend import ScapyBackend
+from capture.icapture_backend import CaptureConfig
+
+backend = ScapyBackend()
+config = CaptureConfig(interface='Wi-Fi', buffer_size=1000)
+session_id = backend.start(config)
+print(f'Session: {session_id}')
+import time
+time.sleep(3)
+stats = backend.get_stats(session_id)
+print(f'Stats: {stats}')
+backend.stop(session_id)
+"
