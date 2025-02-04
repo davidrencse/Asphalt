@@ -42,3 +42,19 @@ Major components:
 - docs/: design and architecture docs
 - testing/: unit and integration tests
 - run.py / asphalt.py / asphalt_launcher.py / asphalt_cli.py: entry points
+
+## Data Models (Key Types)
+Core packet and index models:
+- src/models/packet.py
+  - RawPacket: immutable container for raw bytes + metadata.
+  - DecodedPacket: immutable decoded representation.
+- src/models/index_record.py
+  - PacketIndexRecord: deterministic index entry for search and lookup.
+- src/pcap_loader/session_manifest.py
+  - SessionManifest + SessionManifestBuilder: deterministic session metadata.
+
+Analysis models:
+- src/analysis/models.py
+  - AnalysisPacket: normalized decoded packet for analyzers.
+  - FlowKey + FlowState: flow tracking and aggregates.
+  - AnalysisReport + AnalyzerResult: JSON output shape.

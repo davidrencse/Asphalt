@@ -73,3 +73,10 @@ SessionManifest (metadata: file hash, time range, packet count)
 3. **Determinism**: Same input → same output, critical for testing and reliability
 4. **Contract-First**: Define interfaces before implementations
 5. **Resource Management**: Always close files/memory maps (context managers help)
+
+### Python Patterns 
+
+1. **Abstract Base Classes**: Define contracts with `@abstractmethod`
+2. **Context Managers**: `__enter__`/`__exit__` for safe resource handling
+3. **Memory Mapping**: `mmap` for zero-copy file access (critical for large PCAPs)
+4. **Type Hints**: `-> Iterator[RawPacket]` helps catch errors early
