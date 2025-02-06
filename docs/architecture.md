@@ -89,3 +89,21 @@ Render ← Results ← Task Runner ← Unified Parser ← Analysis Modules ← F
 **Format**: Standard PCAPNG with custom Asphalt blocks
 **Rotation**: Time-based (default 5min) or size-based (default 100MB)
 **Retention**: Configurable policy (time, space, or count-based)
+
+**Session Manifest Format**:
+```json
+{
+  "session_id": "uuid",
+  "start_time": "iso8601",
+  "end_time": "iso8601",
+  "interface": "eth0",
+  "filter": "tcp port 443",
+  "files": [
+    {"sequence": 1, "path": "/data/...", "time_range": [...], "size": 104857600},
+    {"sequence": 2, "path": "/data/...", "time_range": [...], "size": 104857600}
+  ],
+  "total_packets": 1500000,
+  "total_bytes": 1572864000,
+  "index_status": "complete"
+}
+```

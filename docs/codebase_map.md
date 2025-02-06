@@ -58,3 +58,22 @@ Analysis models:
   - AnalysisPacket: normalized decoded packet for analyzers.
   - FlowKey + FlowState: flow tracking and aggregates.
   - AnalysisReport + AnalyzerResult: JSON output shape.
+
+Note: There is also src/models/session.py which defines a SessionManifest.
+This is a parallel implementation to src/pcap_loader/session_manifest.py.
+If you expand session handling, consider consolidating or clearly separating
+these to avoid confusion.
+
+## Pipeline Details
+
+### Offline File Pipeline
+1. Reader selection
+   - src/asphalt_cli/decode.py and src/asphalt_cli/analyze.py determine the
+     reader by file extension or magic number.
+2. Packet loading
+   - PCAP: src/pcap_loader/pcap_reader.py (PcapReader)
+   - PCAPNG: src/pcap_loader/pcapng_reader.py (PcapngReader)
+3. Raw packets
+   - Readers yield RawPacket objects (packet_id, timestamp_us, lengths, link_type, data, pcap_ref).
+4. Decoding
+   - src/capture/packet_decoder.py parses L2/L3/L4 headers into DecodedPacket.
