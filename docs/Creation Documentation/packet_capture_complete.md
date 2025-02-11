@@ -298,3 +298,11 @@ stats = backend.get_stats(session_id)
 print(f'Stats: {stats}')
 backend.stop(session_id)
 "
+
+Check Installation:
+bash
+
+### Verify everything is installed
+python -c "import scapy; print(f'Scapy: {scapy.__version__}')"
+pip show asphalt
+asphalt --version

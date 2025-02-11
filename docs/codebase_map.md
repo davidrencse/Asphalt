@@ -77,3 +77,22 @@ these to avoid confusion.
    - Readers yield RawPacket objects (packet_id, timestamp_us, lengths, link_type, data, pcap_ref).
 4. Decoding
    - src/capture/packet_decoder.py parses L2/L3/L4 headers into DecodedPacket.
+5. Analysis
+   - src/analysis/engine.py wraps AnalysisPacket and forwards to analyzers.
+   - Results are merged into AnalysisReport and serialized as JSON.
+
+### Live Capture Pipeline (CLI/UI)
+1. Backend selection
+   - src/capture/scapy_backend.py (real capture, Windows via NpCap/Scapy)
+   - src/capture/dummy_backend.py (synthetic packets for testing)
+2. Capture loop
+   - Packet queues are filled in the backend and pulled by CLI/UI.
+3. Decode + display
+   - src/asphalt_cli/capture_decode.py decodes and prints packets.
+   - ui_server.py and ui_app.py run capture-decode and optionally analyze.
+
+## Entry Points
+- run.py: preferred CLI runner from project root (adds src to sys.path).
+- asphalt.py / asphalt_cli.py / asphalt_launcher.py: CLI wrappers with varying behavior.
+- ui_server.py: HTTP server that serves ui/ and exposes /capture endpoint.
+- ui_app.py: Tkinter app that runs capture-decode + analysis locally.
