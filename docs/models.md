@@ -199,3 +199,46 @@ record = PacketIndexRecord(**old_data)  # Uses defaults for missing fields
 **A: NO!** Models are **containers**, not **parsers**. 
 - **Parser** (`pcap_reader.py`): Reads file, calculates values
 - **Model** (`RawPacket`): Stores those values
+
+### Q: Why not just use dictionaries?
+```python
+# BAD: Dictionary (unclear, error-prone)
+packet = {
+    "id": 1,           # or "packet_id" or "num"?
+    "time": 123456789, # seconds? milliseconds?
+    "data": b"...",
+}
+
+# GOOD: Model (clear, type-safe)
+packet = RawPacket(
+    packet_id=1,        # Always this name
+    timestamp_us=123456789000000,  # Always microseconds
+    data=b"...",
+)
+```
+
+### Q: What's with all the `Optional` and defaults?
+**A: Future-proofing.** When we add new fields later, old code won't break.
+
+### Q: Why `timestamp_us` not just `timestamp`?
+**A: Precision matters.** `timestamp_us` explicitly says "microseconds". Avoids confusion between seconds/milliseconds/microseconds.
+
+## Practical Example
+
+```python
+# 1. Reader PARSES the file
+reader = PcapReader("capture.pcap")
+reader.open()
+
+# 2. Reader creates RawPacket CONTAINERS
+for packet in reader:  # packet is a RawPacket
+    # 3. Index builder uses packet to create index record
+    index_record = index_builder.create_index_record(packet)
+    
+    # 4. All components understand the SAME structure
+    print(f"Packet {packet.packet_id} at {packet.timestamp_us}μs")
+    print(f"Indexed as {index_record.packet_hash}")
+    
+    # 5. Type safety: IDE helps catch errors
+    # print(packet.timestmap)  # IDE shows error: typo!
+    print(packet.timestamp_us)  # Correct!
