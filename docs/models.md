@@ -242,3 +242,24 @@ for packet in reader:  # packet is a RawPacket
     # 5. Type safety: IDE helps catch errors
     # print(packet.timestmap)  # IDE shows error: typo!
     print(packet.timestamp_us)  # Correct!
+```
+
+## The "Deterministic" Part
+
+Because models define EXACT structures:
+
+```python
+# Test: Same input → Same output
+packet1 = RawPacket(packet_id=1, timestamp_us=1000, ...)
+packet2 = RawPacket(packet_id=1, timestamp_us=1000, ...)  # Same values
+
+index1 = builder.create_index_record(packet1)
+index2 = builder.create_index_record(packet2)
+
+# This MUST be true for deterministic pipeline:
+assert index1.to_dict() == index2.to_dict()
+```
+
+## Summary
+
+Models are:

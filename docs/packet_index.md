@@ -84,3 +84,39 @@ packet = RawPacket(
     timestamp_us=1700000000,
     data=b'\x00\x01\x02...',  # Actual packet bytes
     pcap_ref="0:100:116"
+)
+
+# Process: Creates "catalog card"
+index = PacketIndexBuilder.create_index_record(packet)
+
+# Output: PacketIndexRecord (the catalog card)
+print(index.to_dict())
+# {
+#     "packet_id": 1,
+#     "timestamp_us": 1700000000,
+#     "pcap_ref": "0:100:116",
+#     "packet_hash": "e4d7f1b...",  # ← Calculated from packet data
+#     "src_ip": "0.0.0.0",  # ← Placeholder (for now)
+#     ...
+# }
+```
+
+## The "Deterministic" Part:
+
+**CRITICAL REQUIREMENT:** Same PCAP file → Same index → Same results
+
+```python
+# Monday, run on Server A:
+pcap_file = "capture.pcap"
+index1 = PacketIndexBuilder.process_file(pcap_file)
+
+# Tuesday, run on Server B (same file):
+index2 = PacketIndexBuilder.process_file(pcap_file)
+
+# MUST BE IDENTICAL:
+assert index1 == index2  # True!
+
+# Why? Because:
+# 1. packet_id always starts at 1
+# 2. packet_hash uses same algorithm
+# 3. timestamps calculated same way

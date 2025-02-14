@@ -58,3 +58,18 @@ Fields (subset):
 - analyzers (name and version)
 
 ## Capture Health and Integrity
+
+This analyzer surfaces whether a capture is trustworthy. It reports three sections:
+
+- Capture Quality: drop stats (if available), kernel buffer drops, start/end/duration, link type, snaplen, promiscuous mode.
+- Decode Health: decode success rate, malformed and truncated counts, unknown L3/L4, unsupported link types, checksum results (if computed).
+- Filtering and Sampling: active filter, filtered-out count, sampling rate (if present).
+
+When metadata is unavailable (e.g., offline files without capture stats), fields are populated as `n/a`.
+
+## CLI Usage
+
+Analyze a capture file offline and emit JSON:
+
+```
+python run.py analyze capture.pcapng --output report.json
