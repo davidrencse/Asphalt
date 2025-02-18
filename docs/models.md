@@ -263,3 +263,11 @@ assert index1.to_dict() == index2.to_dict()
 ## Summary
 
 Models are:
+- **Containers** for data 
+- **Agreements** between components
+- **Type-safe** with clear field names
+- **Immutable** (can't change after creation)
+- **Versioned** for future changes
+- **Testable** for deterministic behavior
+
+They're the **labeled boxes** that ensure every component in Asphalt understands the data the same way.

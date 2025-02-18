@@ -120,3 +120,31 @@ assert index1 == index2  # True!
 # 1. packet_id always starts at 1
 # 2. packet_hash uses same algorithm
 # 3. timestamps calculated same way
+# 4. pcap_ref format consistent
+```
+
+## How It's Used Later:
+
+### 1. **Fast Search** (Library Lookup)
+```python
+# "Find packets between 2:00-2:01 PM"
+query = {
+    "start_time": 1700000000,  # 2:00 PM
+    "end_time":   1700000060,  # 2:01 PM
+    "src_ip": "192.168.1.100"  # Optional filter
+}
+
+# Database query uses PacketIndex:
+SELECT * FROM packet_index 
+WHERE timestamp_us BETWEEN 1700000000 AND 1700000060
+  AND src_ip = '192.168.1.100'
+```
+
+### 2. **Random Access** (Jump to Packet)
+```python
+# "Show me packet #42,567"
+pcap_ref = index_db.get_ref(packet_id=42567)  # Returns "0:123456:123472"
+# Jump directly to byte 123456 in file and read packet
+```
+
+### 3. **Statistics** (Counting)

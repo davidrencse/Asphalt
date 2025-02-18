@@ -96,3 +96,28 @@ these to avoid confusion.
 - asphalt.py / asphalt_cli.py / asphalt_launcher.py: CLI wrappers with varying behavior.
 - ui_server.py: HTTP server that serves ui/ and exposes /capture endpoint.
 - ui_app.py: Tkinter app that runs capture-decode + analysis locally.
+
+## CLI Commands (src/asphalt_cli)
+- capture: live capture stats and session summary (dummy or scapy backend).
+- decode: decode PCAP/PCAPNG and print in table or JSON/JSONL.
+- capture-decode: live capture + decode pipeline with table or JSON output.
+- analyze: offline analysis over decoded packets with configurable analyzers.
+
+## Analysis Engine and Analyzers
+Engine:
+- src/analysis/engine.py
+  - AnalysisEngine.process_packet() converts DecodedPacket -> AnalysisPacket.
+  - Flow state is tracked via src/analysis/flow.py.
+  - finalize() merges AnalyzerResult outputs into AnalysisReport.
+
+Registry:
+- src/analysis/registry.py
+  - register_analyzer decorator and create/list helpers.
+
+Built-in analyzers:
+- capture_health: capture quality and decode health summary.
+- global_stats: totals + L4 distribution + flags.
+- protocol_mix: protocol counts and percentages.
+- flow_summary: per-flow summaries from FlowState.
+- tcp_handshakes: SYN/SYN-ACK/ACK grouping and RTTs.
+- abnormal_activity: heuristics for malformed packets, RST ratio, port scans.
