@@ -73,3 +73,10 @@ Analyze a capture file offline and emit JSON:
 
 ```
 python run.py analyze capture.pcapng --output report.json
+```
+
+Select analyzers and configure time-series buckets:
+
+```
+python run.py analyze capture.pcap --analyzers global_stats,protocol_mix,tcp_handshakes,abnormal_activity,packet_chunks,time_series --bucket-ms 500
+```

@@ -107,3 +107,59 @@ Render ← Results ← Task Runner ← Unified Parser ← Analysis Modules ← F
   "index_status": "complete"
 }
 ```
+
+### Tier 2: Packet Index
+**Primary Key**: `(session_id, file_sequence, packet_offset)`
+
+**Indices**:
+- **Timestamp**: `(session_id, timestamp_ns)` → `(file_sequence, offset)`
+- **Flow 5-tuple**: `(session_id, src_ip, dst_ip, src_port, dst_port, protocol)` → `[timestamp_ranges]`
+- **Protocol**: `(session_id, protocol, port)` → `[timestamp_ranges]`
+- **Custom**: Plugin-defined indices via configuration
+
+**Paging**: Opaque tokens containing `(session_id, last_timestamp, last_offset, limit)`
+**Storage Format**: Columnar (Parquet) for time-series queries
+
+### Tier 3: Analytics DB
+**Tables Structure**:
+
+```sql
+-- Flows table
+CREATE TABLE flows (
+  flow_id UUID PRIMARY KEY,
+  session_id UUID REFERENCES sessions,
+  start_time TIMESTAMPTZ,
+  end_time TIMESTAMPTZ,
+  src_ip INET,
+  dst_ip INET,
+  src_port INTEGER,
+  dst_port INTEGER,
+  protocol INTEGER,
+  packet_count INTEGER,
+  byte_count INTEGER,
+  flags INTEGER,
+  rtt_stats JSONB
+);
+
+-- Time-series table
+CREATE TABLE timeseries (
+  session_id UUID,
+  metric_name VARCHAR(50),
+  timestamp TIMESTAMPTZ,
+  value DOUBLE PRECISION,
+  tags JSONB,
+  PRIMARY KEY (session_id, metric_name, timestamp)
+);
+
+-- Findings table  
+CREATE TABLE findings (
+  finding_id UUID PRIMARY KEY,
+  session_id UUID,
+  severity VARCHAR(10),
+  category VARCHAR(50),
+  title VARCHAR(200),
+  description TEXT,
+  evidence JSONB,
+  packet_references UUID[],
+  flow_references UUID[],
+  created_at TIMESTAMPTZ
