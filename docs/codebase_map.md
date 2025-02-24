@@ -121,3 +121,23 @@ Built-in analyzers:
 - flow_summary: per-flow summaries from FlowState.
 - tcp_handshakes: SYN/SYN-ACK/ACK grouping and RTTs.
 - abnormal_activity: heuristics for malformed packets, RST ratio, port scans.
+- packet_chunks: fixed-size packet chunk summaries.
+- time_series: time-bucketed packet/byte counts.
+
+## Packet Indexing and Session Metadata
+- src/pcap_loader/packet_index.py
+  - PacketIndexBuilder produces deterministic PacketIndexRecord entries.
+- src/pcap_loader/session_manifest.py
+  - SessionManifestBuilder computes deterministic session_id and session stats.
+
+## UI
+Static UI (ui/):
+- Minimal HTML/JS that expects /capture JSON from ui_server.py.
+
+Tkinter UI (ui_app.py):
+- Runs capture-decode, runs analysis, renders summary cards and packet table.
+
+React UI (ui-react/):
+- Prototype components and mock data, not wired to runtime.
+
+## Testing

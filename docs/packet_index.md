@@ -148,3 +148,39 @@ pcap_ref = index_db.get_ref(packet_id=42567)  # Returns "0:123456:123472"
 ```
 
 ### 3. **Statistics** (Counting)
+```python
+# "How many TCP packets to port 80?"
+count = index_db.count(
+    protocol=6,      # TCP
+    dst_port=80      # HTTP
+)
+```
+
+### 4. **Flow Reconstruction** (Future)
+```python
+# "Reconstruct this TCP conversation"
+# Find all packets with same (src_ip, dst_ip, src_port, dst_port)
+packets = index_db.get_flow_packets(
+    src_ip="192.168.1.100",
+    dst_ip="8.8.8.8", 
+    src_port=54321,
+    dst_port=80
+)
+```
+
+## For Sprint 0.2:
+
+Your `PacketIndexBuilder` has **TWO MAIN JOBS**:
+
+### Job 1: Create Deterministic Packet IDs
+```python
+# MUST: Start at 1, increment by 1
+packet1 → packet_id=1
+packet2 → packet_id=2
+packet3 → packet_id=3
+# Always same order, always same IDs
+```
+
+### Job 2: Calculate Packet Hash
+```python
+# Like a fingerprint for the packet
