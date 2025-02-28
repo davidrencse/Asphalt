@@ -163,3 +163,22 @@ CREATE TABLE findings (
   packet_references UUID[],
   flow_references UUID[],
   created_at TIMESTAMPTZ
+);
+
+-- Task outputs table
+CREATE TABLE task_outputs (
+  task_id UUID,
+  session_id UUID,
+  output_type VARCHAR(50),
+  output_data JSONB,
+  schema_version INTEGER,
+  created_at TIMESTAMPTZ,
+  PRIMARY KEY (task_id, session_id, output_type)
+);
+```
+
+## 1.6 Backpressure and Performance Model
+
+### Queue Architecture
+```
+Network → [Ring Buffer (kernel)] → [Capture Queue (100k pkts)] → Decoder
