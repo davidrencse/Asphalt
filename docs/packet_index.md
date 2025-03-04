@@ -184,3 +184,43 @@ packet3 → packet_id=3
 ### Job 2: Calculate Packet Hash
 ```python
 # Like a fingerprint for the packet
+hash = hash_function(
+    timestamp + 
+    packet_data + 
+    lengths
+)
+# Same packet → Same hash
+# Different packet → Different hash
+```
+
+### Job 3: Store Location (`pcap_ref`)
+```python
+# Where to find this packet later
+pcap_ref = f"{file_id}:{start_offset}:{data_offset}"
+# Example: "0:100:116" = file 0, packet starts at byte 100, data at byte 116
+```
+
+## What It's NOT:
+
+- ❌ **NOT a parser** (doesn't read PCAP files)
+- ❌ **NOT a storage system** (just creates index records)
+- ❌ **NOT a search engine** (just creates data for search engine)
+
+## What It IS:
+
+- ✅ **A catalog card creator**
+- ✅ **A fingerprint calculator**
+- ✅ **A location tracker**
+- ✅ **A deterministic ID generator**
+
+## Simple Test to Understand:
+
+```python
+# Imagine 3 packets in a file:
+packets = [
+    # Packet 1: HTTP request
+    RawPacket(packet_id=1, timestamp_us=1000, data=b'GET / ...', pcap_ref="0:100:116"),
+    # Packet 2: HTTP response  
+    RawPacket(packet_id=2, timestamp_us=1010, data=b'HTTP/1.1 ...', pcap_ref="0:200:216"),
+    # Packet 3: DNS query
+    RawPacket(packet_id=3, timestamp_us=1020, data=b'\x00\x01...', pcap_ref="0:300:316"),
