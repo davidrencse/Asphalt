@@ -182,3 +182,28 @@ CREATE TABLE task_outputs (
 ### Queue Architecture
 ```
 Network → [Ring Buffer (kernel)] → [Capture Queue (100k pkts)] → Decoder
+Decoder → [Flow Queue (50k pkts)] → Flow Tracker
+Flow Tracker → [Analysis Queue (25k items)] → Task Runner
+```
+
+### Drop Policies (Configurable)
+1. **Drop-Oldest**: Default for capture queue (preserve newest traffic)
+2. **Drop-Newest**: For analysis queue (preserve temporal sequence)
+3. **Sampling**: Configurable rate (1:N) when sustained overload
+4. **Intelligent Drop**: Protocol-aware (preserve TCP handshakes, drop duplicates)
+
+### Observable Metrics
+**Per-Queue Metrics**:
+- `asphalt_queue_depth{component="capture"}`: Current items in queue
+- `asphalt_queue_drops_total{component="capture",policy="drop_oldest"}`: Total dropped items
+- `asphalt_queue_latency_seconds{quantile="0.95"}`: 95th percentile processing latency
+
+**System Metrics**:
+- `asphalt_packets_processed_total`: Total packets processed
+- `asphalt_decode_errors_total`: Protocol decoding errors
+- `asphalt_storage_write_latency_seconds`: Storage write performance
+- `asphalt_memory_usage_bytes`: Component memory consumption
+
+### Budget Targets (Placeholders)
+| Resource | Target | Measurement Method |
+|----------|--------|-------------------|
