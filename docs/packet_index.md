@@ -224,3 +224,32 @@ packets = [
     RawPacket(packet_id=2, timestamp_us=1010, data=b'HTTP/1.1 ...', pcap_ref="0:200:216"),
     # Packet 3: DNS query
     RawPacket(packet_id=3, timestamp_us=1020, data=b'\x00\x01...', pcap_ref="0:300:316"),
+]
+
+# PacketIndexBuilder creates index cards:
+index_cards = []
+for packet in packets:
+    card = PacketIndexBuilder.create_index_record(packet)
+    index_cards.append(card)
+
+# Now you have:
+# [
+#   {"packet_id": 1, "timestamp_us": 1000, "pcap_ref": "0:100:116", "hash": "abc123..."},
+#   {"packet_id": 2, "timestamp_us": 1010, "pcap_ref": "0:200:216", "hash": "def456..."},
+#   {"packet_id": 3, "timestamp_us": 1020, "pcap_ref": "0:300:316", "hash": "ghi789..."},
+# ]
+
+# Later, to find "packets around time 1005":
+result = [card for card in index_cards if 995 <= card.timestamp_us <= 1015]
+# Returns cards 1 and 2 instantly, without reading the file!
+```
+
+## Bottom Line:
+
+**PacketIndex is the "table of contents" for your PCAP file.** It tells you:
+- What's in the file
+- Where to find it
+- When it happened
+- How to identify it uniquely
+
+Without it, every search means reading the ENTIRE file. With it, you jump straight to what you need.

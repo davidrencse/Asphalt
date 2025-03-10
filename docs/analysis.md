@@ -80,3 +80,17 @@ Select analyzers and configure time-series buckets:
 ```
 python run.py analyze capture.pcap --analyzers global_stats,protocol_mix,tcp_handshakes,abnormal_activity,packet_chunks,time_series --bucket-ms 500
 ```
+
+## Built-in Analyzers
+
+- global_stats: bytes, duration, IP/L4 distribution.
+- capture_health: capture quality, decode health, filtering/sampling summary.
+- protocol_mix: TCP/UDP/ICMP/ICMP6/other counts + percentages.
+- flow_summary: per-flow aggregates (counts, bytes, duration).
+- tcp_handshakes: groups SYN/SYN-ACK/ACK into handshakes.
+- abnormal_activity: heuristics (malformed, high RST ratio, port scan suspicion, incomplete handshakes).
+- packet_chunks: count-based chunk summaries.
+- time_series: time-bucketed traffic summaries.
+- throughput_peaks: bps/pps now, average, and per-bucket peak values.
+- packet_size_stats: captured/original length stats, histogram buckets, fragmentation counts.
+- l2_l3_breakdown: Ethernet/VLAN/ARP/ICMP counts, multicast/broadcast totals.

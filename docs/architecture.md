@@ -207,3 +207,35 @@ Flow Tracker → [Analysis Queue (25k items)] → Task Runner
 ### Budget Targets (Placeholders)
 | Resource | Target | Measurement Method |
 |----------|--------|-------------------|
+| CPU | ≤70% per core under 1Gbps | `cpu_usage_seconds_total` |
+| RAM | ≤2GB baseline + 1GB per 10k active flows | `process_resident_memory_bytes` |
+| Disk Write | Sustained 200MB/s, burst 500MB/s | `disk_write_bytes_second` |
+| Packet Loss | <0.1% at 10Gbps line rate | `packets_dropped_total / packets_received_total` |
+| UI Latency | <100ms for indexed queries | API response time histograms |
+
+## 1.7 Privilege Model and Threat Boundaries
+
+### Privilege Separation Architecture
+```
+┌────────────────────┐    UNIX Domain Socket    ┌────────────────────┐
+│  Elevated Capture  │◄────────────────────────►│  Unprivileged Main │
+│      Service       │   (authenticated IPC)    │     Process        │
+│  (root/cap_net_raw)│                          │   (user context)   │
+└────────────────────┘                          └────────────────────┘
+         │                                              │
+         ▼                                              ▼
+   Raw Socket Access                           All other components
+   BPF Injection                                (Decoder, Analytics,
+   PCAPNG Writing                                 UI, Storage, API)
+```
+
+### IPC Mechanism
+- **Primary**: gRPC over UNIX domain sockets with mutual TLS authentication
+- **Fallback**: Named pipes with kernel-level access control
+- **Authentication**: Mutual certificate-based with short-lived tokens
+- **Authorization**: Component-level capability model
+
+### Threat Model
+
+| Threat Actor | Capabilities | Mitigations |
+|--------------|-------------|-------------|
