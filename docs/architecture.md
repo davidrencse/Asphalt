@@ -239,3 +239,45 @@ Flow Tracker → [Analysis Queue (25k items)] → Task Runner
 
 | Threat Actor | Capabilities | Mitigations |
 |--------------|-------------|-------------|
+| **Local Attacker** | Execute code on host, sniff local traffic | IPC authentication, capability limiting, process isolation, no shell access from capture service |
+| **Untrusted PCAP Input** | Malformed files, crafted packets, resource exhaustion | Input validation, parser sandboxing, resource quotas, timeouts, isolated processing context |
+| **Malformed Packets** | Protocol violations, buffer overflow attempts | Defensive decoding, bounds checking, protocol anomaly detection, fuzz-tested parsers |
+| **API Attacker** | Unauthenticated requests, injection attempts | Authentication middleware, input sanitization, rate limiting, SQL injection protection |
+| **Privilege Escalation** | Attempt to gain capture service privileges | Minimal capability set, no external network access, seccomp filters, regular privilege drops |
+
+### Security Boundaries
+1. **Capture Boundary**: Only the capture service runs elevated; communicates via authenticated IPC
+2. **Parser Boundary**: All packet parsing occurs in unprivileged processes with resource limits
+3. **Storage Boundary**: Write-only access for capture service; read/write for main process
+4. **API Boundary**: All external inputs validated and sanitized before processing
+
+---
+
+## Contract Enforcement & Change Management
+
+### Change Identification Protocol
+For any future change, reviewers must identify:
+
+1. **Module Ownership**: Which component(s) in section 1.3 are modified
+2. **Schema Impact**: How storage models (1.5) or IPC contracts evolve
+3. **UI Integration**: Which API endpoints (1.4 flows) and visualizations are affected
+4. **Performance Impact**: Updates to budgets (1.6) or queue sizing
+5. **Security Review**: Threat model implications (1.7)
+
+### Acceptance Criteria
+- [ ] All components have single responsibility per 1.3 table
+- [ ] All data flows match sequence diagrams in 1.4
+- [ ] Storage schema supports required queries without monolith coupling
+- [ ] Performance targets have measurement hooks defined
+- [ ] Privilege separation is enforceable in deployment
+- [ ] Every future feature maps to exactly one component's responsibility
+
+### Review Gate Definition
+**Sprint Completion**: When a reviewer can point to any proposed change and immediately identify:
+- The owning component from 1.3
+- Required schema changes from 1.5
+- API/UI integration points from 1.4
+- Performance budget implications from 1.6
+- Security boundary considerations from 1.7
+
+This ensures implementation cannot drift into an untestable monolith, as all component boundaries and contracts are explicitly defined and enforceable.

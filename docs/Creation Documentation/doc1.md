@@ -95,3 +95,4 @@ Packet Header (16 bytes):
 ts_sec: Seconds since 1970-01-01 (Unix timestamp)
 ts_frac: Fraction of second (microseconds OR nanoseconds)
 caplen: Bytes actually captured (may be less than wirelen due to snaplen)
+wirelen: Original packet size on the wire

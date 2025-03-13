@@ -141,3 +141,18 @@ React UI (ui-react/):
 - Prototype components and mock data, not wired to runtime.
 
 ## Testing
+- testing/: unit tests for decoder, analysis, PCAP loaders, and CLI pipeline.
+- dhcp.pcapng: sample capture used by tests.
+
+## Known Gaps / Implementation Notes
+- Some modules include TODOs or placeholders (for example, hash/utils and parts
+  of pcapng parsing like Simple Packet Blocks).
+- There are multiple CLI entry points; run.py is the cleanest for consistent imports.
+- SessionManifest exists in two locations; unify or document the intended usage.
+
+## Suggested Onboarding Path
+1. Read docs/architecture.md and docs/analysis.md for conceptual flow.
+2. Start with src/models/packet.py and src/capture/packet_decoder.py.
+3. Walk through src/analysis/engine.py and src/analysis/analyzers/*.
+4. Review src/pcap_loader/* for file ingestion and indexing.
+5. Run run.py decode/analyze on a sample PCAP to see outputs.
