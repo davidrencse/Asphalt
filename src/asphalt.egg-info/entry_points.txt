@@ -1,0 +1,2 @@
+[console_scripts]
+asphalt = asphalt_cli.main:cli
