@@ -17,6 +17,7 @@ import os
 from .packet_source import IPacketSource
 from .exceptions import PcapFormatError, PcapEOFError
 from ..models.packet import RawPacket
+from .packet_index import PacketIndexRecord, PacketIndexBuilder
 
 class PcapReader(IPacketSource):
     """
@@ -65,7 +66,7 @@ class PcapReader(IPacketSource):
         self._packet_count = 0 
 
         # 7. _time_range: None (track (start_us, end_us))
-        self._time.range = None
+        self._time_range = None
 
         # 8. _file_size: 0 (set in open())
         self._file_size = 0
@@ -111,92 +112,202 @@ class PcapReader(IPacketSource):
 
     
     def _read_global_header(self):
-        """
-        Read and validate PCAP global header (24 bytes).
         
-        TODO:
-        1. Read first 24 bytes from file_handle
-        2. Check length >= 24 bytes
-        3. Read magic number (first 4 bytes) to determine:
-           - byte_order ('>' or '<')
-           - is_nanosecond (True for nanosecond formats)
-        4. Parse rest of header to get link_type
-        5. Validate magic number is one of the 4 valid values
+        # Read and validate PCAP global header (24 bytes).
         
-        Sets:
-            self.byte_order: '>' or '<'
-            self.is_nanosecond: True for nanosecond timestamps
-            self.link_type: DLT_* constant
-            
-        Raises:
-            PcapFormatError: If header is invalid
-        """
-        # TODO: Your code here
+        # TODO:
+        # 1. Read first 24 bytes from file_handle
+        self.file_handle.seek(0)
+        header_data = self.file_handle.read(24)
+        # 2. Check length >= 24 bytes
+        if len(header_data) < 24:
+            raise PcapFormatError("File too small for PCAP header")
+        
+        # 3. Read magic number (first 4 bytes) to determine:
+        #    - byte_order ('>' or '<')
+        #    - is_nanosecond (True for nanosecond formats)
+        magic_number, = struct.unpack('>I', header_data[0:4])
 
-
-        pass
+        # 4. Parse rest of header to get link_type
+        if magic_number == self.MAGIC_NUMBER_BIG_ENDIAN:
+            self.byte_order = '>'
+            self.is_nanosecond = False
+        elif magic_number == self.MAGIC_NUMBER_LITTLE_ENDIAN:
+            self.byte_order = '<'
+            self.is_nanosecond = False
+        elif magic_number == self.MAGIC_NUMBER_BIG_ENDIAN_NANO:
+            self.byte_order = '>'
+            self.is_nanosecond = True
+        elif magic_number == self.MAGIC_NUMBER_LITTLE_ENDIAN_NANO:
+            self.byte_order = '<'
+            self.is_nanosecond = True
+        else:
+            # Try little-endian interpretation for better error message
+            magic_le, = struct.unpack('<I', header_data[0:4])
+            raise PcapFormatError(
+                f"Invalid PCAP magic number: 0x{magic_number:08x} (big) / "
+                f"0x{magic_le:08x} (little). Expected one of the valid magic numbers."
+            )
+        # Step 5: Parse rest of header (bytes 4-24)
+        # Format string: 'HHIIII' means:
+        # H = unsigned short (2 bytes) - version_major
+        # H = unsigned short (2 bytes) - version_minor  
+        # I = unsigned int (4 bytes) - timezone offset (ignore)
+        # I = unsigned int (4 bytes) - timestamp accuracy (ignore)
+        # I = unsigned int (4 bytes) - snaplen (max packet size)
+        # I = unsigned int (4 bytes) - link_type
+        fmt = self.byte_order + 'HHIIII'
+        version_major, version_minor, _, _, snaplen, self.link_type = \
+            struct.unpack(fmt, header_data[4:24])
+        
     
     def __iter__(self) -> Iterator[RawPacket]:
         """
         Read packets from file and yield them.
-        
-        Implementation of abstract method from IPacketSource.
-        
-        TODO:
-        1. Check self.mmap exists (raise error if not opened)
-        2. Start at offset = 24 (after global header)
-        3. packet_id = 1 (MUST start at 1!)
-        4. While there's enough bytes for a packet header (16 bytes):
-           a. Read packet header (16 bytes from mmap[offset:offset+16])
-           b. Parse header with struct.unpack(self.byte_order + 'IIII')
-           c. Calculate timestamp_us (convert seconds + microseconds/nanoseconds)
-           d. Validate packet data fits in file
-           e. Get packet data slice from mmap
-           f. Create pcap_ref = f"0:{packet_start}:{data_start}"
-           g. Create RawPacket with all fields
-           h. Yield the RawPacket
-           i. Update packet_id, _packet_count, _time_range
-           j. Move offset to next packet (add caplen + padding)
-        
-        Raises:
-            RuntimeError: If file not opened
-            PcapFormatError: If packet header corrupt
-            PcapEOFError: If file ends unexpectedly
         """
-        # TODO: Your code here
-        pass
+        # 1. Check self.mmap exists (raise error if not opened)
+        if self.mmap is None:
+            raise RuntimeError("PCAP file not opened. Call open() or use 'with' statement.")
+        
+        # 2. Start at offset = 24 (after global header)
+        offset = 24  # Use local variable, not self._current_offset for iteration
+        
+        # 3. packet_id = 1 (MUST start at 1!)
+        packet_id = 1
+        
+        # 4. While there's enough bytes for a packet header (16 bytes):
+        while offset + 16 <= len(self.mmap):
+            
+            # a. Store packet start for pcap_ref
+            packet_start = offset
+            
+            # b. Read packet header (16 bytes from mmap[offset:offset+16])
+            header = self.mmap[offset:offset + 16]
+            if len(header) < 16:
+                # Truncated header - end of file
+                break
+            
+            # c. Parse header with struct.unpack(self.byte_order + 'IIII')
+            # Format: 'IIII' = 4 unsigned integers:
+            #   ts_sec: timestamp seconds
+            #   ts_frac: timestamp fraction (micro/nanoseconds)
+            #   caplen: captured length (bytes actually saved)
+            #   wirelen: wire length (original packet size)
+            fmt = self.byte_order + 'IIII'
+            ts_sec, ts_frac, caplen, wirelen = struct.unpack(fmt, header)
+            
+            # d. Calculate timestamp_us (convert seconds + microseconds/nanoseconds)
+            if self.is_nanosecond:
+                # ts_frac is nanoseconds, convert to microseconds
+                timestamp_us = ts_sec * 1_000_000 + ts_frac // 1000
+            else:
+                # ts_frac is already microseconds
+                timestamp_us = ts_sec * 1_000_000 + ts_frac
+            
+            # Move to data start (after 16-byte header)
+            offset += 16
+            data_start = offset
+            
+            # e. Validate packet data fits in file
+            if offset + caplen > len(self.mmap):
+                raise PcapEOFError(
+                    f"Packet {packet_id} truncated: "
+                    f"expected {caplen} bytes at offset {offset}, "
+                    f"but file only has {len(self.mmap)} bytes"
+                )
+            
+            # f. Get packet data slice from mmap
+            packet_data = self.mmap[offset:offset + caplen]
+            
+            # g. Create pcap_ref = f"0:{packet_start}:{data_start}"
+            pcap_ref = f"0:{packet_start}:{data_start}"
+            
+            # h. Create RawPacket with all fields
+            packet = RawPacket(
+                packet_id=packet_id,
+                timestamp_us=timestamp_us,
+                captured_length=caplen,
+                original_length=wirelen,
+                link_type=self.link_type,
+                data=bytes(packet_data),  # Convert to bytes for safety
+                pcap_ref=pcap_ref
+            )
+            
+            # i. Yield the RawPacket
+            yield packet
+            
+            # j. Update tracking variables
+            packet_id += 1
+            self._packet_count += 1
+            
+            # Update time range (track earliest and latest timestamps)
+            if self._time_range is None:
+                self._time_range = (timestamp_us, timestamp_us)
+            else:
+                start, end = self._time_range
+                if timestamp_us < start:
+                    start = timestamp_us
+                if timestamp_us > end:
+                    end = timestamp_us
+                self._time_range = (start, end)
+            
+            # k. Move offset to next packet (add caplen + padding)
+            offset += caplen
+            
+            # PCAP files pad packet data to 32-bit (4-byte) boundaries
+            if caplen % 4 != 0:
+                padding = 4 - (caplen % 4)
+                offset += padding
+            
+            # Update current offset (optional, for debugging)
+            self._current_offset = offset
+        
+        # When loop ends, we've read all packets
+        
     
     def close(self):
         """
         Close the packet source and release resources.
-        
-        Implementation of abstract method from IPacketSource.
-        
-        TODO:
-        1. If self.mmap exists: self.mmap.close()
-        2. If self.file_handle exists: self.file_handle.close()
-        3. Set self.mmap = None, self.file_handle = None
-        4. Reset tracking variables isf needed
+        Safe to call multiple times.
         """
-        # TODO: Your code here
-        pass
+        # Close memory map
+        if self.mmap is not None:
+            try:
+                self.mmap.close()
+            except:
+                pass  # Already closed or error
+            self.mmap = None
+        
+        # Close file handle
+        if self.file_handle is not None:
+            try:
+                self.file_handle.close()
+            except:
+                pass  # Already closed or error
+            self.file_handle = None
+        
+        # Reset state
+        self._packet_count = 0
+        self._time_range = None
+        self._current_offset = 0
     
     def get_index_record(self, packet: RawPacket, packet_id: int) -> PacketIndexRecord:
         """
         Create index record for a packet.
         
         Implementation of abstract method from IPacketSource.
-        
-        TODO:
-        1. Import PacketIndexRecord and PacketIndexBuilder at top of file
-        2. Create PacketIndexBuilder instance (need session_id - use placeholder)
-        3. Call builder.create_index_record(packet, packet_id)
-        4. Return the result
-        
-        Note: We'll fix session_id later when we have SessionManifest
         """
-        # TODO: Your code here
-        pass
+        
+        # Create PacketIndexBuilder instance
+        # Need a session_id, but don't have it yet (will come from SessionManifest)
+        # For now, use a placeholder like "unknown_session"
+        builder = PacketIndexBuilder(session_id="unknown_session")
+        
+        # Call builder.create_index_record(packet)
+        index_record = builder.create_index_record(packet)
+        
+        # Return the result
+        return index_record
     
     def get_session_info(self) -> Dict[str, Any]:
         """
@@ -217,5 +328,14 @@ class PcapReader(IPacketSource):
             'link_type': self.link_type,
         }
         """
-        # TODO: Your code here
-        pass
+
+        return {
+            'packet_count': self._packet_count,
+            'time_range': self._time_range if self._time_range is not None else (0, 0),
+            'link_types': [self.link_type],  # List of link types found
+            'file_size': self._file_size,
+            'format': 'pcap',
+            'byte_order': self.byte_order,
+            'is_nanosecond': self.is_nanosecond,
+            'link_type': self.link_type,
+        }

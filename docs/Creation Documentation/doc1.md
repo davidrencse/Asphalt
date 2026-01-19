@@ -81,3 +81,18 @@ SessionManifest (metadata: file hash, time range, packet count)
 3. **Memory Mapping**: `mmap` for zero-copy file access (critical for large PCAPs)
 4. **Type Hints**: `-> Iterator[RawPacket]` helps catch errors early
 5. **Property Decorators**: `@property` for computed attributes
+
+
+# Notes
+Packet Header Structure
+text
+
+Packet Header (16 bytes):
+┌─────────────────┬─────────────────┬─────────────────┬─────────────────┐
+│ ts_sec (4 bytes)│ ts_frac (4 bytes)│ caplen (4 bytes)│ wirelen (4 bytes)│
+└─────────────────┴─────────────────┴─────────────────┴─────────────────┘
+
+ts_sec: Seconds since 1970-01-01 (Unix timestamp)
+ts_frac: Fraction of second (microseconds OR nanoseconds)
+caplen: Bytes actually captured (may be less than wirelen due to snaplen)
+wirelen: Original packet size on the wire
