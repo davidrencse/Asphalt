@@ -1,0 +1,1 @@
+# Sess manifest handling
