@@ -48,13 +48,42 @@ def capture(interface: str, duration: Optional[int], filter: Optional[str], back
         sys.exit(1)
     
     # List interfaces if requested
+    # In the capture command, modify interface listing:
     if interface == 'list':
         click.echo("Available interfaces:")
         interfaces = capture_backend.list_interfaces()
-        for iface in interfaces:
-            status = "UP" if iface.get('is_up', True) else "DOWN"
-            desc = iface.get('description', '')
-            click.echo(f"  {iface['name']:20} {status:5} {desc}")
+        
+        # Group by type
+        dummy_ifaces = [i for i in interfaces if i['name'].startswith('dummy')]
+        real_ifaces = [i for i in interfaces if not i['name'].startswith('dummy')]
+        
+        if dummy_ifaces:
+            click.echo("\n=== Dummy Interfaces (for testing) ===")
+            for iface in dummy_ifaces:
+                click.echo(f"  {iface['name']:20} {iface.get('description', '')}")
+        
+        if real_ifaces:
+            click.echo("\n=== Real Network Interfaces ===")
+            for iface in real_ifaces:
+                display_name = iface.get('display_name', iface['name'])
+                desc = iface.get('description', '')
+                
+                # Truncate long GUIDs for display
+                if len(display_name) > 30 and 'NPF_' in display_name:
+                    display_name = desc if desc and desc != iface['name'] else f"...{display_name[-20:]}"
+                
+                status = "✓" if iface.get('is_up', True) else "✗"
+                
+                click.echo(f"  {status} {display_name:30}")
+                if iface.get('ips'):
+                    click.echo(f"      IPs: {', '.join(iface['ips'])}")
+                click.echo(f"      Use: asphalt capture --interface \"{iface['name']}\"")
+        
+        if not real_ifaces:
+            click.echo("\nNo real interfaces found.")
+            click.echo("Note: Interface names are GUIDs like \\Device\\NPF_{...}")
+            click.echo("      Use the exact name shown above for capture.")
+        
         return
     
     # Create config
