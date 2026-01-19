@@ -1,22 +1,8 @@
 Metadata-Version: 2.4
 Name: asphalt
 Version: 0.1.0
-Summary: Wireshark-grade packet capture and analysis
-Author: Your Name
-Classifier: Development Status :: 3 - Alpha
-Classifier: Intended Audience :: Cybersecurity Professionals
-Classifier: License :: OSI Approved :: MIT License
-Classifier: Programming Language :: Python :: 3
-Classifier: Programming Language :: Python :: 3.8
-Classifier: Programming Language :: Python :: 3.9
-Classifier: Programming Language :: Python :: 3.10
-Classifier: Topic :: Security
-Classifier: Topic :: System :: Networking :: Monitoring
 Requires-Python: >=3.8
 Requires-Dist: click>=8.0.0
 Requires-Dist: scapy>=2.5.0
-Dynamic: author
-Dynamic: classifier
 Dynamic: requires-dist
 Dynamic: requires-python
-Dynamic: summary

@@ -1,2 +1,2 @@
 [console_scripts]
-asphalt = cli.main:cli
+asphalt = asphalt_cli.main:cli

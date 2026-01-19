@@ -10,7 +10,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 src_path = os.path.join(current_dir, 'src')
 sys.path.insert(0, src_path)
 
-from cli.main import cli
+from asphalt_cli.main import cli
 
 if __name__ == "__main__":
     cli()

@@ -11,7 +11,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "asphalt=cli.main:cli",
+            "asphalt=asphalt_cli.main:cli",
         ],
     },
     # Add this to include non-Python files

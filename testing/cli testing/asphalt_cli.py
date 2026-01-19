@@ -16,7 +16,7 @@ import click
 
 # Import capture command directly
 try:
-    from cli.capture import capture
+    from asphalt_cli.capture import capture
 except ImportError as e:
     click.echo(f"Error importing CLI: {e}", err=True)
     sys.exit(1)

@@ -15,7 +15,7 @@ if src_path not in sys.path:
 
 # Now imports will work
 try:
-    from cli.main import cli
+    from asphalt_cli.main import cli
 except ImportError as e:
     print(f"Error: {e}")
     print(f"Python path: {sys.path}")

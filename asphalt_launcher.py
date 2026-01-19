@@ -11,7 +11,7 @@ src_path = os.path.join(current_dir, 'src')
 sys.path.insert(0, src_path)
 
 # Import and run
-from cli.capture import capture
+from asphalt_cli.capture import capture
 
 if __name__ == "__main__":
     # Handle --help globally

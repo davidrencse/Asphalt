@@ -18,7 +18,7 @@ def cli():
     pass
 
 # Import and add commands
-from cli.capture import capture
+from asphalt_cli.capture import capture
 cli.add_command(capture)
 
 if __name__ == "__main__":
