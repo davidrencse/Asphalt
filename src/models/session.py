@@ -42,9 +42,6 @@ class SessionManifest:
     source_hash: str  # SHA256 of source file
     """Hash of original data source for integrity verification."""
     
-    original_path: Optional[str] = None
-    """Original file path (optional for privacy/portability)."""
-    
     
     # ========== TEMPORAL SCOPE ==========
     time_start_us: int  # First packet timestamp
@@ -77,6 +74,11 @@ class SessionManifest:
     
     manifest_schema_version: str = "0.2.0"
     """Version of this manifest schema."""
+    
+    
+    # ========== OPTIONAL FIELDS ==========
+    original_path: Optional[str] = None
+    """Original file path (optional for privacy/portability)."""
     
     
     # ========== CAPTURE METADATA ==========

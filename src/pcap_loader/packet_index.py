@@ -7,8 +7,12 @@ No randomness, no system-specific values.
 
 import hashlib
 from typing import Optional
-from ..models.packet import RawPacket
-from ..models.index_record import PacketIndexRecord
+try:
+    from ..models.packet import RawPacket, DecodedPacket
+    from ..models.index_record import PacketIndexRecord
+except ImportError:
+    from models.packet import RawPacket, DecodedPacket
+    from models.index_record import PacketIndexRecord
 
 class PacketIndexBuilder:
     """
@@ -38,7 +42,8 @@ class PacketIndexBuilder:
         self.schema_version = schema_version
         self._packet_counter = 0
         
-    def create_index_record(self, packet: RawPacket, 
+    def create_index_record(self, packet: RawPacket,
+                           decoded: Optional[DecodedPacket] = None,
                            stack_summary: Optional[str] = None) -> PacketIndexRecord:
         """
         Create index record for a packet.
@@ -69,8 +74,29 @@ class PacketIndexBuilder:
         hash_value = self._calculate_packet_hash(packet)
 
         # TODO: Step 4 - If stack_summary is None, set to "raw"
-        if (stack_summary == None):
-            stack_summary = "raw"
+        if stack_summary is None:
+            if decoded is not None:
+                stack_summary = decoded.stack_summary
+            else:
+                stack_summary = "raw"
+
+        # Prepare decoded fields (if available)
+        if decoded is not None:
+            src_ip = decoded.src_ip if decoded.src_ip else "0.0.0.0"
+            dst_ip = decoded.dst_ip if decoded.dst_ip else "0.0.0.0"
+            src_port = decoded.src_port if decoded.src_port is not None else 0
+            dst_port = decoded.dst_port if decoded.dst_port is not None else 0
+            protocol = decoded.ip_protocol if decoded.ip_protocol else 0
+            flags = decoded.tcp_flags if decoded.tcp_flags is not None else None
+            ttl = decoded.ttl if decoded.ttl is not None else None
+        else:
+            src_ip = "0.0.0.0"
+            dst_ip = "0.0.0.0"
+            src_port = 0
+            dst_port = 0
+            protocol = 0
+            flags = None
+            ttl = None
 
         # TODO: Step 5 - Create and return PacketIndexRecord with all fields
         return PacketIndexRecord(
@@ -81,13 +107,15 @@ class PacketIndexBuilder:
             original_length=packet.original_length,
             pcap_ref=packet.pcap_ref,
             packet_hash=hash_value,
-            src_ip="0.0.0.0",  # Placeholder for Sprint 0.2
-            dst_ip="0.0.0.0",  # Placeholder for Sprint 0.2
-            src_port=0,  # Placeholder for Sprint 0.2
-            dst_port=0,  # Placeholder for Sprint 0.2
-            protocol=0,  # Placeholder for Sprint 0.2
+            src_ip=src_ip,
+            dst_ip=dst_ip,
+            src_port=src_port,
+            dst_port=dst_port,
+            protocol=protocol,
             stack_summary=stack_summary,
-            schema_version=self.schema_version
+            schema_version=self.schema_version,
+            flags=flags,
+            ttl=ttl,
         )
         # Remember: src_ip, dst_ip, etc. are placeholders ("0.0.0.0", 0)
     

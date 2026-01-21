@@ -3,6 +3,8 @@ Asphalt CLI - main entry point.
 """
 import click
 from .capture import capture
+from .decode import decode
+from .capture_decode import capture_decode
 
 @click.group()
 def cli():
@@ -10,6 +12,8 @@ def cli():
     pass
 
 cli.add_command(capture)
+cli.add_command(decode)
+cli.add_command(capture_decode)
 
 if __name__ == "__main__":
     cli()

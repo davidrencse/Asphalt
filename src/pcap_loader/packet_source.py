@@ -13,8 +13,12 @@ All packet source classes (PcapReader, PcapngReader, etc.) must:
 
 from abc import ABC, abstractmethod
 from typing import Iterator, Optional, Dict, Any
-from ..models.packet import RawPacket
-from ..models.index_record import PacketIndexRecord
+try:
+    from ..models.packet import RawPacket
+    from ..models.index_record import PacketIndexRecord
+except ImportError:
+    from models.packet import RawPacket
+    from models.index_record import PacketIndexRecord
 
 class IPacketSource(ABC):
     """

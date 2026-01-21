@@ -55,6 +55,13 @@ class ScapyBackend(ICaptureBackend):
                 win_ifaces = []
                 guid_to_wininfo = {}
             
+            # If Scapy returns no NPF interfaces, fall back to Windows list
+            if not iface_guids and win_ifaces:
+                for win_iface in win_ifaces:
+                    guid = win_iface.get('guid', '')
+                    if guid:
+                        iface_guids.append(rf"\\Device\\NPF_{guid}")
+
             for iface_guid in iface_guids:
                 try:
                     # Extract GUID from NpCap device name
@@ -130,9 +137,12 @@ class ScapyBackend(ICaptureBackend):
             
             # Resolve interface name - handle both GUID and human-readable names
             actual_iface_name = config.interface
+            # Normalize double-backslash inputs (PowerShell often passes them literally)
+            if actual_iface_name.startswith('\\\\'):
+                actual_iface_name = actual_iface_name.replace('\\\\', '\\')
             
             # Check if it's already a GUID (starts with \Device\NPF_)
-            if not config.interface.startswith(r'\Device\NPF_'):
+            if not actual_iface_name.startswith(r'\Device\NPF_'):
                 # Try to find matching interface by human-readable name
                 all_interfaces = self.list_interfaces()
                 found_match = False
@@ -160,6 +170,20 @@ class ScapyBackend(ICaptureBackend):
                             desc = iface.get('description', iface['name'])
                             print(f"  '{iface['name']}' - {desc}")
             
+            # Ensure scapy uses Npcap/pcap backend on Windows
+            try:
+                conf.use_pcap = True
+            except Exception:
+                pass
+            try:
+                conf.sniff_promisc = config.promisc
+            except Exception:
+                pass
+            try:
+                conf.iface = actual_iface_name
+            except Exception:
+                pass
+
             # Create packet queue
             packet_queue = queue.Queue(maxsize=config.buffer_size)
             stop_event = threading.Event()
@@ -374,8 +398,7 @@ class ScapyBackend(ICaptureBackend):
             
             session = self._sessions[session_id]
             packets = []
-            
-            for _ in range(min(count, session['queue'].qsize())):
+            for _ in range(count):
                 try:
                     packets.append(session['queue'].get_nowait())
                 except queue.Empty:

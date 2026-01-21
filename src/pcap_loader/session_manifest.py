@@ -93,18 +93,6 @@ class SessionManifest:
     - Deterministic session_id generation
     """
     
-    original_path: Optional[str] = None
-    """
-    Original file path (optional for privacy/portability).
-    
-    Example: "/data/captures/network.pcap"
-    
-    Can be None if:
-    - File was moved/deleted
-    - Privacy concerns (don't expose paths)
-    - Uploaded content (no local path)
-    """
-    
     # ==================== TEMPORAL SCOPE ====================
     time_start_us: int
     """
@@ -225,6 +213,19 @@ class SessionManifest:
     Important for understanding truncation:
     - captured_length <= snaplen
     - captured_length <= original_length
+    """
+
+    # ==================== OPTIONAL FIELDS ====================
+    original_path: Optional[str] = None
+    """
+    Original file path (optional for privacy/portability).
+    
+    Example: "/data/captures/network.pcap"
+    
+    Can be None if:
+    - File was moved/deleted
+    - Privacy concerns (don't expose paths)
+    - Uploaded content (no local path)
     """
     
     # ==================== SERIALIZATION ====================

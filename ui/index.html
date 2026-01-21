@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Asphalt Live Decode UI</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="hero">
+        <div class="title-block">
+          <div class="eyebrow">ASPHALT � LIVE PIPELINE</div>
+          <h1>Live Decode Console</h1>
+          <p>Launches local capture ? decode ? UI. Runs entirely on your machine.</p>
+        </div>
+        <div class="pulse" aria-hidden="true"></div>
+      </header>
+
+      <section class="controls">
+        <div class="control-card">
+          <label class="label">Capture settings</label>
+          <div class="row">
+            <select id="backendSelect">
+              <option value="dummy">dummy</option>
+              <option value="scapy">scapy</option>
+            </select>
+            <input id="interfaceInput" type="text" value="dummy0" />
+          </div>
+          <div class="row">
+            <input id="durationInput" type="number" min="1" value="3" />
+            <input id="limitInput" type="number" min="1" value="50" />
+            <button id="startBtn">Start</button>
+          </div>
+          <div class="hint">Scapy requires Npcap + Admin. Dummy is safe.</div>
+        </div>
+        <div class="control-card">
+          <label class="label">Status</label>
+          <div class="status-block" id="status">Idle</div>
+          <div class="hint">Server endpoint: /capture (full pipeline)</div>
+        </div>
+        <div class="control-card">
+          <label class="label">Quick filter</label>
+          <input id="filterInput" type="text" placeholder="ip, protocol, stack, port..." />
+          <div class="hint">Filters the visible rows only</div>
+        </div>
+      </section>
+
+      <section class="stats" id="stats">
+        <div class="stat">
+          <div class="stat-label">Packets</div>
+          <div class="stat-value" id="statPackets">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">IPv4 / IPv6</div>
+          <div class="stat-value" id="statIp">0 / 0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">TCP / UDP</div>
+          <div class="stat-value" id="statL4">0 / 0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Flows</div>
+          <div class="stat-value" id="statFlows">0</div>
+        </div>
+      </section>
+
+      <section class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Time (us)</th>
+              <th>Stack</th>
+              <th>Src</th>
+              <th>Dst</th>
+              <th>Ports</th>
+              <th>L4</th>
+              <th>Flags</th>
+              <th>Quality</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </section>
+
+      <footer class="footer">
+        <div>Asphalt UI � Live capture pipeline</div>
+        <div class="status" id="footerStatus">Waiting for capture�</div>
+      </footer>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -2,13 +2,13 @@
 Packet capture data models.
 """
 
-from .packet import RawPacket
+from .packet import RawPacket, DecodedPacket
 from .index_record import PacketIndexRecord
-from .session import SessionManifest, CaptureConfig
+from .session import SessionManifest
 
 __all__ = [
     'RawPacket',
+    'DecodedPacket',
     'PacketIndexRecord', 
     'SessionManifest',
-    'CaptureConfig',
 ]

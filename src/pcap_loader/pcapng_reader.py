@@ -22,7 +22,10 @@ from typing import BinaryIO, Iterator, Dict, Any, Optional, List, Tuple
 import os
 from .packet_source import IPacketSource
 from .exceptions import PcapngFormatError, PcapEOFError
-from ..models.packet import RawPacket
+try:
+    from ..models.packet import RawPacket
+except ImportError:
+    from models.packet import RawPacket
 from .packet_index import PacketIndexRecord, PacketIndexBuilder
 
 class PcapngReader(IPacketSource):

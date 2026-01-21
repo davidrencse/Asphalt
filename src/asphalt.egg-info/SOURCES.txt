@@ -7,11 +7,15 @@ src/asphalt.egg-info/requires.txt
 src/asphalt.egg-info/top_level.txt
 src/asphalt_cli/__init__.py
 src/asphalt_cli/capture.py
+src/asphalt_cli/capture_decode.py
+src/asphalt_cli/decode.py
 src/asphalt_cli/main.py
 src/capture/__init__.py
+src/capture/decoder.py
 src/capture/dummy_backend.py
 src/capture/icapture_backend.py
 src/capture/live_source.py
+src/capture/packet_decoder.py
 src/capture/scapy_backend.py
 src/capture/win_utils.py
 src/models/__init__.py

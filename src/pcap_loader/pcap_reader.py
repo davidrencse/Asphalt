@@ -16,7 +16,10 @@ from typing import BinaryIO, Iterator, Tuple, Dict, Any, Optional
 import os
 from .packet_source import IPacketSource
 from .exceptions import PcapFormatError, PcapEOFError
-from ..models.packet import RawPacket
+try:
+    from ..models.packet import RawPacket
+except ImportError:
+    from models.packet import RawPacket
 from .packet_index import PacketIndexRecord, PacketIndexBuilder
 
 class PcapReader(IPacketSource):
