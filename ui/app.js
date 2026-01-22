@@ -12,6 +12,13 @@ const statPackets = document.getElementById('statPackets');
 const statIp = document.getElementById('statIp');
 const statL4 = document.getElementById('statL4');
 const statFlows = document.getElementById('statFlows');
+const protocolMixEl = document.getElementById('protocolMix');
+const abnormalSummaryEl = document.getElementById('abnormalSummary');
+const handshakeSummaryEl = document.getElementById('handshakeSummary');
+const chunkSummaryEl = document.getElementById('chunkSummary');
+const captureQualityEl = document.getElementById('captureQuality');
+const decodeHealthEl = document.getElementById('decodeHealth');
+const filteringSamplingEl = document.getElementById('filteringSampling');
 
 let allRows = [];
 
@@ -106,11 +113,12 @@ function applyFilter() {
   updateStats(filtered);
 }
 
-function loadPackets(packets) {
+function loadPackets(packets, analysis) {
   allRows = packets.map(toRow);
   render(allRows);
   updateStats(allRows);
   setStatus(`Loaded ${allRows.length} packets`);
+  renderAnalysis(analysis);
 }
 
 async function runCapture() {
@@ -124,6 +132,7 @@ async function runCapture() {
   if (iface) params.set('interface', iface);
   if (duration > 0) params.set('duration', String(duration));
   if (limit > 0) params.set('limit', String(limit));
+  params.set('analysis', '1');
 
   setStatus('Capturing...');
   try {
@@ -132,10 +141,120 @@ async function runCapture() {
       const text = await response.text();
       throw new Error(text || `HTTP ${response.status}`);
     }
-    const packets = await response.json();
-    loadPackets(packets);
+    const payload = await response.json();
+    const packets = Array.isArray(payload) ? payload : (payload.packets || []);
+    const analysis = Array.isArray(payload) ? null : (payload.analysis || null);
+    loadPackets(packets, analysis);
   } catch (err) {
     setStatus(`Capture failed: ${err.message}`);
+  }
+}
+
+function renderAnalysis(analysis) {
+  if (!analysis) {
+    protocolMixEl.textContent = '-';
+    abnormalSummaryEl.textContent = '-';
+    handshakeSummaryEl.textContent = '-';
+    chunkSummaryEl.textContent = '-';
+    captureQualityEl.textContent = '-';
+    decodeHealthEl.textContent = '-';
+    filteringSamplingEl.textContent = '-';
+    return;
+  }
+
+  const protocol = analysis.global_results?.protocol_mix;
+  if (protocol && protocol.protocol_percentages) {
+    const parts = Object.entries(protocol.protocol_percentages)
+      .map(([key, value]) => `${key}: ${value}%`)
+      .join('\n');
+    protocolMixEl.textContent = parts || '-';
+  } else {
+    protocolMixEl.textContent = '-';
+  }
+
+  const abnormal = analysis.global_results?.abnormal_activity;
+  if (abnormal) {
+    const findings = abnormal.findings || [];
+    if (findings.length === 0) {
+      abnormalSummaryEl.textContent = 'No abnormal activity detected';
+    } else {
+      const lines = findings.map((finding) => {
+        if (finding.type === 'possible_port_scan') {
+          return `possible_port_scan (${finding.sources.length} sources)`;
+        }
+        if (finding.type === 'high_tcp_rst_ratio') {
+          return `high_tcp_rst_ratio (${finding.ratio})`;
+        }
+        return `${finding.type}`;
+      });
+      abnormalSummaryEl.textContent = lines.join('\n');
+    }
+  } else {
+    abnormalSummaryEl.textContent = '-';
+  }
+
+  const handshakes = analysis.global_results?.tcp_handshakes;
+  if (handshakes) {
+    handshakeSummaryEl.textContent =
+      `total: ${handshakes.handshakes_total}\n` +
+      `complete: ${handshakes.handshakes_complete}\n` +
+      `incomplete: ${handshakes.handshakes_incomplete}`;
+  } else {
+    handshakeSummaryEl.textContent = '-';
+  }
+
+  const chunks = analysis.time_series?.packet_chunks;
+  if (chunks) {
+    const list = chunks.chunks || [];
+    if (list.length === 0) {
+      chunkSummaryEl.textContent = 'No chunks';
+    } else {
+      const last = list[list.length - 1];
+      chunkSummaryEl.textContent =
+        `chunks: ${list.length}\n` +
+        `last packets: ${last.packets}\n` +
+        `last bytes: ${last.bytes_captured}`;
+    }
+  } else {
+    chunkSummaryEl.textContent = '-';
+  }
+
+  const health = analysis.global_results?.capture_health;
+  if (health) {
+    const quality = health.capture_quality || {};
+    const session = quality.session || {};
+    const drops = quality.drops || {};
+    captureQualityEl.textContent = [
+      `start: ${session.capture_start_us ?? 'n/a'}`,
+      `end: ${session.capture_end_us ?? 'n/a'}`,
+      `duration_us: ${session.duration_us ?? 'n/a'}`,
+      `link_types: ${Array.isArray(session.link_types) ? session.link_types.join(',') : (session.link_types ?? 'n/a')}`,
+      `snaplen: ${session.snaplen ?? 'n/a'}`,
+      `promisc: ${session.promiscuous ?? 'n/a'}`,
+      `drops: ${drops.dropped_packets ?? 'n/a'}`,
+      `drop_rate: ${drops.drop_rate ?? 'n/a'}`,
+      `kernel_drops: ${drops.kernel_drops ?? 'n/a'}`,
+    ].join('\n');
+
+    const decode = health.decode_health || {};
+    decodeHealthEl.textContent = [
+      `decode_success_rate: ${decode.decode_success_rate ?? 'n/a'}`,
+      `malformed: ${decode.malformed_packets ?? 'n/a'}`,
+      `truncated: ${decode.truncated_packets ?? 'n/a'}`,
+      `unknown_l3: ${decode.unknown_l3_packets ?? 'n/a'}`,
+      `unknown_l4: ${decode.unknown_l4_packets ?? 'n/a'}`,
+    ].join('\n');
+
+    const filtering = health.filtering_sampling || {};
+    filteringSamplingEl.textContent = [
+      `filter: ${filtering.capture_filter ?? 'n/a'}`,
+      `filtered_out: ${filtering.packets_filtered_out ?? 'n/a'}`,
+      `sampling_rate: ${filtering.sampling_rate ?? 'n/a'}`,
+    ].join('\n');
+  } else {
+    captureQualityEl.textContent = '-';
+    decodeHealthEl.textContent = '-';
+    filteringSamplingEl.textContent = '-';
   }
 }
 

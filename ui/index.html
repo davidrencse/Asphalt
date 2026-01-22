@@ -10,9 +10,9 @@
     <main class="app">
       <header class="hero">
         <div class="title-block">
-          <div class="eyebrow">ASPHALT � LIVE PIPELINE</div>
+          <div class="eyebrow">ASPHALT LIVE PIPELINE</div>
           <h1>Live Decode Console</h1>
-          <p>Launches local capture ? decode ? UI. Runs entirely on your machine.</p>
+          <p>Launches local capture ? dyecode ? UI. Runs entirely on your machine.</p>
         </div>
         <div class="pulse" aria-hidden="true"></div>
       </header>
@@ -62,6 +62,43 @@
         <div class="stat">
           <div class="stat-label">Flows</div>
           <div class="stat-value" id="statFlows">0</div>
+        </div>
+      </section>
+
+      <section class="analysis-grid">
+        <div class="analysis-card">
+          <div class="stat-label">Protocol Mix</div>
+          <div class="analysis-body" id="protocolMix">-</div>
+        </div>
+        <div class="analysis-card">
+          <div class="stat-label">Abnormal Activity</div>
+          <div class="analysis-body" id="abnormalSummary">-</div>
+        </div>
+        <div class="analysis-card">
+          <div class="stat-label">TCP Handshakes</div>
+          <div class="analysis-body" id="handshakeSummary">-</div>
+        </div>
+        <div class="analysis-card">
+          <div class="stat-label">Packet Chunks</div>
+          <div class="analysis-body" id="chunkSummary">-</div>
+        </div>
+      </section>
+
+      <section class="analysis-card health-card">
+        <div class="stat-label">Capture Health and Integrity</div>
+        <div class="health-grid">
+          <div>
+            <div class="health-label">Capture Quality</div>
+            <div class="analysis-body" id="captureQuality">-</div>
+          </div>
+          <div>
+            <div class="health-label">Decode Health</div>
+            <div class="analysis-body" id="decodeHealth">-</div>
+          </div>
+          <div>
+            <div class="health-label">Filtering and Sampling</div>
+            <div class="analysis-body" id="filteringSampling">-</div>
+          </div>
         </div>
       </section>
 
