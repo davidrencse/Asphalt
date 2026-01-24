@@ -162,6 +162,9 @@ def test_decoded_to_dict_contract():
         "captured_length",
         "original_length",
         "link_type",
+        "eth_type",
+        "src_mac",
+        "dst_mac",
         "pcap_ref",
         "interface_id",
         "stack_summary",
@@ -178,6 +181,12 @@ def test_decoded_to_dict_contract():
         "quality_flags",
         "quality_names",
         "flow_key",
+        "is_vlan",
+        "is_arp",
+        "is_multicast",
+        "is_broadcast",
+        "is_ipv4_fragment",
+        "is_ipv6_fragment",
     ]
     assert list(payload.keys()) == expected_keys
     assert payload["stack_summary"] == "ETH/IP4/TCP"

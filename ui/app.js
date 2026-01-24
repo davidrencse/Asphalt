@@ -16,11 +16,73 @@ const protocolMixEl = document.getElementById('protocolMix');
 const abnormalSummaryEl = document.getElementById('abnormalSummary');
 const handshakeSummaryEl = document.getElementById('handshakeSummary');
 const chunkSummaryEl = document.getElementById('chunkSummary');
+const throughputSummaryEl = document.getElementById('throughputSummary');
+const packetSizeSummaryEl = document.getElementById('packetSizeSummary');
+const l2l3SummaryEl = document.getElementById('l2l3Summary');
 const captureQualityEl = document.getElementById('captureQuality');
 const decodeHealthEl = document.getElementById('decodeHealth');
 const filteringSamplingEl = document.getElementById('filteringSampling');
 
 let allRows = [];
+
+function formatNumber(value, digits = 2) {
+  if (value == null || Number.isNaN(value)) return 'n/a';
+  const fixed = Number(value).toFixed(digits);
+  return fixed.replace(/\.00$/, '');
+}
+
+function formatCount(value) {
+  if (value == null || Number.isNaN(value)) return 'n/a';
+  return Math.round(Number(value)).toLocaleString('en-US');
+}
+
+function formatBps(value) {
+  if (value == null || Number.isNaN(value)) return 'n/a';
+  const units = ['bps', 'Kbps', 'Mbps', 'Gbps', 'Tbps'];
+  let v = Number(value);
+  let idx = 0;
+  while (v >= 1000 && idx < units.length - 1) {
+    v /= 1000;
+    idx += 1;
+  }
+  return `${formatNumber(v, 2)} ${units[idx]}`;
+}
+
+function formatPps(value) {
+  if (value == null || Number.isNaN(value)) return 'n/a';
+  const units = ['pps', 'Kpps', 'Mpps', 'Gpps'];
+  let v = Number(value);
+  let idx = 0;
+  while (v >= 1000 && idx < units.length - 1) {
+    v /= 1000;
+    idx += 1;
+  }
+  return `${formatNumber(v, 2)} ${units[idx]}`;
+}
+
+function formatBytes(value) {
+  if (value == null || Number.isNaN(value)) return 'n/a';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let v = Number(value);
+  let idx = 0;
+  while (v >= 1024 && idx < units.length - 1) {
+    v /= 1024;
+    idx += 1;
+  }
+  return `${formatNumber(v, idx === 0 ? 0 : 2)} ${units[idx]}`;
+}
+
+function formatTimestampUtc(tsUs) {
+  if (!tsUs) return 'n/a';
+  const ms = Math.floor(Number(tsUs) / 1000);
+  const date = new Date(ms);
+  const pad = (num, size = 2) => String(num).padStart(size, '0');
+  const hh = pad(date.getUTCHours());
+  const mm = pad(date.getUTCMinutes());
+  const ss = pad(date.getUTCSeconds());
+  const msStr = pad(date.getUTCMilliseconds(), 3);
+  return `${hh}:${mm}:${ss}.${msStr}Z`;
+}
 
 function setStatus(text) {
   statusEl.textContent = text;
@@ -156,6 +218,9 @@ function renderAnalysis(analysis) {
     abnormalSummaryEl.textContent = '-';
     handshakeSummaryEl.textContent = '-';
     chunkSummaryEl.textContent = '-';
+    throughputSummaryEl.textContent = '-';
+    packetSizeSummaryEl.textContent = '-';
+    l2l3SummaryEl.textContent = '-';
     captureQualityEl.textContent = '-';
     decodeHealthEl.textContent = '-';
     filteringSamplingEl.textContent = '-';
@@ -217,6 +282,54 @@ function renderAnalysis(analysis) {
     }
   } else {
     chunkSummaryEl.textContent = '-';
+  }
+
+  const throughput = analysis.global_results?.throughput_peaks;
+  if (throughput) {
+    throughputSummaryEl.textContent = [
+      `bps_now: ${formatBps(throughput.bps_now)}`,
+      `bps_avg: ${formatBps(throughput.bps_avg)}`,
+      `pps_now: ${formatPps(throughput.pps_now)}`,
+      `pps_avg: ${formatPps(throughput.pps_avg)}`,
+      `peak_bps: ${formatBps(throughput.peak_bps)}`,
+      `peak_pps: ${formatPps(throughput.peak_pps)}`,
+      `peak_bps_ts: ${formatTimestampUtc(throughput.peak_bps_timestamp)}`,
+      `peak_pps_ts: ${formatTimestampUtc(throughput.peak_pps_timestamp)}`,
+    ].join('\n');
+  } else {
+    throughputSummaryEl.textContent = '-';
+  }
+
+  const sizeStats = analysis.global_results?.packet_size_stats;
+  if (sizeStats) {
+    const captured = sizeStats.captured_length || {};
+    const original = sizeStats.original_length || {};
+    const hist = sizeStats.histogram || {};
+    packetSizeSummaryEl.textContent = [
+      `cap min/med/p95/max: ${formatBytes(captured.min)} / ${formatBytes(captured.median)} / ${formatBytes(captured.p95)} / ${formatBytes(captured.max)}`,
+      `orig min/med/p95/max: ${formatBytes(original.min)} / ${formatBytes(original.median)} / ${formatBytes(original.p95)} / ${formatBytes(original.max)}`,
+      `hist 0-63: ${formatCount(hist['0-63'] ?? 0)}, 64-127: ${formatCount(hist['64-127'] ?? 0)}`,
+      `hist 128-511: ${formatCount(hist['128-511'] ?? 0)}, 512-1023: ${formatCount(hist['512-1023'] ?? 0)}`,
+      `hist 1024-1514: ${formatCount(hist['1024-1514'] ?? 0)}, jumbo: ${formatCount(hist.jumbo ?? 0)}`,
+      `frags v4/v6: ${formatCount(sizeStats.fragments?.ipv4_fragments ?? 0)} / ${formatCount(sizeStats.fragments?.ipv6_fragments ?? 0)}`,
+    ].join('\n');
+  } else {
+    packetSizeSummaryEl.textContent = '-';
+  }
+
+  const l2l3 = analysis.global_results?.l2_l3_breakdown;
+  if (l2l3) {
+    l2l3SummaryEl.textContent = [
+      `ethernet: ${formatCount(l2l3.ethernet_frames ?? 0)}`,
+      `vlan: ${formatCount(l2l3.vlan_frames ?? 0)}`,
+      `arp: ${formatCount(l2l3.arp_packets ?? 0)}`,
+      `icmp: ${formatCount(l2l3.icmp_packets ?? 0)}`,
+      `icmpv6: ${formatCount(l2l3.icmpv6_packets ?? 0)}`,
+      `multicast: ${formatCount(l2l3.multicast_packets ?? 0)}`,
+      `broadcast: ${formatCount(l2l3.broadcast_packets ?? 0)}`,
+    ].join('\n');
+  } else {
+    l2l3SummaryEl.textContent = '-';
   }
 
   const health = analysis.global_results?.capture_health;

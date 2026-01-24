@@ -62,10 +62,15 @@ def run_analysis(packets, bucket_ms: int, chunk_size: int):
         "global_stats",
         "protocol_mix",
         "flow_summary",
+        "flow_analytics",
         "tcp_handshakes",
         "abnormal_activity",
         "packet_chunks",
         "time_series",
+        "throughput_peaks",
+        "packet_size_stats",
+        "l2_l3_breakdown",
+        "top_entities",
     ]
     analyzers = []
     for name in analyzer_names:

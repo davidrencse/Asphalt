@@ -78,12 +78,30 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
     dst_port = None
     tcp_flags = None
     ttl = None
+    eth_type = None
+    src_mac = None
+    dst_mac = None
+    is_vlan = False
+    is_arp = False
+    is_multicast = False
+    is_broadcast = False
+    is_ipv4_fragment = False
+    is_ipv6_fragment = False
 
     offset = 0
 
     # L2 decoding based on link type
     if raw.link_type == DLT_EN10MB:
         protocol_stack.append("ETH")
+        if cap_len >= 6:
+            dst_mac = data[0:6]
+            is_broadcast = dst_mac == b"\xff\xff\xff\xff\xff\xff"
+            is_multicast = (dst_mac[0] & 0x01) == 0x01 and not is_broadcast
+        if cap_len >= 12:
+            src_mac = data[6:12]
+            dst_mac = data[0:6]
+        src_mac = _format_mac(src_mac)
+        dst_mac = _format_mac(dst_mac)
         if cap_len < 14:
             quality |= DecodeQuality.MALFORMED_L2
             return DecodedPacket(
@@ -97,6 +115,7 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
         # VLAN tags (single or double)
         for _ in range(2):
             if ethertype in (ETH_TYPE_VLAN, ETH_TYPE_QINQ):
+                is_vlan = True
                 if cap_len < offset + 4:
                     quality |= DecodeQuality.MALFORMED_L2
                     return DecodedPacket(
@@ -109,31 +128,37 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
                 offset += 4
             else:
                 break
+        eth_type = ethertype
 
         if ethertype == ETH_TYPE_IPV4:
-            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality = _parse_ipv4(data, offset)
+            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv4_fragment = _parse_ipv4(data, offset)
             quality |= l3_quality
             protocol_stack.append("IP4")
             if l4_offset is None:
                 return _finalize(raw, protocol_stack, ip_version, src_ip, dst_ip, l4_protocol,
-                                 ip_protocol, src_port, dst_port, tcp_flags, ttl, quality)
+                                 ip_protocol, src_port, dst_port, tcp_flags, ttl, quality,
+                                 eth_type, src_mac, dst_mac, is_vlan, is_arp, is_multicast, is_broadcast,
+                                 is_ipv4_fragment, is_ipv6_fragment)
             l4_protocol, src_port, dst_port, tcp_flags, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
             quality |= l4_quality
             if l4_protocol:
                 protocol_stack.append(l4_protocol)
         elif ethertype == ETH_TYPE_IPV6:
-            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality = _parse_ipv6(data, offset)
+            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv6_fragment = _parse_ipv6(data, offset)
             quality |= l3_quality
             protocol_stack.append("IP6")
             if l4_offset is None:
                 return _finalize(raw, protocol_stack, ip_version, src_ip, dst_ip, l4_protocol,
-                                 ip_protocol, src_port, dst_port, tcp_flags, ttl, quality)
+                                 ip_protocol, src_port, dst_port, tcp_flags, ttl, quality,
+                                 eth_type, src_mac, dst_mac, is_vlan, is_arp, is_multicast, is_broadcast,
+                                 is_ipv4_fragment, is_ipv6_fragment)
             l4_protocol, src_port, dst_port, tcp_flags, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
             quality |= l4_quality
             if l4_protocol:
                 protocol_stack.append(l4_protocol)
         elif ethertype == ETH_TYPE_ARP:
             protocol_stack.append("ARP")
+            is_arp = True
         else:
             quality |= DecodeQuality.UNKNOWN_L3
 
@@ -144,11 +169,11 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
             return DecodedPacket(raw_packet=raw, quality_flags=int(quality))
         version = data[0] >> 4
         if version == 4:
-            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality = _parse_ipv4(data, 0)
+            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv4_fragment = _parse_ipv4(data, 0)
             quality |= l3_quality
             protocol_stack.append("IP4")
         elif version == 6:
-            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality = _parse_ipv6(data, 0)
+            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv6_fragment = _parse_ipv6(data, 0)
             quality |= l3_quality
             protocol_stack.append("IP6")
         else:
@@ -166,9 +191,10 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
             quality |= DecodeQuality.MALFORMED_L2
             return DecodedPacket(raw_packet=raw, protocol_stack=tuple(protocol_stack), quality_flags=int(quality))
         ethertype = struct.unpack_from("!H", data, 14)[0]
+        eth_type = ethertype
         offset = 16
         if ethertype == ETH_TYPE_IPV4:
-            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality = _parse_ipv4(data, offset)
+            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv4_fragment = _parse_ipv4(data, offset)
             quality |= l3_quality
             protocol_stack.append("IP4")
             if l4_offset is not None:
@@ -177,7 +203,7 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
                 if l4_protocol:
                     protocol_stack.append(l4_protocol)
         elif ethertype == ETH_TYPE_IPV6:
-            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality = _parse_ipv6(data, offset)
+            ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv6_fragment = _parse_ipv6(data, offset)
             quality |= l3_quality
             protocol_stack.append("IP6")
             if l4_offset is not None:
@@ -197,11 +223,11 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
             family = family_le if family_le in (2, 24, 28, 30) else family_be
             offset = 4
             if family == 2:
-                ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality = _parse_ipv4(data, offset)
+                ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv4_fragment = _parse_ipv4(data, offset)
                 quality |= l3_quality
                 protocol_stack.append("IP4")
             elif family in (24, 28, 30):
-                ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality = _parse_ipv6(data, offset)
+                ip_version, src_ip, dst_ip, ip_protocol, ttl, l4_offset, l3_quality, is_ipv6_fragment = _parse_ipv6(data, offset)
                 quality |= l3_quality
                 protocol_stack.append("IP6")
             else:
@@ -216,8 +242,21 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
     else:
         quality |= DecodeQuality.UNSUPPORTED_LINKTYPE
 
+    # IP-level multicast/broadcast detection (fallback for non-ethernet sources)
+    if dst_ip:
+        try:
+            ip_obj = ipaddress.ip_address(dst_ip)
+            if ip_obj.is_multicast:
+                is_multicast = True
+            if ip_obj.version == 4 and dst_ip == "255.255.255.255":
+                is_broadcast = True
+        except Exception:
+            pass
+
     return _finalize(raw, protocol_stack, ip_version, src_ip, dst_ip, l4_protocol,
-                     ip_protocol, src_port, dst_port, tcp_flags, ttl, quality)
+                     ip_protocol, src_port, dst_port, tcp_flags, ttl, quality,
+                     eth_type, src_mac, dst_mac, is_vlan, is_arp, is_multicast, is_broadcast,
+                     is_ipv4_fragment, is_ipv6_fragment)
 
 
 def _finalize(raw: RawPacket,
@@ -231,10 +270,28 @@ def _finalize(raw: RawPacket,
               dst_port: Optional[int],
               tcp_flags: Optional[int],
               ttl: Optional[int],
-              quality: DecodeQuality) -> DecodedPacket:
+              quality: DecodeQuality,
+              eth_type: Optional[int],
+              src_mac: Optional[str],
+              dst_mac: Optional[str],
+              is_vlan: bool,
+              is_arp: bool,
+              is_multicast: bool,
+              is_broadcast: bool,
+              is_ipv4_fragment: bool,
+              is_ipv6_fragment: bool) -> DecodedPacket:
     return DecodedPacket(
         raw_packet=raw,
         protocol_stack=tuple(protocol_stack),
+        eth_type=eth_type,
+        src_mac=src_mac,
+        dst_mac=dst_mac,
+        is_vlan=is_vlan,
+        is_arp=is_arp,
+        is_multicast=is_multicast,
+        is_broadcast=is_broadcast,
+        is_ipv4_fragment=is_ipv4_fragment,
+        is_ipv6_fragment=is_ipv6_fragment,
         ip_version=ip_version,
         src_ip=src_ip,
         dst_ip=dst_ip,
@@ -248,41 +305,46 @@ def _finalize(raw: RawPacket,
     )
 
 
-def _parse_ipv4(data: bytes, offset: int) -> Tuple[int, Optional[str], Optional[str], int, Optional[int], Optional[int], DecodeQuality]:
+def _parse_ipv4(data: bytes, offset: int) -> Tuple[int, Optional[str], Optional[str], int, Optional[int], Optional[int], DecodeQuality, bool]:
     cap_len = len(data)
     if offset + 20 > cap_len:
-        return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3
+        return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3, False
     vihl = data[offset]
     version = vihl >> 4
     ihl = (vihl & 0x0F) * 4
     if version != 4 or ihl < 20:
-        return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3
+        return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3, False
     if offset + ihl > cap_len:
-        return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3
+        return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3, False
 
     ttl = data[offset + 8]
     ip_proto = data[offset + 9]
+    flags_frag = struct.unpack_from("!H", data, offset + 6)[0]
+    frag_offset = flags_frag & 0x1FFF
+    more_frag = (flags_frag & 0x2000) != 0
+    is_fragment = frag_offset != 0 or more_frag
     src_ip = _format_ipv4(data[offset + 12:offset + 16])
     dst_ip = _format_ipv4(data[offset + 16:offset + 20])
     l4_offset = offset + ihl
-    return 4, src_ip, dst_ip, ip_proto, ttl, l4_offset, DecodeQuality.OK
+    return 4, src_ip, dst_ip, ip_proto, ttl, l4_offset, DecodeQuality.OK, is_fragment
 
 
-def _parse_ipv6(data: bytes, offset: int) -> Tuple[int, Optional[str], Optional[str], int, Optional[int], Optional[int], DecodeQuality]:
+def _parse_ipv6(data: bytes, offset: int) -> Tuple[int, Optional[str], Optional[str], int, Optional[int], Optional[int], DecodeQuality, bool]:
     cap_len = len(data)
     if offset + 40 > cap_len:
-        return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3
+        return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3, False
     version = data[offset] >> 4
     if version != 6:
-        return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3
+        return 0, None, None, 0, None, None, DecodeQuality.MALFORMED_L3, False
 
     next_header = data[offset + 6]
     hop_limit = data[offset + 7]
     src_ip = _format_ipv6(data[offset + 8:offset + 24])
     dst_ip = _format_ipv6(data[offset + 24:offset + 40])
 
-    l4_offset = offset + 40
-    return 6, src_ip, dst_ip, next_header, hop_limit, l4_offset, DecodeQuality.OK
+    is_fragment = next_header == 44
+    l4_offset = None if is_fragment else offset + 40
+    return 6, src_ip, dst_ip, next_header, hop_limit, l4_offset, DecodeQuality.OK, is_fragment
 
 
 def _parse_l4(data: bytes, offset: int, ip_protocol: int) -> Tuple[Optional[str], Optional[int], Optional[int], Optional[int], DecodeQuality]:
@@ -326,3 +388,9 @@ def _format_ipv6(addr: bytes) -> Optional[str]:
         return str(ipaddress.IPv6Address(addr))
     except Exception:
         return None
+
+
+def _format_mac(addr: Optional[bytes]) -> Optional[str]:
+    if not addr or len(addr) != 6:
+        return None
+    return ":".join(f"{b:02x}" for b in addr)

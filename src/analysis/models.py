@@ -25,6 +25,9 @@ class AnalysisPacket:
     captured_length: int
     original_length: int
     link_type: int
+    eth_type: Optional[int]
+    src_mac: Optional[str]
+    dst_mac: Optional[str]
     ip_version: int
     src_ip: Optional[str]
     dst_ip: Optional[str]
@@ -35,6 +38,12 @@ class AnalysisPacket:
     tcp_flags: Optional[int]
     ttl: Optional[int]
     quality_flags: int
+    is_vlan: bool = False
+    is_arp: bool = False
+    is_multicast: bool = False
+    is_broadcast: bool = False
+    is_ipv4_fragment: bool = False
+    is_ipv6_fragment: bool = False
     protocol_stack: Tuple[str, ...] = field(default_factory=tuple)
     payload_bytes: Optional[bytes] = None
 
@@ -47,6 +56,9 @@ class AnalysisPacket:
             captured_length=raw.captured_length,
             original_length=raw.original_length,
             link_type=raw.link_type,
+            eth_type=getattr(decoded, "eth_type", None),
+            src_mac=getattr(decoded, "src_mac", None),
+            dst_mac=getattr(decoded, "dst_mac", None),
             ip_version=decoded.ip_version,
             src_ip=decoded.src_ip,
             dst_ip=decoded.dst_ip,
@@ -57,6 +69,12 @@ class AnalysisPacket:
             tcp_flags=decoded.tcp_flags,
             ttl=decoded.ttl,
             quality_flags=decoded.quality_flags,
+            is_vlan=getattr(decoded, "is_vlan", False),
+            is_arp=getattr(decoded, "is_arp", False),
+            is_multicast=getattr(decoded, "is_multicast", False),
+            is_broadcast=getattr(decoded, "is_broadcast", False),
+            is_ipv4_fragment=getattr(decoded, "is_ipv4_fragment", False),
+            is_ipv6_fragment=getattr(decoded, "is_ipv6_fragment", False),
             protocol_stack=decoded.protocol_stack,
             payload_bytes=raw.data,
         )
@@ -68,6 +86,9 @@ class AnalysisPacket:
             "captured_length": self.captured_length,
             "original_length": self.original_length,
             "link_type": self.link_type,
+            "eth_type": self.eth_type,
+            "src_mac": self.src_mac,
+            "dst_mac": self.dst_mac,
             "ip_version": self.ip_version,
             "src_ip": self.src_ip,
             "dst_ip": self.dst_ip,
@@ -78,6 +99,12 @@ class AnalysisPacket:
             "tcp_flags": self.tcp_flags,
             "ttl": self.ttl,
             "quality_flags": self.quality_flags,
+            "is_vlan": self.is_vlan,
+            "is_arp": self.is_arp,
+            "is_multicast": self.is_multicast,
+            "is_broadcast": self.is_broadcast,
+            "is_ipv4_fragment": self.is_ipv4_fragment,
+            "is_ipv6_fragment": self.is_ipv6_fragment,
             "protocol_stack": list(self.protocol_stack),
         }
 
@@ -125,6 +152,14 @@ class FlowState:
     l4_protocols: Dict[str, int] = field(default_factory=dict)
     tcp_flags: Dict[str, int] = field(default_factory=dict)
     quality_flags: Dict[str, int] = field(default_factory=dict)
+    has_fwd: bool = False
+    has_rev: bool = False
+    tcp_syn_seen: bool = False
+    tcp_synack_seen: bool = False
+    tcp_ack_seen: bool = False
+    tcp_rst_seen: bool = False
+    tcp_seen: bool = False
+    udp_seen: bool = False
 
     def update_from_packet(self, packet: AnalysisPacket, direction: Direction) -> None:
         self.last_ts_us = max(self.last_ts_us, packet.timestamp_us)
@@ -136,10 +171,12 @@ class FlowState:
             self.packets_fwd += 1
             self.bytes_captured_fwd += packet.captured_length
             self.bytes_original_fwd += packet.original_length
+            self.has_fwd = True
         elif direction == Direction.REV:
             self.packets_rev += 1
             self.bytes_captured_rev += packet.captured_length
             self.bytes_original_rev += packet.original_length
+            self.has_rev = True
 
         if packet.ip_version:
             key = str(packet.ip_version)
@@ -150,9 +187,25 @@ class FlowState:
         if packet.tcp_flags is not None:
             for name in _tcp_flag_names(packet.tcp_flags):
                 self.tcp_flags[name] = self.tcp_flags.get(name, 0) + 1
+            self.tcp_seen = True
+            flags = packet.tcp_flags
+            is_syn = bool(flags & 0x02)
+            is_ack = bool(flags & 0x10)
+            is_rst = bool(flags & 0x04)
+            if is_syn and not is_ack:
+                self.tcp_syn_seen = True
+            if is_syn and is_ack:
+                self.tcp_synack_seen = True
+            if is_ack and not is_syn:
+                self.tcp_ack_seen = True
+            if is_rst:
+                self.tcp_rst_seen = True
 
         if packet.quality_flags != 0:
             self.quality_flags[str(packet.quality_flags)] = self.quality_flags.get(str(packet.quality_flags), 0) + 1
+
+        if packet.l4_protocol == "UDP" or packet.ip_protocol == 17:
+            self.udp_seen = True
 
     def duration_us(self) -> int:
         if self.packets_total == 0:

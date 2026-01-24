@@ -93,6 +93,28 @@ class DecodedPacket:
     # Protocol stack
     protocol_stack: Tuple[str, ...] = field(default_factory=tuple)
     """Stack of protocol names, e.g., ('ETH', 'IP4', 'TCP')"""
+
+    # L2 metadata
+    eth_type: Optional[int] = None
+    """EtherType for Ethernet-derived frames (None if not applicable)."""
+
+    src_mac: Optional[str] = None
+    """Source MAC address (lowercase colon-separated)."""
+    dst_mac: Optional[str] = None
+    """Destination MAC address (lowercase colon-separated)."""
+
+    is_vlan: bool = False
+    """True if one or more VLAN tags were present."""
+    is_arp: bool = False
+    """True if packet was identified as ARP."""
+    is_multicast: bool = False
+    """True if destination was multicast (L2 or L3)."""
+    is_broadcast: bool = False
+    """True if destination was broadcast (L2 or L3)."""
+    is_ipv4_fragment: bool = False
+    """True if IPv4 fragmentation flags/offset indicate a fragment."""
+    is_ipv6_fragment: bool = False
+    """True if IPv6 fragment header was detected."""
     
     # L3/L4 summary fields
     ip_version: int = 0
@@ -116,7 +138,7 @@ class DecodedPacket:
     
     ttl: Optional[int] = None
     """IPv4 TTL or IPv6 Hop Limit."""
-    
+
     # Decode quality
     quality_flags: int = 0
     """Bitmask of decode quality flags (see capture.packet_decoder)."""
@@ -191,6 +213,9 @@ class DecodedPacket:
             "captured_length": raw.captured_length,
             "original_length": raw.original_length,
             "link_type": raw.link_type,
+            "eth_type": self.eth_type,
+            "src_mac": self.src_mac,
+            "dst_mac": self.dst_mac,
             "pcap_ref": raw.pcap_ref,
             "interface_id": raw.interface_id,
             "stack_summary": self.stack_summary,
@@ -207,6 +232,12 @@ class DecodedPacket:
             "quality_flags": self.quality_flags,
             "quality_names": list(self.quality_names),
             "flow_key": list(self.flow_key) if self.flow_key else None,
+            "is_vlan": self.is_vlan,
+            "is_arp": self.is_arp,
+            "is_multicast": self.is_multicast,
+            "is_broadcast": self.is_broadcast,
+            "is_ipv4_fragment": self.is_ipv4_fragment,
+            "is_ipv6_fragment": self.is_ipv6_fragment,
         }
 
     def to_json(self) -> str:

@@ -12,6 +12,7 @@ import threading
 import subprocess
 import tkinter as tk
 from tkinter import ttk, messagebox
+from datetime import datetime, timezone
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC_DIR = os.path.join(PROJECT_ROOT, "src")
@@ -107,6 +108,11 @@ def run_analysis(packets, bucket_ms: int = 1000, chunk_size: int = 200):
         "abnormal_activity",
         "packet_chunks",
         "time_series",
+        "throughput_peaks",
+        "packet_size_stats",
+        "l2_l3_breakdown",
+        "top_entities",
+        "flow_analytics",
     ]
     analyzers = []
     for name in analyzer_names:
@@ -120,6 +126,89 @@ def run_analysis(packets, bucket_ms: int = 1000, chunk_size: int = 200):
     for packet in packets:
         engine.process_packet_dict(packet)
     return engine.finalize().to_dict()
+
+
+def _fmt_number(value, digits=2):
+    if value is None:
+        return "n/a"
+    try:
+        return f"{float(value):.{digits}f}".rstrip("0").rstrip(".")
+    except (TypeError, ValueError):
+        return "n/a"
+
+
+def _fmt_count(value):
+    if value is None:
+        return "n/a"
+    try:
+        return f"{int(round(float(value))):,}"
+    except (TypeError, ValueError):
+        return "n/a"
+
+
+def _fmt_bps(value):
+    if value is None:
+        return "n/a"
+    try:
+        units = ["bps", "Kbps", "Mbps", "Gbps", "Tbps"]
+        v = float(value)
+        idx = 0
+        while v >= 1000 and idx < len(units) - 1:
+            v /= 1000
+            idx += 1
+        return f"{_fmt_number(v, 2)} {units[idx]}"
+    except (TypeError, ValueError):
+        return "n/a"
+
+
+def _fmt_pps(value):
+    if value is None:
+        return "n/a"
+    try:
+        units = ["pps", "Kpps", "Mpps", "Gpps"]
+        v = float(value)
+        idx = 0
+        while v >= 1000 and idx < len(units) - 1:
+            v /= 1000
+            idx += 1
+        return f"{_fmt_number(v, 2)} {units[idx]}"
+    except (TypeError, ValueError):
+        return "n/a"
+
+
+def _fmt_bytes(value):
+    if value is None:
+        return "n/a"
+    try:
+        units = ["B", "KB", "MB", "GB"]
+        v = float(value)
+        idx = 0
+        while v >= 1024 and idx < len(units) - 1:
+            v /= 1024
+            idx += 1
+        digits = 0 if idx == 0 else 2
+        return f"{_fmt_number(v, digits)} {units[idx]}"
+    except (TypeError, ValueError):
+        return "n/a"
+
+
+def _fmt_ts_utc(ts_us):
+    if ts_us is None:
+        return "n/a"
+    try:
+        dt = datetime.fromtimestamp(ts_us / 1_000_000, tz=timezone.utc)
+        return dt.strftime("%H:%M:%S.%f")[:-3] + "Z"
+    except (TypeError, ValueError, OSError):
+        return "n/a"
+
+
+def _fmt_pct(value):
+    if value is None:
+        return "n/a"
+    try:
+        return f"{float(value):.2f}%"
+    except (TypeError, ValueError):
+        return "n/a"
 
 
 class AsphaltApp(tk.Tk):
@@ -207,6 +296,12 @@ class AsphaltApp(tk.Tk):
         self.analysis_capture_quality = tk.StringVar(value="-")
         self.analysis_decode_health = tk.StringVar(value="-")
         self.analysis_filtering = tk.StringVar(value="-")
+        self.analysis_throughput = tk.StringVar(value="-")
+        self.analysis_packet_sizes = tk.StringVar(value="-")
+        self.analysis_l2l3 = tk.StringVar(value="-")
+        self.analysis_top_talkers = tk.StringVar(value="-")
+        self.analysis_top_macs = tk.StringVar(value="-")
+        self.analysis_top_ports = tk.StringVar(value="-")
 
         self._stat_block(stats, "Packets", self.stat_packets, 0)
         self._stat_block(stats, "IPv4 / IPv6", self.stat_ip, 1)
@@ -314,271 +409,36 @@ class AsphaltApp(tk.Tk):
         sections = tk.Frame(self.content, bg="#0e1117")
         sections.pack(fill="x", padx=20, pady=10)
 
-        data = self._extra_analysis_data()
-        for section in data:
-            frame, body = self._collapsible_section(sections, section["title"], section["summary"])
-            frame.pack(fill="x", pady=6)
-            grid = tk.Frame(body, bg="#151b23")
-            grid.pack(fill="x")
-            for idx, block in enumerate(section["blocks"]):
-                col = idx % section["columns"]
-                row = idx // section["columns"]
-                self._info_card(grid, block["title"], block["lines"], col, row)
-            for c in range(section["columns"]):
-                grid.grid_columnconfigure(c, weight=1)
+        frame, body = self._collapsible_section(
+            sections,
+            "Traffic overview",
+            "Throughput · Packet Size Stats · L2/L3 Breakdown"
+        )
+        frame.pack(fill="x", pady=6)
+        grid = tk.Frame(body, bg="#151b23")
+        grid.pack(fill="x")
+        self._info_card_var(grid, "Throughput", self.analysis_throughput, 0, 0)
+        self._info_card_var(grid, "Packet Size Stats", self.analysis_packet_sizes, 1, 0)
+        self._info_card_var(grid, "L2/L3 Breakdown", self.analysis_l2l3, 2, 0)
+        for c in range(3):
+            grid.grid_columnconfigure(c, weight=1)
+
+        frame, body = self._collapsible_section(
+            sections,
+            "Top entities",
+            "Top Talkers · Top MAC Addresses · Top Ports and Services"
+        )
+        frame.pack(fill="x", pady=6)
+        grid = tk.Frame(body, bg="#151b23")
+        grid.pack(fill="x")
+        self._info_card_var(grid, "Top Talkers", self.analysis_top_talkers, 0, 0)
+        self._info_card_var(grid, "Top MAC Addresses", self.analysis_top_macs, 1, 0)
+        self._info_card_var(grid, "Top Ports and Services", self.analysis_top_ports, 2, 0)
+        for c in range(3):
+            grid.grid_columnconfigure(c, weight=1)
 
     def _extra_analysis_data(self):
-        return [
-            {
-                "title": "Traffic overview",
-                "summary": "Throughput 18.4 Mbps now · p95 1472B",
-                "columns": 3,
-                "blocks": [
-                    {
-                        "title": "Throughput",
-                        "lines": [
-                            "bps now: 18.4 Mbps",
-                            "bps avg: 12.1 Mbps",
-                            "pps now: 3,820",
-                            "pps avg: 2,940",
-                            "peak bps: 41.2 Mbps @ 14:20:54",
-                            "peak pps: 6,900 @ 14:20:54",
-                        ],
-                    },
-                    {
-                        "title": "Packet Size Stats",
-                        "lines": [
-                            "min: 64B, median: 312B",
-                            "p95: 1472B, max: 9014B",
-                            "hist: 0-128B 32%",
-                            "hist: 128-512B 44%",
-                            "fragments: 2 (IPv4)",
-                        ],
-                    },
-                    {
-                        "title": "L2/L3 Breakdown",
-                        "lines": [
-                            "Ethernet: 1,362",
-                            "VLAN: 24, ARP: 16",
-                            "ICMP: 11, ICMPv6: 8",
-                            "Multicast: 148, Broadcast: 42",
-                        ],
-                    },
-                ],
-            },
-            {
-                "title": "Top entities",
-                "summary": "Top src 192.168.0.14 · TCP 443 62%",
-                "columns": 3,
-                "blocks": [
-                    {
-                        "title": "Top Talkers",
-                        "lines": [
-                            "src: 192.168.0.14 22.1MB",
-                            "src: 192.168.0.12 8.6MB",
-                            "dst: 8.8.8.8 3.2MB",
-                            "dst: 34.120.32.2 10.2MB",
-                            "Internal 62% / External 38%",
-                        ],
-                    },
-                    {
-                        "title": "Top MAC Addresses",
-                        "lines": [
-                            "CC:98:8B:2A:4C:11 21.4MB",
-                            "B0:AA:36:14:9D:20 8.0MB",
-                            "Vendors: Apple 44%",
-                        ],
-                    },
-                    {
-                        "title": "Top Ports and Services",
-                        "lines": [
-                            "TCP 443 (HTTPS) 62%",
-                            "TCP 80 (HTTP) 12%",
-                            "UDP 53 (DNS) 34%",
-                            "UDP 5353 (mDNS) 24%",
-                        ],
-                    },
-                ],
-            },
-            {
-                "title": "Flow analytics",
-                "summary": "Flows 132 · New 3.2/s",
-                "columns": 3,
-                "blocks": [
-                    {
-                        "title": "Flow Summary",
-                        "lines": [
-                            "total flows: 132",
-                            "new flows/sec: 3.2",
-                            "duration median: 2.1s",
-                            "bytes/flow avg: 182KB",
-                        ],
-                    },
-                    {
-                        "title": "Heavy Hitters",
-                        "lines": [
-                            "192.168.0.14:53144 -> 34.120.32.2:443 9.1MB",
-                            "192.168.0.12:51422 -> 52.43.112.8:443 6.2MB",
-                            "Longest: SSDP 40.3s",
-                        ],
-                    },
-                    {
-                        "title": "Flow States",
-                        "lines": [
-                            "TCP Established: 44",
-                            "TCP Half-open: 5",
-                            "TCP Reset/Failed: 3",
-                            "UDP Paired: 56",
-                            "UDP Unpaired: 24",
-                        ],
-                    },
-                ],
-            },
-            {
-                "title": "TCP health and behavior",
-                "summary": "Completion 90.7% · Retrans 2.1%",
-                "columns": 3,
-                "blocks": [
-                    {
-                        "title": "Handshake Detail",
-                        "lines": [
-                            "SYN: 58, SYN-ACK: 54",
-                            "ACK: 49",
-                            "Completion: 90.7%",
-                            "RTT median: 28ms, p95: 120ms",
-                        ],
-                    },
-                    {
-                        "title": "Reliability Indicators",
-                        "lines": [
-                            "Retransmissions: 12 (2.1%)",
-                            "Out-of-order: 7",
-                            "Dup ACKs: 21",
-                            "RST: 5 (0.9%)",
-                        ],
-                    },
-                    {
-                        "title": "TCP Performance Signals",
-                        "lines": [
-                            "Window median: 256KB",
-                            "Window p95: 1.2MB",
-                            "Zero-window: 0",
-                            "MSS top: 1460 (82%)",
-                        ],
-                    },
-                ],
-            },
-            {
-                "title": "UDP and DNS insights",
-                "summary": "UDP 2.4k pps · DNS response 96.8%",
-                "columns": 3,
-                "blocks": [
-                    {
-                        "title": "UDP Quality",
-                        "lines": [
-                            "rate: 2.4k pps / 9.1 Mbps",
-                            "largest flow: 192.168.0.14 -> 224.0.0.251",
-                            "burstiness: 0.62",
-                        ],
-                    },
-                    {
-                        "title": "DNS Dashboard",
-                        "lines": [
-                            "Queries: 221, Responses: 214",
-                            "Response rate: 96.8%",
-                            "NXDOMAIN: 6 (2.7%)",
-                            "Avg latency: 18ms",
-                        ],
-                    },
-                    {
-                        "title": "Top Queried Domains",
-                        "lines": [
-                            "api.apple.com (44)",
-                            "clients4.google.com (31)",
-                            "time.cloudflare.com (18)",
-                        ],
-                    },
-                ],
-            },
-            {
-                "title": "Timing and burst detection",
-                "summary": "Peak 6,900 pps · Jitter 1.1ms",
-                "columns": 2,
-                "blocks": [
-                    {
-                        "title": "Burst Monitor",
-                        "lines": [
-                            "Peak PPS: 6,900 @ 14:20:54",
-                            "Peak BPS: 41.2 Mbps",
-                            "Burst events: 7",
-                        ],
-                    },
-                    {
-                        "title": "Inter-arrival Stats",
-                        "lines": [
-                            "Median: 0.5ms",
-                            "p95: 6.2ms",
-                            "Jitter: 1.1ms",
-                        ],
-                    },
-                ],
-            },
-            {
-                "title": "Security and anomaly signals",
-                "summary": "SYN:SYN-ACK 1.12 · ARP changes 1",
-                "columns": 3,
-                "blocks": [
-                    {
-                        "title": "Scan-like Behavior",
-                        "lines": [
-                            "Distinct dst ports/src: max 41",
-                            "Distinct dst IPs/src: max 23",
-                            "SYN:SYN-ACK ratio: 1.12",
-                        ],
-                    },
-                    {
-                        "title": "DNS Anomalies",
-                        "lines": [
-                            "High-entropy subdomains: 2",
-                            "Long labels: 4",
-                            "NXDOMAIN spike: None",
-                        ],
-                    },
-                    {
-                        "title": "ARP and LAN Attacks",
-                        "lines": [
-                            "IP claimed by multiple MACs: 0",
-                            "Frequent ARP changes: 1",
-                        ],
-                    },
-                ],
-            },
-            {
-                "title": "Application metadata",
-                "summary": "TLS 1.3 74% · HTTP GET 61%",
-                "columns": 2,
-                "blocks": [
-                    {
-                        "title": "TLS Handshake Metadata",
-                        "lines": [
-                            "SNI count: 24",
-                            "Top SNI: api.apple.com (7)",
-                            "ALPN: h2 68%, http/1.1 32%",
-                            "TLS version: 1.3 74%",
-                        ],
-                    },
-                    {
-                        "title": "HTTP Plaintext",
-                        "lines": [
-                            "Hosts: 12",
-                            "Methods: GET 61%, POST 24%",
-                            "Status: 200 91%, 404 4%",
-                            "Slowest: /upload 1.2s",
-                        ],
-                    },
-                ],
-            },
-        ]
+        return []
 
     def _build_packet_table(self):
         header = tk.Frame(self.content, bg="#0e1117")
@@ -729,6 +589,12 @@ class AsphaltApp(tk.Tk):
             self.analysis_capture_quality.set("-")
             self.analysis_decode_health.set("-")
             self.analysis_filtering.set("-")
+            self.analysis_throughput.set("-")
+            self.analysis_packet_sizes.set("-")
+            self.analysis_l2l3.set("-")
+            self.analysis_top_talkers.set("-")
+            self.analysis_top_macs.set("-")
+            self.analysis_top_ports.set("-")
             return
 
         protocol = analysis.get("global_results", {}).get("protocol_mix", {})
@@ -806,6 +672,105 @@ class AsphaltApp(tk.Tk):
             self.analysis_capture_quality.set("-")
             self.analysis_decode_health.set("-")
             self.analysis_filtering.set("-")
+
+        throughput = analysis.get("global_results", {}).get("throughput_peaks", {})
+        if throughput:
+            self.analysis_throughput.set(
+                f"bps now {_fmt_bps(throughput.get('bps_now'))}\n"
+                f"bps avg {_fmt_bps(throughput.get('bps_avg'))}\n"
+                f"pps now {_fmt_pps(throughput.get('pps_now'))}\n"
+                f"pps avg {_fmt_pps(throughput.get('pps_avg'))}\n"
+                f"peak bps {_fmt_bps(throughput.get('peak_bps'))}\n"
+                f"peak pps {_fmt_pps(throughput.get('peak_pps'))}\n"
+                f"peak bps ts {_fmt_ts_utc(throughput.get('peak_bps_timestamp'))}\n"
+                f"peak pps ts {_fmt_ts_utc(throughput.get('peak_pps_timestamp'))}"
+            )
+        else:
+            self.analysis_throughput.set("-")
+
+        size_stats = analysis.get("global_results", {}).get("packet_size_stats", {})
+        if size_stats:
+            captured = size_stats.get("captured_length", {})
+            original = size_stats.get("original_length", {})
+            hist = size_stats.get("histogram", {})
+            fragments = size_stats.get("fragments", {})
+            self.analysis_packet_sizes.set(
+                f"cap min/med/p95/max "
+                f"{_fmt_bytes(captured.get('min'))} / {_fmt_bytes(captured.get('median'))} / "
+                f"{_fmt_bytes(captured.get('p95'))} / {_fmt_bytes(captured.get('max'))}\n"
+                f"orig min/med/p95/max "
+                f"{_fmt_bytes(original.get('min'))} / {_fmt_bytes(original.get('median'))} / "
+                f"{_fmt_bytes(original.get('p95'))} / {_fmt_bytes(original.get('max'))}\n"
+                f"hist 0-63 {_fmt_count(hist.get('0-63', 0))}, 64-127 {_fmt_count(hist.get('64-127', 0))}\n"
+                f"hist 128-511 {_fmt_count(hist.get('128-511', 0))}, 512-1023 {_fmt_count(hist.get('512-1023', 0))}\n"
+                f"hist 1024-1514 {_fmt_count(hist.get('1024-1514', 0))}, jumbo {_fmt_count(hist.get('jumbo', 0))}\n"
+                f"frags v4/v6 {_fmt_count(fragments.get('ipv4_fragments', 0))} / {_fmt_count(fragments.get('ipv6_fragments', 0))}"
+            )
+        else:
+            self.analysis_packet_sizes.set("-")
+
+        l2l3 = analysis.get("global_results", {}).get("l2_l3_breakdown", {})
+        if l2l3:
+            self.analysis_l2l3.set(
+                f"Ethernet {_fmt_count(l2l3.get('ethernet_frames', 0))}\n"
+                f"VLAN {_fmt_count(l2l3.get('vlan_frames', 0))}\n"
+                f"ARP {_fmt_count(l2l3.get('arp_packets', 0))}\n"
+                f"ICMP {_fmt_count(l2l3.get('icmp_packets', 0))}\n"
+                f"ICMPv6 {_fmt_count(l2l3.get('icmpv6_packets', 0))}\n"
+                f"Multicast {_fmt_count(l2l3.get('multicast_packets', 0))}\n"
+                f"Broadcast {_fmt_count(l2l3.get('broadcast_packets', 0))}"
+            )
+        else:
+            self.analysis_l2l3.set("-")
+
+        top_entities = analysis.get("global_results", {}).get("top_entities", {})
+        ip_talkers = top_entities.get("ip_talkers", {})
+        if ip_talkers:
+            src_list = ip_talkers.get("top_src", [])
+            dst_list = ip_talkers.get("top_dst", [])
+            internal = ip_talkers.get("internal_external", {})
+            src_lines = [
+                f"src {item.get('ip')} {_fmt_bytes(item.get('bytes'))}"
+                for item in src_list
+            ]
+            dst_lines = [
+                f"dst {item.get('ip')} {_fmt_bytes(item.get('bytes'))}"
+                for item in dst_list
+            ]
+            split = (
+                f"internal {_fmt_pct(internal.get('internal_bytes_pct'))} / "
+                f"external {_fmt_pct(internal.get('external_bytes_pct'))}"
+            )
+            self.analysis_top_talkers.set("\n".join(src_lines + dst_lines + [split]) if (src_lines or dst_lines) else "-")
+        else:
+            self.analysis_top_talkers.set("-")
+
+        mac_talkers = top_entities.get("mac_talkers", {})
+        if mac_talkers:
+            mac_list = mac_talkers.get("top_src", []) + mac_talkers.get("top_dst", [])
+            lines = []
+            for item in mac_list[:6]:
+                vendor = item.get("vendor", "Unknown")
+                lines.append(f"{item.get('mac')} {vendor} {_fmt_bytes(item.get('bytes'))}")
+            self.analysis_top_macs.set("\n".join(lines) if lines else "-")
+        else:
+            self.analysis_top_macs.set("-")
+
+        ports = top_entities.get("ports", {})
+        if ports:
+            tcp = ports.get("tcp", {})
+            udp = ports.get("udp", {})
+            tcp_lines = [
+                f"TCP {item.get('port')} ({item.get('service')}) {_fmt_pct(item.get('packets_pct'))}"
+                for item in tcp.get("top_dst_ports", [])
+            ]
+            udp_lines = [
+                f"UDP {item.get('port')} ({item.get('service')}) {_fmt_pct(item.get('packets_pct'))}"
+                for item in udp.get("top_dst_ports", [])
+            ]
+            self.analysis_top_ports.set("\n".join(tcp_lines + udp_lines) if (tcp_lines or udp_lines) else "-")
+        else:
+            self.analysis_top_ports.set("-")
 
 
 if __name__ == "__main__":

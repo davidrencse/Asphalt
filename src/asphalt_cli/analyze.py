@@ -51,7 +51,7 @@ def _parse_analyzers(value: str):
 @click.option(
     "--analyzers",
     "analyzers",
-    default="capture_health,global_stats,protocol_mix,flow_summary,tcp_handshakes,abnormal_activity,packet_chunks,time_series",
+    default="capture_health,global_stats,protocol_mix,flow_summary,flow_analytics,tcp_handshakes,abnormal_activity,packet_chunks,time_series,throughput_peaks,packet_size_stats,l2_l3_breakdown,top_entities",
     show_default=True,
     help="Comma-separated analyzer list",
 )

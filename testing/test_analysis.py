@@ -20,6 +20,11 @@ from analysis.analyzers.tcp_handshakes import TcpHandshakeAnalyzer
 from analysis.analyzers.abnormal_activity import AbnormalActivityAnalyzer
 from analysis.analyzers.packet_chunks import PacketChunksAnalyzer
 from analysis.analyzers.capture_health import CaptureHealthAnalyzer
+from analysis.analyzers.throughput_peaks import ThroughputPeaksAnalyzer
+from analysis.analyzers.packet_size_stats import PacketSizeStatsAnalyzer
+from analysis.analyzers.l2_l3_breakdown import L2L3BreakdownAnalyzer
+from analysis.analyzers.top_entities import TopEntitiesAnalyzer
+from analysis.analyzers.flow_analytics import FlowAnalyticsAnalyzer
 
 
 def _make_decoded(packet_id: int,
@@ -59,6 +64,58 @@ def _make_decoded(packet_id: int,
         ttl=ttl,
         quality_flags=quality_flags,
     )
+
+
+def _packet_dict(packet_id: int,
+                 ts_us: int,
+                 captured_len: int,
+                 original_len: int,
+                 ip_version: int = 4,
+                 ip_proto: int = 6,
+                 src_ip: str = "10.0.0.1",
+                 dst_ip: str = "10.0.0.2",
+                 l4: str = "TCP",
+                 src_mac: str = "00:1b:63:aa:bb:cc",
+                 dst_mac: str = "00:1a:2b:11:22:33",
+                 src_port: int = 1234,
+                 dst_port: int = 80,
+                 tcp_flags: int = None,
+                 is_vlan: bool = False,
+                 is_arp: bool = False,
+                 is_multicast: bool = False,
+                 is_broadcast: bool = False,
+                 is_ipv4_fragment: bool = False,
+                 is_ipv6_fragment: bool = False):
+    effective_tcp_flags = tcp_flags
+    if effective_tcp_flags is None and l4 == "TCP":
+        effective_tcp_flags = 0x10
+    return {
+        "packet_id": packet_id,
+        "timestamp_us": ts_us,
+        "captured_length": captured_len,
+        "original_length": original_len,
+        "link_type": 1,
+        "eth_type": 0x0800,
+        "src_mac": src_mac,
+        "dst_mac": dst_mac,
+        "ip_version": ip_version,
+        "src_ip": src_ip,
+        "dst_ip": dst_ip,
+        "ip_protocol": ip_proto,
+        "l4_protocol": l4,
+        "src_port": src_port,
+        "dst_port": dst_port,
+        "tcp_flags": effective_tcp_flags,
+        "ttl": 64,
+        "quality_flags": 0,
+        "stack_summary": "ETH/IP4/TCP",
+        "is_vlan": is_vlan,
+        "is_arp": is_arp,
+        "is_multicast": is_multicast,
+        "is_broadcast": is_broadcast,
+        "is_ipv4_fragment": is_ipv4_fragment,
+        "is_ipv6_fragment": is_ipv6_fragment,
+    }
 
 
 def test_flow_state_direction_counts():
@@ -336,6 +393,333 @@ def test_capture_health_decode_stats():
     assert decode["malformed_packets"] == 1
 
 
+def test_throughput_peaks_empty():
+    analyzer = ThroughputPeaksAnalyzer(bucket_ms=1000)
+    engine = AnalysisEngine(analyzers=[analyzer])
+    report = engine.finalize()
+    summary = report.global_results["throughput_peaks"]
+    assert summary["bps_now"] == 0.0
+    assert summary["peak_bps_timestamp"] is None
+
+
+def test_throughput_peaks_mixed():
+    analyzer = ThroughputPeaksAnalyzer(bucket_ms=1000)
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(1, 1_000_000, 1000, 1000))
+    engine.process_packet_dict(_packet_dict(2, 1_200_000, 1000, 1000))
+    engine.process_packet_dict(_packet_dict(3, 2_000_000, 4000, 4000))
+    report = engine.finalize()
+    summary = report.global_results["throughput_peaks"]
+    assert summary["bps_now"] == 32000.0
+    assert summary["pps_now"] == 1.0
+    assert summary["bps_avg"] == 24000.0
+    assert summary["pps_avg"] == 1.5
+    assert summary["peak_bps_timestamp"] == 2_000_000
+    assert summary["peak_pps_timestamp"] == 1_000_000
+    assert summary["peak_timestamp"] is None
+
+
+def test_packet_size_stats_histogram_and_quantiles():
+    analyzer = PacketSizeStatsAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    sizes = [60, 100, 200, 600, 1400, 1600]
+    for idx, size in enumerate(sizes, start=1):
+        engine.process_packet_dict(_packet_dict(idx, 1_000_000 + idx * 10, size, size))
+    report = engine.finalize()
+    stats = report.global_results["packet_size_stats"]
+    captured = stats["captured_length"]
+    assert captured["min"] == 60
+    assert captured["max"] == 1600
+    assert captured["median"] == 400.0
+    assert captured["p95"] == 1550.0
+    hist = stats["histogram"]
+    assert hist["0-63"] == 1
+    assert hist["64-127"] == 1
+    assert hist["128-511"] == 1
+    assert hist["512-1023"] == 1
+    assert hist["1024-1514"] == 1
+    assert hist["jumbo"] == 1
+
+
+def test_packet_size_stats_empty():
+    analyzer = PacketSizeStatsAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    report = engine.finalize()
+    stats = report.global_results["packet_size_stats"]
+    assert stats["captured_length"]["median"] is None
+    assert stats["original_length"]["median"] is None
+    assert stats["histogram"]["jumbo"] == 0
+
+
+def test_packet_size_stats_fragments():
+    analyzer = PacketSizeStatsAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(1, 1_000_000, 100, 100, is_ipv4_fragment=True))
+    engine.process_packet_dict(_packet_dict(2, 1_100_000, 120, 120, is_ipv6_fragment=True))
+    report = engine.finalize()
+    fragments = report.global_results["packet_size_stats"]["fragments"]
+    assert fragments["ipv4_fragments"] == 1
+    assert fragments["ipv6_fragments"] == 1
+
+
+def test_l2_l3_breakdown_counts():
+    analyzer = L2L3BreakdownAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(1, 1_000_000, 100, 100, is_vlan=True))
+    engine.process_packet_dict(_packet_dict(2, 1_010_000, 100, 100, ip_proto=1))
+    engine.process_packet_dict(_packet_dict(3, 1_020_000, 100, 100, ip_proto=58))
+    engine.process_packet_dict(_packet_dict(4, 1_030_000, 100, 100, is_arp=True))
+    engine.process_packet_dict(_packet_dict(5, 1_040_000, 100, 100, is_multicast=True))
+    engine.process_packet_dict(_packet_dict(6, 1_050_000, 100, 100, is_broadcast=True))
+    report = engine.finalize()
+    breakdown = report.global_results["l2_l3_breakdown"]
+    assert breakdown["ethernet_frames"] == 6
+    assert breakdown["vlan_frames"] == 1
+    assert breakdown["arp_packets"] == 1
+    assert breakdown["icmp_packets"] == 1
+    assert breakdown["icmpv6_packets"] == 1
+    assert breakdown["multicast_packets"] == 1
+    assert breakdown["broadcast_packets"] == 1
+
+
+def test_l2_l3_breakdown_empty():
+    analyzer = L2L3BreakdownAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    report = engine.finalize()
+    breakdown = report.global_results["l2_l3_breakdown"]
+    assert breakdown["ethernet_frames"] == 0
+    assert breakdown["broadcast_packets"] == 0
+
+
+def test_top_entities_empty():
+    analyzer = TopEntitiesAnalyzer(top_n=3)
+    engine = AnalysisEngine(analyzers=[analyzer])
+    report = engine.finalize()
+    top = report.global_results["top_entities"]
+    assert top["ip_talkers"]["top_src"] == []
+    assert top["mac_talkers"]["top_src"] == []
+    assert top["ports"]["tcp"]["top_dst_ports"] == []
+
+
+def test_top_entities_mixed():
+    analyzer = TopEntitiesAnalyzer(top_n=2)
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(
+        1, 1_000_000, 500, 500,
+        src_ip="10.0.0.1", dst_ip="8.8.8.8",
+        src_mac="00:1b:63:aa:bb:cc", dst_mac="5c:51:4f:00:11:22",
+        ip_proto=6, l4="TCP",
+    ))
+    engine.process_packet_dict(_packet_dict(
+        2, 1_010_000, 700, 700,
+        src_ip="10.0.0.2", dst_ip="1.1.1.1",
+        src_mac="00:0c:29:aa:bb:cc", dst_mac="00:1b:63:aa:bb:cc",
+        ip_proto=17, l4="UDP",
+    ))
+    engine.process_packet_dict(_packet_dict(
+        3, 1_020_000, 200, 200,
+        src_ip="10.0.0.1", dst_ip="8.8.8.8",
+        src_mac="00:1b:63:aa:bb:cc", dst_mac="5c:51:4f:00:11:22",
+        ip_proto=6, l4="TCP", dst_port=443,
+    ))
+    report = engine.finalize()
+    top = report.global_results["top_entities"]
+    src = top["ip_talkers"]["top_src"][0]
+    assert src["ip"] == "10.0.0.1"
+    assert src["bytes"] == 700
+    split = top["ip_talkers"]["internal_external"]
+    assert split["internal_bytes_pct"] == 100.0
+
+    macs = top["mac_talkers"]["top_src"]
+    assert macs[0]["vendor"] in ("Apple", "Unknown")
+
+    tcp_ports = top["ports"]["tcp"]["top_dst_ports"]
+    assert tcp_ports[0]["port"] in (80, 443)
+
+
+def test_top_entities_vendor_lookup_and_ports_pct():
+    analyzer = TopEntitiesAnalyzer(top_n=3)
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(
+        1, 1_000_000, 100, 100,
+        src_mac="00:1b:63:aa:bb:cc", dst_mac="ff:ff:ff:ff:ff:ff",
+        ip_proto=6, l4="TCP", dst_port=80
+    ))
+    engine.process_packet_dict(_packet_dict(
+        2, 1_010_000, 100, 100,
+        src_mac="00:1b:63:aa:bb:cc", dst_mac="00:0c:29:11:22:33",
+        ip_proto=6, l4="TCP", dst_port=80
+    ))
+    engine.process_packet_dict(_packet_dict(
+        3, 1_020_000, 100, 100,
+        src_mac="00:0c:29:aa:bb:cc", dst_mac="00:0c:29:11:22:33",
+        ip_proto=17, l4="UDP", dst_port=53
+    ))
+    engine.process_packet_dict(_packet_dict(
+        4, 1_030_000, 50, 50,
+        src_mac="aa:bb:cc:dd:ee:ff", dst_mac="00:0c:29:11:22:33",
+        ip_proto=17, l4="UDP", dst_port=53
+    ))
+    report = engine.finalize()
+    top = report.global_results["top_entities"]
+    mac_entry = top["mac_talkers"]["top_src"][0]
+    assert mac_entry["vendor"] in ("Apple", "VMware", "Unknown")
+    vendors = {item["vendor"] for item in top["mac_talkers"]["vendor_distribution"]}
+    assert "Unknown" in vendors
+    tcp = top["ports"]["tcp"]["top_dst_ports"]
+    assert tcp[0]["port"] == 80
+    assert tcp[0]["packets_pct"] == 100.0
+    udp = top["ports"]["udp"]["top_dst_ports"]
+    assert udp[0]["port"] == 53
+    assert udp[0]["packets_pct"] == 100.0
+
+
+def test_top_entities_internal_external_split():
+    analyzer = TopEntitiesAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(
+        1, 1_000_000, 100, 100,
+        src_ip="10.0.0.5", dst_ip="8.8.8.8",
+        ip_proto=6, l4="TCP", dst_port=80
+    ))
+    engine.process_packet_dict(_packet_dict(
+        2, 1_010_000, 300, 300,
+        src_ip="1.2.3.4", dst_ip="10.0.0.5",
+        ip_proto=17, l4="UDP", dst_port=53
+    ))
+    report = engine.finalize()
+    split = report.global_results["top_entities"]["ip_talkers"]["internal_external"]
+    assert split["internal_bytes_pct"] == 25.0
+    assert split["external_bytes_pct"] == 75.0
+
+
+def test_top_entities_schema_keys():
+    analyzer = TopEntitiesAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(1, 1_000_000, 60, 60))
+    report = engine.finalize()
+    top = report.global_results["top_entities"]
+    assert "ip_talkers" in top
+    assert "mac_talkers" in top
+    assert "ports" in top
+
+
+def test_flow_analytics_empty():
+    analyzer = FlowAnalyticsAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    report = engine.finalize()
+    analytics = report.global_results["flow_analytics"]
+    assert analytics["summary"]["total_flows"] == 0
+    assert analytics["heavy_hitters"]["top_by_bytes"] == []
+    assert analytics["states"]["tcp_established"] == 0
+
+
+def test_flow_analytics_rates_and_percentiles():
+    analyzer = FlowAnalyticsAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(
+        1, 1_000_000, 100, 100,
+        src_ip="10.0.0.1", dst_ip="10.0.0.2",
+        src_port=1111, dst_port=80, ip_proto=6, l4="TCP",
+        tcp_flags=0x02,
+    ))
+    engine.process_packet_dict(_packet_dict(
+        2, 2_000_000, 200, 200,
+        src_ip="10.0.0.3", dst_ip="10.0.0.4",
+        src_port=2222, dst_port=443, ip_proto=6, l4="TCP",
+        tcp_flags=0x02,
+    ))
+    report = engine.finalize()
+    summary = report.global_results["flow_analytics"]["summary"]
+    assert summary["total_flows"] == 2
+    assert summary["new_flows_per_sec"] == 2.0
+    assert summary["bytes_per_flow_avg"] == 150.0
+
+
+def test_flow_analytics_heavy_hitters_and_duration():
+    analyzer = FlowAnalyticsAnalyzer(top_n=1)
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(
+        1, 1_000_000, 500, 500,
+        src_ip="10.0.0.1", dst_ip="10.0.0.2",
+        src_port=1111, dst_port=80, ip_proto=6, l4="TCP",
+        tcp_flags=0x02,
+    ))
+    engine.process_packet_dict(_packet_dict(
+        2, 1_500_000, 500, 500,
+        src_ip="10.0.0.1", dst_ip="10.0.0.2",
+        src_port=1111, dst_port=80, ip_proto=6, l4="TCP",
+        tcp_flags=0x10,
+    ))
+    report = engine.finalize()
+    heavy = report.global_results["flow_analytics"]["heavy_hitters"]["top_by_bytes"][0]
+    assert heavy["bytes"] == 1000
+    assert heavy["duration_us"] == 500_000
+    assert "label" in heavy
+
+
+def test_flow_analytics_states_tcp_udp():
+    analyzer = FlowAnalyticsAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    # TCP established
+    engine.process_packet_dict(_packet_dict(
+        1, 1_000_000, 100, 100,
+        src_ip="10.0.0.1", dst_ip="10.0.0.2",
+        src_port=1111, dst_port=80, ip_proto=6, l4="TCP",
+        tcp_flags=0x02,
+    ))
+    engine.process_packet_dict(_packet_dict(
+        2, 1_010_000, 100, 100,
+        src_ip="10.0.0.2", dst_ip="10.0.0.1",
+        src_port=80, dst_port=1111, ip_proto=6, l4="TCP",
+        tcp_flags=0x12,
+    ))
+    engine.process_packet_dict(_packet_dict(
+        3, 1_020_000, 100, 100,
+        src_ip="10.0.0.1", dst_ip="10.0.0.2",
+        src_port=1111, dst_port=80, ip_proto=6, l4="TCP",
+        tcp_flags=0x10,
+    ))
+    # TCP half-open
+    engine.process_packet_dict(_packet_dict(
+        4, 1_030_000, 100, 100,
+        src_ip="10.0.0.3", dst_ip="10.0.0.4",
+        src_port=2222, dst_port=81, ip_proto=6, l4="TCP",
+        tcp_flags=0x02,
+    ))
+    # TCP reset/failed
+    engine.process_packet_dict(_packet_dict(
+        5, 1_040_000, 100, 100,
+        src_ip="10.0.0.5", dst_ip="10.0.0.6",
+        src_port=3333, dst_port=82, ip_proto=6, l4="TCP",
+        tcp_flags=0x04,
+    ))
+    # UDP paired and unpaired
+    engine.process_packet_dict(_packet_dict(
+        6, 1_050_000, 100, 100,
+        src_ip="10.0.0.7", dst_ip="10.0.0.8",
+        src_port=4000, dst_port=53, ip_proto=17, l4="UDP",
+    ))
+    engine.process_packet_dict(_packet_dict(
+        7, 1_060_000, 100, 100,
+        src_ip="10.0.0.8", dst_ip="10.0.0.7",
+        src_port=53, dst_port=4000, ip_proto=17, l4="UDP",
+    ))
+    engine.process_packet_dict(_packet_dict(
+        8, 1_070_000, 100, 100,
+        src_ip="10.0.0.9", dst_ip="10.0.0.10",
+        src_port=5000, dst_port=53, ip_proto=17, l4="UDP",
+    ))
+
+    report = engine.finalize()
+    states = report.global_results["flow_analytics"]["states"]
+    assert states["tcp_established"] == 1
+    assert states["tcp_half_open"] == 1
+    assert states["tcp_reset_failed"] == 1
+    assert states["udp_paired"] == 1
+    assert states["udp_unpaired"] == 1
+
+
 def main():
     tests = [
         test_flow_state_direction_counts,
@@ -346,6 +730,22 @@ def main():
         test_abnormal_activity_scan_and_syn_only,
         test_packet_chunks,
         test_capture_health_decode_stats,
+        test_throughput_peaks_empty,
+        test_throughput_peaks_mixed,
+        test_packet_size_stats_histogram_and_quantiles,
+        test_packet_size_stats_empty,
+        test_packet_size_stats_fragments,
+        test_l2_l3_breakdown_counts,
+        test_l2_l3_breakdown_empty,
+        test_top_entities_empty,
+        test_top_entities_mixed,
+        test_top_entities_vendor_lookup_and_ports_pct,
+        test_top_entities_internal_external_split,
+        test_top_entities_schema_keys,
+        test_flow_analytics_empty,
+        test_flow_analytics_rates_and_percentiles,
+        test_flow_analytics_heavy_hitters_and_duration,
+        test_flow_analytics_states_tcp_udp,
     ]
 
     print("=" * 60)

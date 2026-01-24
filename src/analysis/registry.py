@@ -24,6 +24,11 @@ def _load_builtin_analyzers() -> None:
     from .analyzers import packet_chunks  # noqa: F401
     from .analyzers import tcp_handshakes  # noqa: F401
     from .analyzers import capture_health  # noqa: F401
+    from .analyzers import throughput_peaks  # noqa: F401
+    from .analyzers import packet_size_stats  # noqa: F401
+    from .analyzers import l2_l3_breakdown  # noqa: F401
+    from .analyzers import top_entities  # noqa: F401
+    from .analyzers import flow_analytics  # noqa: F401
 
 
 def list_analyzers() -> List[str]:
