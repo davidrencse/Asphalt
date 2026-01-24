@@ -151,7 +151,9 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
                                  ip_protocol, src_port, dst_port, tcp_flags, ttl, quality,
                                  eth_type, src_mac, dst_mac, is_vlan, is_arp, is_multicast, is_broadcast,
                                  is_ipv4_fragment, is_ipv6_fragment,
-                                 tcp_seq, tcp_ack, tcp_window, tcp_mss)
+                                 tcp_seq, tcp_ack, tcp_window, tcp_mss,
+                                 arp_sender_ip, arp_sender_mac,
+                                 dns_qname, dns_is_query, dns_is_response, dns_rcode)
             l4_protocol, src_port, dst_port, tcp_flags, tcp_seq, tcp_ack, tcp_window, tcp_mss, l4_payload_offset, tcp_header_len, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
             quality |= l4_quality
             if l4_protocol:
@@ -165,7 +167,9 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
                                  ip_protocol, src_port, dst_port, tcp_flags, ttl, quality,
                                  eth_type, src_mac, dst_mac, is_vlan, is_arp, is_multicast, is_broadcast,
                                  is_ipv4_fragment, is_ipv6_fragment,
-                                 tcp_seq, tcp_ack, tcp_window, tcp_mss)
+                                 tcp_seq, tcp_ack, tcp_window, tcp_mss,
+                                 arp_sender_ip, arp_sender_mac,
+                                 dns_qname, dns_is_query, dns_is_response, dns_rcode)
             l4_protocol, src_port, dst_port, tcp_flags, tcp_seq, tcp_ack, tcp_window, tcp_mss, l4_payload_offset, tcp_header_len, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
             quality |= l4_quality
             if l4_protocol:
