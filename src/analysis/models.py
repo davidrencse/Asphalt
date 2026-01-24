@@ -40,6 +40,12 @@ class AnalysisPacket:
     tcp_ack: Optional[int]
     tcp_window: Optional[int]
     tcp_mss: Optional[int]
+    arp_sender_ip: Optional[str]
+    arp_sender_mac: Optional[str]
+    dns_qname: Optional[str]
+    dns_is_query: Optional[bool]
+    dns_is_response: Optional[bool]
+    dns_rcode: Optional[int]
     ttl: Optional[int]
     quality_flags: int
     is_vlan: bool = False
@@ -75,6 +81,12 @@ class AnalysisPacket:
             tcp_ack=getattr(decoded, "tcp_ack", None),
             tcp_window=getattr(decoded, "tcp_window", None),
             tcp_mss=getattr(decoded, "tcp_mss", None),
+            arp_sender_ip=getattr(decoded, "arp_sender_ip", None),
+            arp_sender_mac=getattr(decoded, "arp_sender_mac", None),
+            dns_qname=getattr(decoded, "dns_qname", None),
+            dns_is_query=getattr(decoded, "dns_is_query", None),
+            dns_is_response=getattr(decoded, "dns_is_response", None),
+            dns_rcode=getattr(decoded, "dns_rcode", None),
             ttl=decoded.ttl,
             quality_flags=decoded.quality_flags,
             is_vlan=getattr(decoded, "is_vlan", False),
@@ -109,6 +121,12 @@ class AnalysisPacket:
             "tcp_ack": self.tcp_ack,
             "tcp_window": self.tcp_window,
             "tcp_mss": self.tcp_mss,
+            "arp_sender_ip": self.arp_sender_ip,
+            "arp_sender_mac": self.arp_sender_mac,
+            "dns_qname": self.dns_qname,
+            "dns_is_query": self.dns_is_query,
+            "dns_is_response": self.dns_is_response,
+            "dns_rcode": self.dns_rcode,
             "ttl": self.ttl,
             "quality_flags": self.quality_flags,
             "is_vlan": self.is_vlan,

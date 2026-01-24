@@ -144,7 +144,20 @@ class DecodedPacket:
     """Advertised TCP receive window (unscaled)."""
     tcp_mss: Optional[int] = None
     """TCP MSS option value if present."""
-    
+
+    arp_sender_ip: Optional[str] = None
+    """ARP sender protocol address (SPA)."""
+    arp_sender_mac: Optional[str] = None
+    """ARP sender hardware address (SHA)."""
+
+    dns_qname: Optional[str] = None
+    """DNS query name if decoded."""
+    dns_is_query: Optional[bool] = None
+    """True if DNS packet is a query."""
+    dns_is_response: Optional[bool] = None
+    """True if DNS packet is a response."""
+    dns_rcode: Optional[int] = None
+    """DNS response code if available."""
     ttl: Optional[int] = None
     """IPv4 TTL or IPv6 Hop Limit."""
 
@@ -240,6 +253,12 @@ class DecodedPacket:
             "tcp_ack": self.tcp_ack,
             "tcp_window": self.tcp_window,
             "tcp_mss": self.tcp_mss,
+            "arp_sender_ip": self.arp_sender_ip,
+            "arp_sender_mac": self.arp_sender_mac,
+            "dns_qname": self.dns_qname,
+            "dns_is_query": self.dns_is_query,
+            "dns_is_response": self.dns_is_response,
+            "dns_rcode": self.dns_rcode,
             "tcp_flags_names": list(self.tcp_flag_names),
             "ttl": self.ttl,
             "quality_flags": self.quality_flags,

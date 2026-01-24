@@ -108,6 +108,9 @@ def run_analysis(packets, bucket_ms: int = 1000, chunk_size: int = 200):
         "tcp_reliability",
         "tcp_performance",
         "abnormal_activity",
+        "scan_signals",
+        "arp_lan_signals",
+        "dns_anomalies",
         "packet_chunks",
         "time_series",
         "throughput_peaks",
@@ -329,6 +332,9 @@ class AsphaltApp(tk.Tk):
         self.analysis_tcp_handshake = tk.StringVar(value="-")
         self.analysis_tcp_reliability = tk.StringVar(value="-")
         self.analysis_tcp_performance = tk.StringVar(value="-")
+        self.analysis_scan_signals = tk.StringVar(value="-")
+        self.analysis_arp_lan = tk.StringVar(value="-")
+        self.analysis_dns_anomalies = tk.StringVar(value="-")
 
         self._stat_block(stats, "Packets", self.stat_packets, 0)
         self._stat_block(stats, "IPv4 / IPv6", self.stat_ip, 1)
@@ -489,6 +495,20 @@ class AsphaltApp(tk.Tk):
         self._info_card_var(grid, "Handshake Detail", self.analysis_tcp_handshake, 0, 0)
         self._info_card_var(grid, "Reliability Indicators", self.analysis_tcp_reliability, 1, 0)
         self._info_card_var(grid, "TCP Performance Signals", self.analysis_tcp_performance, 2, 0)
+        for c in range(3):
+            grid.grid_columnconfigure(c, weight=1)
+
+        frame, body = self._collapsible_section(
+            sections,
+            "Security and anomaly signals",
+            "Scan-like Behavior · DNS Anomalies · ARP and LAN Attacks"
+        )
+        frame.pack(fill="x", pady=6)
+        grid = tk.Frame(body, bg="#151b23")
+        grid.pack(fill="x")
+        self._info_card_var(grid, "Scan-like Behavior", self.analysis_scan_signals, 0, 0)
+        self._info_card_var(grid, "DNS Anomalies", self.analysis_dns_anomalies, 1, 0)
+        self._info_card_var(grid, "ARP and LAN Attacks", self.analysis_arp_lan, 2, 0)
         for c in range(3):
             grid.grid_columnconfigure(c, weight=1)
 
@@ -658,6 +678,9 @@ class AsphaltApp(tk.Tk):
             self.analysis_tcp_handshake.set("-")
             self.analysis_tcp_reliability.set("-")
             self.analysis_tcp_performance.set("-")
+            self.analysis_scan_signals.set("-")
+            self.analysis_dns_anomalies.set("-")
+            self.analysis_arp_lan.set("-")
             return
 
         protocol = analysis.get("global_results", {}).get("protocol_mix", {})
@@ -916,6 +939,56 @@ class AsphaltApp(tk.Tk):
             )
         else:
             self.analysis_tcp_performance.set("-")
+
+        scan = analysis.get("global_results", {}).get("scan_signals", {})
+        if scan:
+            ports = scan.get("distinct_ports", {})
+            ips = scan.get("distinct_ips", {})
+            syn_ratio = scan.get("tcp_syn_ratio", {})
+            ratio_val = syn_ratio.get("ratio")
+            ratio_note = syn_ratio.get("ratio_note")
+            ratio_text = _fmt_number(ratio_val, 3) if ratio_val is not None else (ratio_note or "n/a")
+            self.analysis_scan_signals.set(
+                f"dst ports max {ports.get('max_count', 0)} ({ports.get('src_ip', 'n/a')})\n"
+                f"dst ips max {ips.get('max_count', 0)} ({ips.get('src_ip', 'n/a')})\n"
+                f"SYN {syn_ratio.get('syn_count', 0)} / SYN-ACK {syn_ratio.get('synack_count', 0)}\n"
+                f"SYN:SYN-ACK {ratio_text}"
+            )
+        else:
+            self.analysis_scan_signals.set("-")
+
+        dns = analysis.get("global_results", {}).get("dns_anomalies", {})
+        if dns:
+            entropy = dns.get("entropy", {})
+            long_labels = dns.get("long_labels", {})
+            nxd = dns.get("nxdomain", {})
+            sample_entropy = entropy.get("samples", [])
+            sample_long = long_labels.get("samples", [])
+            entropy_line = sample_entropy[0]["domain"] if sample_entropy else "none"
+            long_line = sample_long[0]["domain"] if sample_long else "none"
+            self.analysis_dns_anomalies.set(
+                f"high entropy {entropy.get('count', 0)} (e.g. {entropy_line})\n"
+                f"long labels {long_labels.get('count', 0)} (e.g. {long_line})\n"
+                f"NXDOMAIN {nxd.get('nxdomain_count', 0)} / {nxd.get('total_responses', 0)} "
+                f"({_fmt_pct(nxd.get('nxdomain_pct'))})\n"
+                f"spike {nxd.get('spike_detected', False)}"
+            )
+        else:
+            self.analysis_dns_anomalies.set("-")
+
+        arp = analysis.get("global_results", {}).get("arp_lan_signals", {})
+        if arp:
+            multiple = arp.get("multiple_macs", {})
+            changes = arp.get("arp_changes", {})
+            example = multiple.get("examples", [])
+            example_ip = example[0]["ip"] if example else "none"
+            self.analysis_arp_lan.set(
+                f"multiple MACs {multiple.get('count', 0)} (e.g. {example_ip})\n"
+                f"arp changes {changes.get('count', 0)}\n"
+                f"threshold {changes.get('threshold', 'n/a')}"
+            )
+        else:
+            self.analysis_arp_lan.set("-")
 
     def download_capture(self):
         if not self.latest_packets:

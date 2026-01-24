@@ -31,6 +31,9 @@ def _load_builtin_analyzers() -> None:
     from .analyzers import flow_analytics  # noqa: F401
     from .analyzers import tcp_reliability  # noqa: F401
     from .analyzers import tcp_performance  # noqa: F401
+    from .analyzers import scan_signals  # noqa: F401
+    from .analyzers import arp_lan_signals  # noqa: F401
+    from .analyzers import dns_anomalies  # noqa: F401
 
 
 def list_analyzers() -> List[str]:

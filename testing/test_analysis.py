@@ -27,6 +27,9 @@ from analysis.analyzers.top_entities import TopEntitiesAnalyzer
 from analysis.analyzers.flow_analytics import FlowAnalyticsAnalyzer
 from analysis.analyzers.tcp_reliability import TcpReliabilityAnalyzer
 from analysis.analyzers.tcp_performance import TcpPerformanceAnalyzer
+from analysis.analyzers.scan_signals import ScanSignalsAnalyzer
+from analysis.analyzers.arp_lan_signals import ArpLanSignalsAnalyzer
+from analysis.analyzers.dns_anomalies import DnsAnomaliesAnalyzer
 
 
 def _make_decoded(packet_id: int,
@@ -86,6 +89,12 @@ def _packet_dict(packet_id: int,
                  tcp_ack: int = None,
                  tcp_window: int = None,
                  tcp_mss: int = None,
+                 arp_sender_ip: str = None,
+                 arp_sender_mac: str = None,
+                 dns_qname: str = None,
+                 dns_is_query: bool = None,
+                 dns_is_response: bool = None,
+                 dns_rcode: int = None,
                  is_vlan: bool = False,
                  is_arp: bool = False,
                  is_multicast: bool = False,
@@ -116,6 +125,12 @@ def _packet_dict(packet_id: int,
         "tcp_ack": tcp_ack,
         "tcp_window": tcp_window,
         "tcp_mss": tcp_mss,
+        "arp_sender_ip": arp_sender_ip,
+        "arp_sender_mac": arp_sender_mac,
+        "dns_qname": dns_qname,
+        "dns_is_query": dns_is_query,
+        "dns_is_response": dns_is_response,
+        "dns_rcode": dns_rcode,
         "ttl": 64,
         "quality_flags": 0,
         "stack_summary": "ETH/IP4/TCP",
@@ -865,6 +880,107 @@ def test_tcp_reliability_bounded_memory():
     rel = report.global_results["tcp_reliability"]
     assert rel["tcp_packets"] == 2
 
+
+def test_scan_signals_counts_and_ratio():
+    analyzer = ScanSignalsAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(
+        1, 1_000_000, 100, 100,
+        src_ip="10.0.0.1", dst_ip="8.8.8.8",
+        ip_proto=6, l4="TCP", dst_port=80, tcp_flags=0x02
+    ))
+    engine.process_packet_dict(_packet_dict(
+        2, 1_010_000, 100, 100,
+        src_ip="10.0.0.1", dst_ip="1.1.1.1",
+        ip_proto=6, l4="TCP", dst_port=443, tcp_flags=0x12
+    ))
+    engine.process_packet_dict(_packet_dict(
+        3, 1_020_000, 100, 100,
+        src_ip="10.0.0.1", dst_ip="9.9.9.9",
+        ip_proto=6, l4="TCP", dst_port=22, tcp_flags=0x02
+    ))
+    report = engine.finalize()
+    scan = report.global_results["scan_signals"]
+    assert scan["distinct_ports"]["max_count"] == 3
+    assert scan["distinct_ports"]["src_ip"] == "10.0.0.1"
+    assert scan["distinct_ips"]["max_count"] == 3
+    syn_ratio = scan["tcp_syn_ratio"]
+    assert syn_ratio["syn_count"] == 2
+    assert syn_ratio["synack_count"] == 1
+    assert syn_ratio["ratio"] == 2.0
+
+
+def test_scan_signals_zero_synack():
+    analyzer = ScanSignalsAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(
+        1, 1_000_000, 100, 100,
+        ip_proto=6, l4="TCP", tcp_flags=0x02
+    ))
+    report = engine.finalize()
+    ratio = report.global_results["scan_signals"]["tcp_syn_ratio"]
+    assert ratio["ratio"] is None
+    assert ratio["ratio_note"] == "synack_zero"
+
+
+def test_arp_lan_signals():
+    analyzer = ArpLanSignalsAnalyzer(change_threshold=1)
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(
+        1, 1_000_000, 60, 60,
+        is_arp=True, arp_sender_ip="192.168.1.10", arp_sender_mac="00:11:22:33:44:55"
+    ))
+    engine.process_packet_dict(_packet_dict(
+        2, 1_010_000, 60, 60,
+        is_arp=True, arp_sender_ip="192.168.1.10", arp_sender_mac="00:11:22:33:44:66"
+    ))
+    engine.process_packet_dict(_packet_dict(
+        3, 1_020_000, 60, 60,
+        is_arp=True, arp_sender_ip="192.168.1.10", arp_sender_mac="00:11:22:33:44:77"
+    ))
+    report = engine.finalize()
+    arp = report.global_results["arp_lan_signals"]
+    assert arp["multiple_macs"]["count"] == 1
+    assert arp["arp_changes"]["count"] == 1
+
+
+def test_dns_anomalies_metrics():
+    analyzer = DnsAnomaliesAnalyzer(entropy_threshold=3.0, label_length_threshold=10, nxdomain_threshold_pct=50.0, min_responses=2)
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(
+        1, 1_000_000, 100, 100,
+        dns_qname="abcd1234wxyz.example.com", dns_is_query=True
+    ))
+    engine.process_packet_dict(_packet_dict(
+        2, 1_010_000, 100, 100,
+        dns_qname="aaaaaaaaaaaaaaaaaaaa.example.com", dns_is_query=True
+    ))
+    engine.process_packet_dict(_packet_dict(
+        3, 1_020_000, 100, 100,
+        dns_is_response=True, dns_rcode=3
+    ))
+    engine.process_packet_dict(_packet_dict(
+        4, 1_030_000, 100, 100,
+        dns_is_response=True, dns_rcode=0
+    ))
+    report = engine.finalize()
+    dns = report.global_results["dns_anomalies"]
+    assert dns["entropy"]["count"] >= 1
+    assert dns["long_labels"]["count"] >= 1
+    assert dns["nxdomain"]["nxdomain_count"] == 1
+    assert dns["nxdomain"]["total_responses"] == 2
+    assert dns["nxdomain"]["spike_detected"] is True
+
+
+def test_dns_anomalies_missing_fields():
+    analyzer = DnsAnomaliesAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(1, 1_000_000, 100, 100))
+    report = engine.finalize()
+    dns = report.global_results["dns_anomalies"]
+    assert dns["entropy"]["count"] == 0
+    assert dns["nxdomain"]["total_responses"] == 0
+
 def main():
     tests = [
         test_flow_state_direction_counts,
@@ -895,6 +1011,11 @@ def main():
         test_tcp_performance_metrics,
         test_tcp_handshake_rtt_quantiles,
         test_tcp_reliability_bounded_memory,
+        test_scan_signals_counts_and_ratio,
+        test_scan_signals_zero_synack,
+        test_arp_lan_signals,
+        test_dns_anomalies_metrics,
+        test_dns_anomalies_missing_fields,
     ]
 
     print("=" * 60)
