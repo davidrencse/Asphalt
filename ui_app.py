@@ -13,6 +13,15 @@ import subprocess
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from datetime import datetime, timezone
+try:
+    import matplotlib
+    from matplotlib.figure import Figure
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    _HAS_MPL = True
+except Exception:
+    Figure = None
+    FigureCanvasTkAgg = None
+    _HAS_MPL = False
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC_DIR = os.path.join(PROJECT_ROOT, "src")
@@ -33,6 +42,21 @@ ACCENT = "#ffffff"
 ACCENT_BTN_BG = "#ffffff"
 ACCENT_BTN_FG = "#000000"
 WARN = "#e0e0e0"
+GOOD = "#4caf50"
+WARN_BADGE = "#ffb300"
+BAD = "#e53935"
+
+DROP_RATE_WARN = 1.0
+DROP_RATE_BAD = 5.0
+HANDSHAKE_WARN_LO = 85.0
+HANDSHAKE_GOOD_LO = 95.0
+RETX_WARN = 1.0
+RETX_BAD = 3.0
+RST_WARN = 1.0
+RST_BAD = 3.0
+SCAN_PORTS_WARN = 100
+ARP_CONFLICT_WARN = 1
+NXDOMAIN_SPIKE_WARN = True
 
 
 def _extract_json_array(text: str):
@@ -248,6 +272,7 @@ class AsphaltApp(tk.Tk):
         self.title("Asphalt")
         self.geometry("1200x820")
         self.configure(bg=BG_MAIN)
+        self.has_mpl = _HAS_MPL
 
         self.style = ttk.Style(self)
         try:
@@ -377,6 +402,7 @@ class AsphaltApp(tk.Tk):
 
         self._build_raw_data_heuristics_section()
         self._build_technical_information_section()
+        self._build_simplified_dashboard_section()
         self._build_packet_table()
 
     def _on_mousewheel(self, event):
@@ -614,6 +640,66 @@ class AsphaltApp(tk.Tk):
         self._build_ti_security_signals()
         self._build_ti_time_series_chunking()
 
+    def _build_simplified_dashboard_section(self):
+        section = tk.Frame(self.content, bg=BG_MAIN)
+        section.pack(fill="x", padx=20, pady=10)
+
+        frame, body = self._collapsible_section(
+            section,
+            "Simplified Dashboard",
+            "Executive summary · Key charts · Diagnostics"
+        )
+        frame.pack(fill="x", pady=6)
+
+        kpi_frame = ttk.LabelFrame(body, text="Executive Summary")
+        kpi_frame.pack(fill="x", padx=8, pady=6)
+        kpi_grid = tk.Frame(kpi_frame, bg=BG_PANEL)
+        kpi_grid.pack(fill="x", pady=(0, 10))
+        self.sd_kpi_vars = {}
+        self.sd_kpi_sev = {}
+        kpi_titles = [
+            "Total Packets",
+            "Total Bytes",
+            "Duration",
+            "Peak BPS",
+            "TCP Handshake Completion",
+            "TCP Retransmission Rate",
+            "Drop Rate",
+            "NXDOMAIN Spike",
+        ]
+        for idx, title in enumerate(kpi_titles):
+            row = idx // 4
+            col = idx % 4
+            value_var = tk.StringVar(value="n/a")
+            sev_var = tk.StringVar(value="INFO")
+            self.sd_kpi_vars[title] = value_var
+            self.sd_kpi_sev[title] = sev_var
+            self._kpi_card(kpi_grid, title, value_var, sev_var, col=col, row=row)
+        for c in range(4):
+            kpi_grid.grid_columnconfigure(c, weight=1)
+
+        charts_frame = ttk.LabelFrame(body, text="Key Charts")
+        charts_frame.pack(fill="x", padx=8, pady=6)
+        self.sd_charts_notebook = ttk.Notebook(charts_frame)
+        self.sd_charts_notebook.pack(fill="both", expand=True)
+        chart_tabs = {}
+        for name in ["Traffic", "Protocols", "Talkers", "TCP", "Packet Sizes"]:
+            tab = tk.Frame(self.sd_charts_notebook, bg=BG_PANEL)
+            self.sd_charts_notebook.add(tab, text=name)
+            chart_tabs[name] = tab
+        self.sd_chart_tabs = chart_tabs
+
+        self.sd_tcp_chart_frame = tk.Frame(self.sd_chart_tabs["TCP"], bg=BG_PANEL)
+        self.sd_tcp_chart_frame.pack(fill="both", expand=True)
+        self.sd_tcp_interpret = tk.StringVar(value="")
+        tk.Label(self.sd_chart_tabs["TCP"], textvariable=self.sd_tcp_interpret, fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9), justify="left").pack(anchor="w", padx=8, pady=(4, 0))
+
+        diag_frame = ttk.LabelFrame(body, text="Diagnostics")
+        diag_frame.pack(fill="x", padx=8, pady=6)
+        self.sd_diag_container = tk.Frame(diag_frame, bg=BG_PANEL)
+        self.sd_diag_container.pack(fill="x", padx=8, pady=6)
+
     def _make_kpi_grid(self, parent, items):
         grid = tk.Frame(parent, bg=BG_PANEL)
         grid.pack(fill="x", pady=(0, 10))
@@ -631,6 +717,159 @@ class AsphaltApp(tk.Tk):
         for c in range(3):
             grid.grid_columnconfigure(c, weight=1)
         return vars_map
+
+    def _make_kpi_grid_cols(self, parent, items, cols):
+        grid = tk.Frame(parent, bg=BG_PANEL)
+        grid.pack(fill="x", pady=(0, 10))
+        vars_map = {}
+        for idx, (label, default_value) in enumerate(items):
+            row = idx // cols
+            col = idx % cols
+            card = tk.Frame(grid, bg=BG_CARD, padx=10, pady=8, bd=1, relief="flat")
+            card.grid(row=row, column=col, padx=8, pady=6, sticky="nsew")
+            tk.Label(card, text=label, fg=FG_MUTED, bg=BG_CARD, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+            var = tk.StringVar(value=default_value)
+            tk.Label(card, textvariable=var, fg=FG_TEXT, bg=BG_CARD,
+                     font=("Segoe UI", 9), justify="left", wraplength=320).pack(anchor="w")
+            vars_map[label] = var
+        for c in range(cols):
+            grid.grid_columnconfigure(c, weight=1)
+        return vars_map
+
+    def _kpi_card(self, parent, title, value_var, severity_var, sub_var=None, col=0, row=0):
+        card = tk.Frame(parent, bg=BG_CARD, padx=10, pady=8, bd=1, relief="flat")
+        card.grid(row=row, column=col, padx=8, pady=6, sticky="nsew")
+        header = tk.Frame(card, bg=BG_CARD)
+        header.pack(fill="x")
+        tk.Label(header, text=title, fg=FG_MUTED, bg=BG_CARD,
+                 font=("Segoe UI", 9, "bold")).pack(side="left")
+        badge = tk.Label(header, textvariable=severity_var, fg=BG_MAIN, bg=BG_CARD,
+                         font=("Segoe UI", 8, "bold"), padx=6, pady=1)
+        badge.pack(side="right")
+
+        def _update_badge(*_):
+            sev = (severity_var.get() or "INFO").upper()
+            if sev == "GOOD":
+                badge.configure(bg=GOOD, fg=BG_MAIN)
+            elif sev == "WARN":
+                badge.configure(bg=WARN_BADGE, fg=BG_MAIN)
+            elif sev == "BAD":
+                badge.configure(bg=BAD, fg=BG_MAIN)
+            else:
+                badge.configure(bg=FG_MUTED, fg=BG_MAIN)
+
+        severity_var.trace_add("write", _update_badge)
+        _update_badge()
+
+        tk.Label(card, textvariable=value_var, fg=FG_TEXT, bg=BG_CARD,
+                 font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(4, 0))
+        if sub_var is not None:
+            tk.Label(card, textvariable=sub_var, fg=FG_MUTED, bg=BG_CARD,
+                     font=("Segoe UI", 9)).pack(anchor="w")
+        return card
+
+    def _sev_from_pct(self, value, good_lt, warn_lt, bad_ge):
+        if value is None:
+            return "INFO"
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return "INFO"
+        if v >= bad_ge:
+            return "BAD"
+        if v >= warn_lt:
+            return "WARN"
+        if v < good_lt:
+            return "GOOD"
+        return "INFO"
+
+    def _sev_from_bool(self, flag):
+        if flag is None:
+            return "INFO"
+        return "WARN" if bool(flag) else "GOOD"
+
+    def _mpl_clear_frame(self, frame):
+        for child in frame.winfo_children():
+            child.destroy()
+
+    def _mpl_pie(self, frame, labels, values, title):
+        self._mpl_clear_frame(frame)
+        if not self.has_mpl:
+            self._render_table(frame, ["label", "value"], list(zip(labels, values)))
+            return
+        fig = Figure(figsize=(5, 3), dpi=100)
+        ax = fig.add_subplot(111)
+        ax.pie(values, labels=labels, autopct="%1.0f%%" if sum(values) else None)
+        ax.set_title(title)
+        canvas = FigureCanvasTkAgg(fig, master=frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True)
+
+    def _mpl_bar(self, frame, labels, values, title, xrot=0):
+        self._mpl_clear_frame(frame)
+        if not self.has_mpl:
+            self._render_table(frame, ["label", "value"], list(zip(labels, values)))
+            return
+        fig = Figure(figsize=(6, 3), dpi=100)
+        ax = fig.add_subplot(111)
+        ax.bar(labels, values)
+        ax.set_title(title)
+        ax.tick_params(axis="x", rotation=xrot)
+        canvas = FigureCanvasTkAgg(fig, master=frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True)
+
+    def _mpl_line(self, frame, x, series_list, title, xlabel="", ylabel=""):
+        self._mpl_clear_frame(frame)
+        if not self.has_mpl:
+            cols = ["x"] + [series["label"] for series in series_list]
+            rows = []
+            for i, xv in enumerate(x):
+                row = [xv]
+                for series in series_list:
+                    values = series.get("values", [])
+                    row.append(values[i] if i < len(values) else None)
+                rows.append(tuple(row))
+            self._render_table(frame, cols, rows)
+            return
+        fig = Figure(figsize=(6, 3), dpi=100)
+        ax = fig.add_subplot(111)
+        for series in series_list:
+            ax.plot(x, series.get("values", []), label=series.get("label"))
+        ax.set_title(title)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.legend()
+        canvas = FigureCanvasTkAgg(fig, master=frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True)
+
+    def _mpl_hist(self, frame, bucket_labels, counts, title):
+        self._mpl_clear_frame(frame)
+        if not self.has_mpl:
+            self._render_table(frame, ["bucket", "count"], list(zip(bucket_labels, counts)))
+            return
+        fig = Figure(figsize=(6, 3), dpi=100)
+        ax = fig.add_subplot(111)
+        ax.bar(bucket_labels, counts)
+        ax.set_title(title)
+        ax.tick_params(axis="x", rotation=30)
+        canvas = FigureCanvasTkAgg(fig, master=frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True)
+
+    def _render_table(self, frame, columns, rows):
+        container = tk.Frame(frame, bg=BG_PANEL)
+        container.pack(fill="both", expand=True)
+        tree = ttk.Treeview(container, columns=columns, show="headings", height=6)
+        yscroll = ttk.Scrollbar(container, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=yscroll.set)
+        tree.pack(side="left", fill="both", expand=True)
+        yscroll.pack(side="right", fill="y")
+        for col in columns:
+            tree.heading(col, text=col)
+            tree.column(col, width=120, anchor="w")
+        self._tree_set_rows(tree, rows)
 
     def _make_tree(self, parent, columns, headings=None):
         container = tk.Frame(parent, bg=BG_PANEL)
@@ -1296,6 +1535,7 @@ class AsphaltApp(tk.Tk):
             self.after(0, self.refresh_table)
             self.after(0, lambda: self.refresh_analysis(analysis))
             self.after(0, self.refresh_technical_information)
+            self.after(0, self.refresh_simplified_dashboard)
             self.after(0, lambda: self.set_status(f"Loaded {len(packets)} packets"))
             self.after(0, lambda: self.download_btn.config(state="normal" if packets else "disabled"))
         except Exception as exc:
@@ -1707,6 +1947,353 @@ class AsphaltApp(tk.Tk):
         self._refresh_ti_security_signals(analysis)
         self._refresh_ti_time_series_chunking(analysis)
 
+    def refresh_simplified_dashboard(self):
+        analysis = self.latest_analysis or {}
+        totals = analysis.get("global_results", {}).get("global_stats", {}).get("totals", {})
+        totals = totals if isinstance(totals, dict) else {}
+        packets_total = totals.get("packets")
+        if packets_total is None:
+            packets_total = analysis.get("stats", {}).get("packets_total")
+        bytes_total = totals.get("bytes_captured")
+        if bytes_total is None:
+            bytes_total = totals.get("bytes_captured_total")
+        if bytes_total is None:
+            bytes_total = analysis.get("stats", {}).get("bytes_captured_total")
+        duration_us = totals.get("duration_us")
+        if duration_us is None:
+            duration_us = analysis.get("stats", {}).get("duration_us")
+
+        throughput = analysis.get("global_results", {}).get("throughput_peaks", {})
+        throughput = throughput if isinstance(throughput, dict) else {}
+        peak_bps = throughput.get("peak_bps")
+
+        handshakes = analysis.get("global_results", {}).get("tcp_handshakes", {})
+        handshakes = handshakes if isinstance(handshakes, dict) else {}
+        completion_rate = handshakes.get("completion_rate")
+        completion_pct = completion_rate * 100 if isinstance(completion_rate, (int, float)) else None
+
+        reliability = analysis.get("global_results", {}).get("tcp_reliability", {})
+        reliability = reliability if isinstance(reliability, dict) else {}
+        retrans_rate = reliability.get("retransmission_rate")
+        retrans_pct = retrans_rate * 100 if isinstance(retrans_rate, (int, float)) else None
+        rst_rate = reliability.get("rst_rate")
+        rst_pct = rst_rate * 100 if isinstance(rst_rate, (int, float)) else None
+
+        drops = (analysis.get("global_results", {})
+                 .get("capture_health", {})
+                 .get("capture_quality", {})
+                 .get("drops", {}))
+        drops = drops if isinstance(drops, dict) else {}
+        drop_rate_pct = drops.get("drop_rate_pct")
+        if drop_rate_pct is None:
+            dropped_packets = drops.get("dropped_packets")
+            if isinstance(dropped_packets, (int, float)) and isinstance(packets_total, (int, float)):
+                denom = packets_total + dropped_packets
+                drop_rate_pct = (dropped_packets / denom * 100) if denom else None
+
+        nxdomain = analysis.get("global_results", {}).get("dns_anomalies", {}).get("nxdomain", {})
+        nxdomain = nxdomain if isinstance(nxdomain, dict) else {}
+        nxdomain_spike = nxdomain.get("spike_detected")
+
+        self.sd_kpi_vars["Total Packets"].set(_fmt_count(packets_total))
+        self.sd_kpi_vars["Total Bytes"].set(_fmt_bytes(bytes_total))
+        self.sd_kpi_vars["Duration"].set(_fmt_duration_us(duration_us))
+        self.sd_kpi_vars["Peak BPS"].set(_fmt_bps(peak_bps))
+        self.sd_kpi_vars["TCP Handshake Completion"].set(_fmt_pct(completion_pct))
+        self.sd_kpi_vars["TCP Retransmission Rate"].set(_fmt_pct(retrans_pct))
+        self.sd_kpi_vars["Drop Rate"].set(_fmt_pct(drop_rate_pct))
+        self.sd_kpi_vars["NXDOMAIN Spike"].set(str(nxdomain_spike if nxdomain_spike is not None else "n/a"))
+
+        self.sd_kpi_sev["Total Packets"].set("INFO")
+        self.sd_kpi_sev["Total Bytes"].set("INFO")
+        self.sd_kpi_sev["Duration"].set("INFO")
+        self.sd_kpi_sev["Peak BPS"].set("INFO")
+        self.sd_kpi_sev["Drop Rate"].set(self._sev_from_pct(drop_rate_pct, DROP_RATE_WARN, DROP_RATE_WARN, DROP_RATE_BAD))
+        if completion_pct is None:
+            self.sd_kpi_sev["TCP Handshake Completion"].set("INFO")
+        elif completion_pct < HANDSHAKE_WARN_LO:
+            self.sd_kpi_sev["TCP Handshake Completion"].set("BAD")
+        elif completion_pct < HANDSHAKE_GOOD_LO:
+            self.sd_kpi_sev["TCP Handshake Completion"].set("WARN")
+        else:
+            self.sd_kpi_sev["TCP Handshake Completion"].set("GOOD")
+        self.sd_kpi_sev["TCP Retransmission Rate"].set(
+            self._sev_from_pct(retrans_pct, RETX_WARN, RETX_WARN, RETX_BAD)
+        )
+        self.sd_kpi_sev["NXDOMAIN Spike"].set(self._sev_from_bool(nxdomain_spike))
+
+        # Charts: Traffic over time
+        ts_obj = analysis.get("time_series", {})
+        ts_obj = ts_obj if isinstance(ts_obj, dict) else {}
+        series = ts_obj.get("time_series") or ts_obj.get("buckets") or ts_obj.get("series")
+        if series is None:
+            series = analysis.get("global_results", {}).get("time_series")
+        if series is None and isinstance(analysis.get("time_series"), list):
+            series = analysis.get("time_series")
+
+        x = []
+        packets_series = []
+        bytes_series = []
+
+        if isinstance(series, dict):
+            if isinstance(series.get("traffic"), list):
+                series = series.get("traffic")
+        if isinstance(series, list):
+            for idx, point in enumerate(series):
+                if isinstance(point, dict):
+                    ts = point.get("start_us") or point.get("timestamp_us") or point.get("end_us")
+                    x.append(_fmt_ts_utc(ts) if isinstance(ts, (int, float)) and ts > 1_000_000 else str(idx))
+                    packets_series.append(point.get("packets"))
+                    bytes_series.append(point.get("bytes") if point.get("bytes") is not None else point.get("bytes_captured"))
+                else:
+                    x.append(str(idx))
+                    packets_series.append(None)
+                    bytes_series.append(None)
+        elif isinstance(series, dict):
+            packets_list = series.get("packets") or series.get("packet_counts")
+            bytes_list = series.get("bytes") or series.get("byte_counts") or series.get("bytes_captured")
+            starts = series.get("bucket_start_us") or series.get("start_us") or series.get("timestamps")
+            if isinstance(packets_list, list) or isinstance(bytes_list, list):
+                total = max(len(packets_list or []), len(bytes_list or []), len(starts or []))
+                for idx in range(total):
+                    ts = starts[idx] if isinstance(starts, list) and idx < len(starts) else None
+                    x.append(_fmt_ts_utc(ts) if isinstance(ts, (int, float)) and ts > 1_000_000 else str(idx))
+                    packets_series.append(packets_list[idx] if isinstance(packets_list, list) and idx < len(packets_list) else None)
+                    bytes_series.append(bytes_list[idx] if isinstance(bytes_list, list) and idx < len(bytes_list) else None)
+
+        if len(x) > 200:
+            step = max(1, len(x) // 200)
+            x = x[::step][:200]
+            packets_series = packets_series[::step][:200]
+            bytes_series = bytes_series[::step][:200]
+
+        if x:
+            self._mpl_line(
+                self.sd_chart_tabs["Traffic"],
+                x,
+                [
+                    {"label": "Packets", "values": packets_series},
+                    {"label": "Bytes", "values": bytes_series},
+                ],
+                "Traffic Over Time",
+                xlabel="Bucket",
+                ylabel="Count",
+            )
+        else:
+            self._mpl_clear_frame(self.sd_chart_tabs["Traffic"])
+            self._render_table(self.sd_chart_tabs["Traffic"], ["bucket", "packets", "bytes"], [("n/a", "n/a", "n/a")])
+
+        protocol = analysis.get("global_results", {}).get("protocol_mix", {})
+        protocol = protocol if isinstance(protocol, dict) else {}
+        counts = protocol.get("protocol_counts")
+        percents = protocol.get("protocol_percentages")
+        if isinstance(counts, dict):
+            counts_dict = counts
+        elif isinstance(percents, dict):
+            counts_dict = {}
+        else:
+            counts_dict = protocol if isinstance(protocol, dict) else {}
+        if isinstance(percents, dict):
+            percent_dict = percents
+        else:
+            total = sum(v for v in counts_dict.values() if isinstance(v, (int, float)))
+            percent_dict = {
+                k: (v / total * 100.0) if total else 0.0
+                for k, v in counts_dict.items()
+                if isinstance(v, (int, float))
+            }
+        labels = list(percent_dict.keys())
+        values = [percent_dict.get(k, 0) for k in labels]
+        if self.has_mpl:
+            self._mpl_pie(self.sd_chart_tabs["Protocols"], labels, values, "Protocol Mix")
+        else:
+            self._mpl_clear_frame(self.sd_chart_tabs["Protocols"])
+            rows = []
+            for key in labels:
+                count_val = counts_dict.get(key)
+                count_text = _fmt_count(count_val) if isinstance(count_val, (int, float)) else "n/a"
+                rows.append((key, count_text, _fmt_pct(percent_dict.get(key))))
+            self._render_table(self.sd_chart_tabs["Protocols"], ["protocol", "count", "percent"], rows)
+
+        talkers = (analysis.get("global_results", {})
+                   .get("top_entities", {})
+                   .get("ip_talkers", {})
+                   .get("top_src", []))
+        talkers = talkers if isinstance(talkers, list) else []
+        talkers_sorted = sorted(
+            [t for t in talkers if isinstance(t, dict)],
+            key=lambda x: x.get("bytes", 0) if isinstance(x.get("bytes"), (int, float)) else 0,
+            reverse=True,
+        )[:10]
+        talker_labels = [t.get("ip") for t in talkers_sorted]
+        talker_values = [t.get("bytes", 0) if isinstance(t.get("bytes"), (int, float)) else 0 for t in talkers_sorted]
+        if self.has_mpl:
+            self._mpl_bar(self.sd_chart_tabs["Talkers"], talker_labels, talker_values,
+                          "Top Source IPs by Bytes", xrot=45)
+        else:
+            self._mpl_clear_frame(self.sd_chart_tabs["Talkers"])
+            rows = []
+            for item in talkers_sorted:
+                rows.append((
+                    item.get("ip"),
+                    _fmt_bytes(item.get("bytes")),
+                    _fmt_count(item.get("packets")) if item.get("packets") is not None else "n/a",
+                ))
+            self._render_table(self.sd_chart_tabs["Talkers"], ["ip", "bytes", "packets"], rows)
+
+        tcp_total = reliability.get("tcp_packets")
+        def _rate_pct(rate_key, count_key):
+            rate_val = reliability.get(rate_key)
+            if isinstance(rate_val, (int, float)):
+                return rate_val * 100
+            count_val = reliability.get(count_key)
+            if isinstance(count_val, (int, float)) and isinstance(tcp_total, (int, float)) and tcp_total:
+                return (count_val / tcp_total) * 100
+            return None
+
+        tcp_metrics = [
+            ("Retrans", "retransmission_rate", "retransmissions"),
+            ("Out-of-order", "out_of_order_rate", "out_of_order"),
+            ("Dup ACK", "dup_ack_rate", "dup_acks"),
+            ("RST", "rst_rate", "rst_packets"),
+        ]
+        tcp_rows = []
+        for label, rate_key, count_key in tcp_metrics:
+            tcp_rows.append((label, _rate_pct(rate_key, count_key)))
+
+        chart_labels = [label for label, value in tcp_rows if value is not None]
+        chart_values = [value for _, value in tcp_rows if value is not None]
+        if not chart_labels:
+            chart_labels = [label for label, _ in tcp_rows]
+            chart_values = [0 for _ in tcp_rows]
+
+        if self.has_mpl:
+            self._mpl_bar(self.sd_tcp_chart_frame, chart_labels, chart_values, "TCP Reliability Rates (%)")
+        else:
+            self._mpl_clear_frame(self.sd_tcp_chart_frame)
+            rows = [(label, _fmt_pct(value)) for label, value in tcp_rows]
+            self._render_table(self.sd_tcp_chart_frame, ["metric", "percent"], rows)
+
+        interp_lines = []
+        retrans_line = next((v for k, v in tcp_rows if k == "Retrans"), None)
+        dup_line = next((v for k, v in tcp_rows if k == "Dup ACK"), None)
+        ooo_line = next((v for k, v in tcp_rows if k == "Out-of-order"), None)
+        rst_line = next((v for k, v in tcp_rows if k == "RST"), None)
+
+        def _sev_text(value, good_lt, warn_lt, bad_ge):
+            sev = self._sev_from_pct(value, good_lt, warn_lt, bad_ge)
+            return f"{_fmt_pct(value)} ({sev})" if value is not None else "n/a (INFO)"
+
+        interp_lines.append(f"Retrans rate {_sev_text(retrans_line, RETX_WARN, RETX_WARN, RETX_BAD)}")
+        interp_lines.append(f"Out-of-order rate {_sev_text(ooo_line, RETX_WARN, RETX_WARN, RETX_BAD)}")
+        interp_lines.append(f"Dup ACK rate {_sev_text(dup_line, RETX_WARN, RETX_WARN, RETX_BAD)}")
+        interp_lines.append(f"RST rate {_sev_text(rst_line, RST_WARN, RST_WARN, RST_BAD)}")
+        self.sd_tcp_interpret.set("\n".join(interp_lines[:3]))
+
+        histogram = (analysis.get("global_results", {})
+                     .get("packet_size_stats", {})
+                     .get("histogram", {}))
+        histogram = histogram if isinstance(histogram, dict) else {}
+        bucket_order = ["0-63", "64-127", "128-511", "512-1023", "1024-1514", "jumbo"]
+        bucket_labels = [b for b in bucket_order if b in histogram] + [
+            b for b in histogram.keys() if b not in bucket_order
+        ]
+        bucket_counts = [histogram.get(b, 0) for b in bucket_labels]
+        if not bucket_labels:
+            self._mpl_clear_frame(self.sd_chart_tabs["Packet Sizes"])
+            self._render_table(self.sd_chart_tabs["Packet Sizes"], ["bucket", "count"], [("n/a", "n/a")])
+        else:
+            self._mpl_hist(self.sd_chart_tabs["Packet Sizes"], bucket_labels, bucket_counts,
+                           "Packet Size Histogram")
+
+        diagnostics = []
+
+        def _add_line(sev, title, detail):
+            diagnostics.append((sev, f"[{sev}] {title}  {detail}"))
+
+        if drop_rate_pct is None:
+            _add_line("INFO", "Drop Rate", "not available in this capture.")
+        else:
+            if drop_rate_pct >= DROP_RATE_BAD:
+                _add_line("BAD", "Drop Rate", f"{drop_rate_pct:.2f}% (>= {DROP_RATE_BAD}%)")
+            elif drop_rate_pct >= DROP_RATE_WARN:
+                _add_line("WARN", "Drop Rate", f"{drop_rate_pct:.2f}% (>= {DROP_RATE_WARN}%)")
+            else:
+                _add_line("GOOD", "Drop Rate", f"{drop_rate_pct:.2f}%")
+
+        if completion_pct is None:
+            _add_line("INFO", "Handshake Completion", "not available in this capture.")
+        else:
+            if completion_pct < HANDSHAKE_WARN_LO:
+                _add_line("BAD", "Handshake Completion", f"{completion_pct:.2f}% (< {HANDSHAKE_WARN_LO}%)")
+            elif completion_pct < HANDSHAKE_GOOD_LO:
+                _add_line("WARN", "Handshake Completion", f"{completion_pct:.2f}% (< {HANDSHAKE_GOOD_LO}%)")
+            else:
+                _add_line("GOOD", "Handshake Completion", f"{completion_pct:.2f}%")
+
+        if retrans_pct is None:
+            _add_line("INFO", "Retransmission Rate", "not available in this capture.")
+        else:
+            if retrans_pct >= RETX_BAD:
+                _add_line("BAD", "Retransmission Rate", f"{retrans_pct:.2f}% (>= {RETX_BAD}%)")
+            elif retrans_pct >= RETX_WARN:
+                _add_line("WARN", "Retransmission Rate", f"{retrans_pct:.2f}% (>= {RETX_WARN}%)")
+            else:
+                _add_line("GOOD", "Retransmission Rate", f"{retrans_pct:.2f}%")
+
+        if rst_pct is None:
+            _add_line("INFO", "RST Rate", "not available in this capture.")
+        else:
+            if rst_pct >= RST_BAD:
+                _add_line("BAD", "RST Rate", f"{rst_pct:.2f}% (>= {RST_BAD}%)")
+            elif rst_pct >= RST_WARN:
+                _add_line("WARN", "RST Rate", f"{rst_pct:.2f}% (>= {RST_WARN}%)")
+            else:
+                _add_line("GOOD", "RST Rate", f"{rst_pct:.2f}%")
+
+        if nxdomain_spike is None:
+            _add_line("INFO", "NXDOMAIN Spike", "not available in this capture.")
+        elif nxdomain_spike == NXDOMAIN_SPIKE_WARN:
+            _add_line("WARN", "NXDOMAIN Spike", "spike_detected")
+        else:
+            _add_line("GOOD", "NXDOMAIN Spike", "no spike detected")
+
+        arp_macs = (analysis.get("global_results", {})
+                    .get("arp_lan_signals", {})
+                    .get("multiple_macs", {}))
+        arp_macs = arp_macs if isinstance(arp_macs, dict) else {}
+        arp_count = arp_macs.get("count")
+        if arp_count is None:
+            _add_line("INFO", "ARP Multiple MACs", "not available in this capture.")
+        elif arp_count >= ARP_CONFLICT_WARN:
+            _add_line("WARN", "ARP Multiple MACs", f"{arp_count} detected")
+        else:
+            _add_line("GOOD", "ARP Multiple MACs", "none detected")
+
+        scan_ports = (analysis.get("global_results", {})
+                      .get("scan_signals", {})
+                      .get("distinct_ports", {}))
+        scan_ports = scan_ports if isinstance(scan_ports, dict) else {}
+        max_ports = scan_ports.get("max_count")
+        if max_ports is None:
+            _add_line("INFO", "Scan Signals", "not available in this capture.")
+        elif isinstance(max_ports, (int, float)) and max_ports >= SCAN_PORTS_WARN:
+            _add_line("WARN", "Scan Signals", f"max distinct ports {max_ports}")
+        else:
+            _add_line("GOOD", "Scan Signals", f"max distinct ports {max_ports}")
+
+        for child in self.sd_diag_container.winfo_children():
+            child.destroy()
+        for sev, msg in diagnostics:
+            color = FG_MUTED
+            if sev == "GOOD":
+                color = GOOD
+            elif sev == "WARN":
+                color = WARN_BADGE
+            elif sev == "BAD":
+                color = BAD
+            tk.Label(self.sd_diag_container, text=msg, fg=color, bg=BG_PANEL,
+                     font=("Segoe UI", 9)).pack(anchor="w")
     def _refresh_ti_capture_quality(self, analysis):
         health = analysis.get("global_results", {}).get("capture_health", {})
         quality = health.get("capture_quality", {}) if isinstance(health, dict) else {}
