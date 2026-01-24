@@ -23,6 +23,18 @@ from analysis.engine import AnalysisEngine
 from analysis.registry import create_analyzer
 
 
+BG_MAIN = "#000000"
+BG_PANEL = "#0a0a0a"
+BG_HEADER = "#050505"
+BG_CARD = "#101010"
+FG_TEXT = "#ffffff"
+FG_MUTED = "#c7c7c7"
+ACCENT = "#ffffff"
+ACCENT_BTN_BG = "#ffffff"
+ACCENT_BTN_FG = "#000000"
+WARN = "#e0e0e0"
+
+
 def _extract_json_array(text: str):
     start = text.find("[")
     end = text.rfind("]")
@@ -235,78 +247,92 @@ class AsphaltApp(tk.Tk):
         super().__init__()
         self.title("Asphalt")
         self.geometry("1200x820")
-        self.configure(bg="#0e1117")
+        self.configure(bg=BG_MAIN)
+
+        self.style = ttk.Style(self)
+        try:
+            self.style.theme_use("clam")
+        except tk.TclError:
+            pass
+        self.style.configure("TCombobox", fieldbackground=BG_PANEL, background=BG_PANEL, foreground=FG_TEXT)
+        self.style.configure("Treeview", background=BG_PANEL, fieldbackground=BG_PANEL, foreground=FG_TEXT)
+        self.style.configure("Treeview.Heading", background=BG_HEADER, foreground=FG_TEXT)
+        self.style.configure("TNotebook", background=BG_PANEL, borderwidth=0)
+        self.style.configure("TNotebook.Tab", background=BG_HEADER, foreground=FG_TEXT, padding=(10, 6))
+        self.style.map("TNotebook.Tab", background=[("selected", BG_PANEL)], foreground=[("selected", ACCENT)])
+        self.style.configure("TScrollbar", background=BG_PANEL, troughcolor=BG_MAIN, arrowcolor=FG_TEXT)
 
         self.rows = []
         self.table_visible = True
         self.latest_packets = []
+        self.latest_analysis = {}
 
         self._build_ui()
 
     def _build_ui(self):
-        container = tk.Frame(self, bg="#0e1117")
+        container = tk.Frame(self, bg=BG_MAIN)
         container.pack(fill="both", expand=True)
 
-        self.canvas = tk.Canvas(container, bg="#0e1117", highlightthickness=0)
+        self.canvas = tk.Canvas(container, bg=BG_MAIN, highlightthickness=0)
         scrollbar = ttk.Scrollbar(container, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=scrollbar.set)
 
         scrollbar.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
 
-        self.content = tk.Frame(self.canvas, bg="#0e1117")
+        self.content = tk.Frame(self.canvas, bg=BG_MAIN)
         self.canvas.create_window((0, 0), window=self.content, anchor="nw")
         self.content.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
         self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
-        header = tk.Frame(self.content, bg="#0e1117")
+        header = tk.Frame(self.content, bg=BG_MAIN)
         header.pack(fill="x", padx=20, pady=(20, 10))
 
-        title = tk.Label(header, text="Asphalt Live Decode", fg="#e6edf3", bg="#0e1117",
+        title = tk.Label(header, text="Asphalt Live Decode", fg=FG_TEXT, bg=BG_MAIN,
                          font=("Segoe UI", 20, "bold"))
         title.pack(anchor="w")
 
-        subtitle = tk.Label(header, text="Capture -> Decode -> UI (local)", fg="#9aa4b2", bg="#0e1117")
+        subtitle = tk.Label(header, text="Capture -> Decode -> UI (local)", fg=FG_MUTED, bg=BG_MAIN)
         subtitle.pack(anchor="w")
 
-        controls = tk.Frame(self.content, bg="#151b23")
+        controls = tk.Frame(self.content, bg=BG_PANEL)
         controls.pack(fill="x", padx=20, pady=10)
 
-        tk.Label(controls, text="Backend", fg="#9aa4b2", bg="#151b23").grid(row=0, column=0, padx=8, pady=8)
+        tk.Label(controls, text="Backend", fg=FG_MUTED, bg=BG_PANEL).grid(row=0, column=0, padx=8, pady=8)
         self.backend_var = tk.StringVar(value="dummy")
         backend = ttk.Combobox(controls, textvariable=self.backend_var, values=["dummy", "scapy"], width=10)
         backend.grid(row=0, column=1, padx=8, pady=8)
 
-        tk.Label(controls, text="Interface", fg="#9aa4b2", bg="#151b23").grid(row=0, column=2, padx=8, pady=8)
+        tk.Label(controls, text="Interface", fg=FG_MUTED, bg=BG_PANEL).grid(row=0, column=2, padx=8, pady=8)
         self.interface_var = tk.StringVar(value="dummy0")
         tk.Entry(controls, textvariable=self.interface_var, width=20).grid(row=0, column=3, padx=8, pady=8)
 
-        tk.Label(controls, text="Duration (s)", fg="#9aa4b2", bg="#151b23").grid(row=0, column=4, padx=8, pady=8)
+        tk.Label(controls, text="Duration (s)", fg=FG_MUTED, bg=BG_PANEL).grid(row=0, column=4, padx=8, pady=8)
         self.duration_var = tk.StringVar(value="3")
         tk.Entry(controls, textvariable=self.duration_var, width=6).grid(row=0, column=5, padx=8, pady=8)
 
-        tk.Label(controls, text="Limit", fg="#9aa4b2", bg="#151b23").grid(row=0, column=6, padx=8, pady=8)
+        tk.Label(controls, text="Limit", fg=FG_MUTED, bg=BG_PANEL).grid(row=0, column=6, padx=8, pady=8)
         self.limit_var = tk.StringVar(value="50")
         tk.Entry(controls, textvariable=self.limit_var, width=6).grid(row=0, column=7, padx=8, pady=8)
 
-        self.start_btn = tk.Button(controls, text="Start", command=self.start_capture, bg="#4fd1c5", fg="#0b0f12")
+        self.start_btn = tk.Button(controls, text="Start", command=self.start_capture, bg=ACCENT_BTN_BG, fg=ACCENT_BTN_FG)
         self.start_btn.grid(row=0, column=8, padx=8, pady=8)
 
         self.download_btn = tk.Button(controls, text="Download", command=self.download_capture,
-                                       bg="#151b23", fg="#e6edf3", state="disabled")
+                                       bg=BG_PANEL, fg=FG_TEXT, state="disabled")
         self.download_btn.grid(row=0, column=9, padx=8, pady=8)
 
-        tk.Label(controls, text="Filter", fg="#9aa4b2", bg="#151b23").grid(row=1, column=0, padx=8, pady=8)
+        tk.Label(controls, text="Filter", fg=FG_MUTED, bg=BG_PANEL).grid(row=1, column=0, padx=8, pady=8)
         self.filter_var = tk.StringVar()
         filter_entry = tk.Entry(controls, textvariable=self.filter_var, width=35)
         filter_entry.grid(row=1, column=1, columnspan=3, padx=8, pady=8, sticky="w")
         filter_entry.bind("<KeyRelease>", lambda e: self.apply_filter())
 
         self.status_var = tk.StringVar(value="Idle")
-        status = tk.Label(controls, textvariable=self.status_var, fg="#f6c177", bg="#151b23")
+        status = tk.Label(controls, textvariable=self.status_var, fg=WARN, bg=BG_PANEL)
         status.grid(row=1, column=4, columnspan=5, padx=8, pady=8, sticky="w")
 
-        stats = tk.Frame(self.content, bg="#0e1117")
+        stats = tk.Frame(self.content, bg=BG_MAIN)
         stats.pack(fill="x", padx=20, pady=(0, 10))
 
         self.stat_packets = tk.StringVar(value="0")
@@ -341,7 +367,7 @@ class AsphaltApp(tk.Tk):
         self._stat_block(stats, "TCP / UDP", self.stat_l4, 2)
         self._stat_block(stats, "Flows", self.stat_flows, 3)
 
-        analysis = tk.Frame(self.content, bg="#0e1117")
+        analysis = tk.Frame(self.content, bg=BG_MAIN)
         analysis.pack(fill="x", padx=20, pady=(0, 10))
 
         self._analysis_block(analysis, "Protocol Mix", self.analysis_protocol, 0)
@@ -349,41 +375,41 @@ class AsphaltApp(tk.Tk):
         self._analysis_block(analysis, "TCP Handshakes", self.analysis_handshake, 2)
         self._analysis_block(analysis, "Packet Chunks", self.analysis_chunks, 3)
 
-        self._build_capture_health_section()
-        self._build_extra_sections()
+        self._build_raw_data_heuristics_section()
+        self._build_technical_information_section()
         self._build_packet_table()
 
     def _on_mousewheel(self, event):
         self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     def _stat_block(self, parent, label, var, column):
-        block = tk.Frame(parent, bg="#151b23", padx=12, pady=8)
+        block = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=8)
         block.grid(row=0, column=column, padx=8, pady=4, sticky="ew")
-        tk.Label(block, text=label, fg="#9aa4b2", bg="#151b23").pack(anchor="w")
-        tk.Label(block, textvariable=var, fg="#e6edf3", bg="#151b23", font=("Segoe UI", 12, "bold")).pack(anchor="w")
+        tk.Label(block, text=label, fg=FG_MUTED, bg=BG_PANEL).pack(anchor="w")
+        tk.Label(block, textvariable=var, fg=FG_TEXT, bg=BG_PANEL, font=("Segoe UI", 12, "bold")).pack(anchor="w")
 
     def _analysis_block(self, parent, label, var, column):
-        block = tk.Frame(parent, bg="#151b23", padx=12, pady=8)
+        block = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=8)
         block.grid(row=0, column=column, padx=8, pady=4, sticky="ew")
-        tk.Label(block, text=label, fg="#9aa4b2", bg="#151b23").pack(anchor="w")
-        tk.Label(block, textvariable=var, fg="#e6edf3", bg="#151b23", font=("Segoe UI", 10, "bold"),
+        tk.Label(block, text=label, fg=FG_MUTED, bg=BG_PANEL).pack(anchor="w")
+        tk.Label(block, textvariable=var, fg=FG_TEXT, bg=BG_PANEL, font=("Segoe UI", 10, "bold"),
                  justify="left", wraplength=220).pack(anchor="w")
 
     def _collapsible_section(self, parent, title, summary):
-        frame = tk.Frame(parent, bg="#151b23", bd=1, relief="flat")
-        header = tk.Frame(frame, bg="#111720")
+        frame = tk.Frame(parent, bg=BG_PANEL, bd=1, relief="flat")
+        header = tk.Frame(frame, bg=BG_HEADER)
         header.pack(fill="x")
 
-        title_label = tk.Label(header, text=title, fg="#6ee7c8", bg="#111720", font=("Segoe UI", 10, "bold"))
+        title_label = tk.Label(header, text=title, fg=ACCENT, bg=BG_HEADER, font=("Segoe UI", 10, "bold"))
         title_label.pack(side="left", padx=10, pady=6)
 
-        summary_label = tk.Label(header, text=summary, fg="#9aa4b2", bg="#111720")
+        summary_label = tk.Label(header, text=summary, fg=FG_MUTED, bg=BG_HEADER)
         summary_label.pack(side="left", padx=10)
 
-        toggle = tk.Label(header, text="+", fg="#e6edf3", bg="#111720", font=("Segoe UI", 12, "bold"))
+        toggle = tk.Label(header, text="+", fg=FG_TEXT, bg=BG_HEADER, font=("Segoe UI", 12, "bold"))
         toggle.pack(side="right", padx=10)
 
-        body = tk.Frame(frame, bg="#151b23")
+        body = tk.Frame(frame, bg=BG_PANEL)
         body.pack(fill="x", padx=10, pady=10)
 
         def _toggle():
@@ -402,24 +428,40 @@ class AsphaltApp(tk.Tk):
         return frame, body
 
     def _info_card(self, parent, title, lines, column, row):
-        card = tk.Frame(parent, bg="#0f141c", padx=10, pady=8, bd=1, relief="flat")
+        card = tk.Frame(parent, bg=BG_CARD, padx=10, pady=8, bd=1, relief="flat")
         card.grid(row=row, column=column, padx=8, pady=6, sticky="nsew")
-        tk.Label(card, text=title, fg="#9aa4b2", bg="#0f141c", font=("Segoe UI", 9, "bold")).pack(anchor="w")
+        tk.Label(card, text=title, fg=FG_MUTED, bg=BG_CARD, font=("Segoe UI", 9, "bold")).pack(anchor="w")
         for line in lines:
-            tk.Label(card, text=line, fg="#e6edf3", bg="#0f141c", font=("Segoe UI", 9)).pack(anchor="w")
+            tk.Label(card, text=line, fg=FG_TEXT, bg=BG_CARD, font=("Segoe UI", 9)).pack(anchor="w")
         return card
 
     def _info_card_var(self, parent, title, var, column, row):
-        card = tk.Frame(parent, bg="#0f141c", padx=10, pady=8, bd=1, relief="flat")
+        card = tk.Frame(parent, bg=BG_CARD, padx=10, pady=8, bd=1, relief="flat")
         card.grid(row=row, column=column, padx=8, pady=6, sticky="nsew")
-        tk.Label(card, text=title, fg="#9aa4b2", bg="#0f141c", font=("Segoe UI", 9, "bold")).pack(anchor="w")
-        tk.Label(card, textvariable=var, fg="#e6edf3", bg="#0f141c",
+        tk.Label(card, text=title, fg=FG_MUTED, bg=BG_CARD, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+        tk.Label(card, textvariable=var, fg=FG_TEXT, bg=BG_CARD,
                  font=("Segoe UI", 9), justify="left", wraplength=320).pack(anchor="w")
         return card
 
-    def _build_capture_health_section(self):
-        section = tk.Frame(self.content, bg="#0e1117")
+    def _build_raw_data_heuristics_section(self):
+        section = tk.Frame(self.content, bg=BG_MAIN)
         section.pack(fill="x", padx=20, pady=10)
+
+        frame, body = self._collapsible_section(
+            section,
+            "Raw Data Heuristics",
+            "Capture Health Â· Traffic Overview Â· Entities Â· Flows Â· TCP Â· Security"
+        )
+        frame.pack(fill="x", pady=6)
+
+        container = tk.Frame(body, bg=BG_PANEL)
+        container.pack(fill="x")
+        self._build_capture_health_section(container)
+        self._build_extra_sections(container)
+
+    def _build_capture_health_section(self, parent):
+        section = tk.Frame(parent, bg=BG_MAIN)
+        section.pack(fill="x", pady=6)
 
         frame, body = self._collapsible_section(
             section,
@@ -428,7 +470,7 @@ class AsphaltApp(tk.Tk):
         )
         frame.pack(fill="x", pady=6)
 
-        grid = tk.Frame(body, bg="#151b23")
+        grid = tk.Frame(body, bg=BG_PANEL)
         grid.pack(fill="x")
 
         self._info_card_var(grid, "Capture Quality", self.analysis_capture_quality, 0, 0)
@@ -438,9 +480,9 @@ class AsphaltApp(tk.Tk):
         for c in range(3):
             grid.grid_columnconfigure(c, weight=1)
 
-    def _build_extra_sections(self):
-        sections = tk.Frame(self.content, bg="#0e1117")
-        sections.pack(fill="x", padx=20, pady=10)
+    def _build_extra_sections(self, parent):
+        sections = tk.Frame(parent, bg=BG_MAIN)
+        sections.pack(fill="x", pady=6)
 
         frame, body = self._collapsible_section(
             sections,
@@ -448,7 +490,7 @@ class AsphaltApp(tk.Tk):
             "Throughput · Packet Size Stats · L2/L3 Breakdown"
         )
         frame.pack(fill="x", pady=6)
-        grid = tk.Frame(body, bg="#151b23")
+        grid = tk.Frame(body, bg=BG_PANEL)
         grid.pack(fill="x")
         self._info_card_var(grid, "Throughput", self.analysis_throughput, 0, 0)
         self._info_card_var(grid, "Packet Size Stats", self.analysis_packet_sizes, 1, 0)
@@ -462,7 +504,7 @@ class AsphaltApp(tk.Tk):
             "Top Talkers · Top MAC Addresses · Top Ports and Services"
         )
         frame.pack(fill="x", pady=6)
-        grid = tk.Frame(body, bg="#151b23")
+        grid = tk.Frame(body, bg=BG_PANEL)
         grid.pack(fill="x")
         self._info_card_var(grid, "Top Talkers", self.analysis_top_talkers, 0, 0)
         self._info_card_var(grid, "Top MAC Addresses", self.analysis_top_macs, 1, 0)
@@ -476,7 +518,7 @@ class AsphaltApp(tk.Tk):
             "Summary · Heavy hitters · Flow states"
         )
         frame.pack(fill="x", pady=6)
-        grid = tk.Frame(body, bg="#151b23")
+        grid = tk.Frame(body, bg=BG_PANEL)
         grid.pack(fill="x")
         self._info_card_var(grid, "Flow Summary", self.analysis_flow_summary, 0, 0)
         self._info_card_var(grid, "Heavy Hitters", self.analysis_flow_heavy, 1, 0)
@@ -490,7 +532,7 @@ class AsphaltApp(tk.Tk):
             "Handshake Detail · Reliability Indicators · TCP Performance Signals"
         )
         frame.pack(fill="x", pady=6)
-        grid = tk.Frame(body, bg="#151b23")
+        grid = tk.Frame(body, bg=BG_PANEL)
         grid.pack(fill="x")
         self._info_card_var(grid, "Handshake Detail", self.analysis_tcp_handshake, 0, 0)
         self._info_card_var(grid, "Reliability Indicators", self.analysis_tcp_reliability, 1, 0)
@@ -504,7 +546,7 @@ class AsphaltApp(tk.Tk):
             "Scan-like Behavior · DNS Anomalies · ARP and LAN Attacks"
         )
         frame.pack(fill="x", pady=6)
-        grid = tk.Frame(body, bg="#151b23")
+        grid = tk.Frame(body, bg=BG_PANEL)
         grid.pack(fill="x")
         self._info_card_var(grid, "Scan-like Behavior", self.analysis_scan_signals, 0, 0)
         self._info_card_var(grid, "DNS Anomalies", self.analysis_dns_anomalies, 1, 0)
@@ -512,21 +554,683 @@ class AsphaltApp(tk.Tk):
         for c in range(3):
             grid.grid_columnconfigure(c, weight=1)
 
+    def _build_technical_information_section(self):
+        section = tk.Frame(self.content, bg=BG_MAIN)
+        section.pack(fill="x", padx=20, pady=10)
+
+        frame, body = self._collapsible_section(
+            section,
+            "Technical Information",
+            "Detailed analyzer outputs"
+        )
+        frame.pack(fill="x", pady=6)
+
+        self.tech_notebook = ttk.Notebook(body)
+        self.tech_notebook.pack(fill="both", expand=True)
+
+        tab_names = [
+            "Capture Quality",
+            "Traffic Overview",
+            "Protocol Mix",
+            "Flow Analytics",
+            "TCP Health",
+            "Top Entities",
+            "Security Signals",
+            "Time Series & Chunking",
+        ]
+        self.tech_tabs = {}
+        self.tech_tab_canvases = {}
+        for name in tab_names:
+            tab = tk.Frame(self.tech_notebook, bg=BG_PANEL)
+            self.tech_notebook.add(tab, text=name)
+
+            canvas = tk.Canvas(tab, bg=BG_PANEL, highlightthickness=0)
+            scrollbar = ttk.Scrollbar(tab, orient="vertical", command=canvas.yview)
+            canvas.configure(yscrollcommand=scrollbar.set)
+            scrollbar.pack(side="right", fill="y")
+            canvas.pack(side="left", fill="both", expand=True)
+
+            inner = tk.Frame(canvas, bg=BG_PANEL)
+            window_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+
+            def _on_inner_configure(event, c=canvas):
+                c.configure(scrollregion=c.bbox("all"))
+
+            def _on_canvas_configure(event, c=canvas, w=window_id):
+                c.itemconfigure(w, width=event.width)
+
+            inner.bind("<Configure>", _on_inner_configure)
+            canvas.bind("<Configure>", _on_canvas_configure)
+
+            self.tech_tabs[name] = inner
+            self.tech_tab_canvases[name] = canvas
+
+        self._build_ti_capture_quality()
+        self._build_ti_traffic_overview()
+        self._build_ti_protocol_mix()
+        self._build_ti_flow_analytics()
+        self._build_ti_tcp_health()
+        self._build_ti_top_entities()
+        self._build_ti_security_signals()
+        self._build_ti_time_series_chunking()
+
+    def _make_kpi_grid(self, parent, items):
+        grid = tk.Frame(parent, bg=BG_PANEL)
+        grid.pack(fill="x", pady=(0, 10))
+        vars_map = {}
+        for idx, (label, default_value) in enumerate(items):
+            row = idx // 3
+            col = idx % 3
+            card = tk.Frame(grid, bg=BG_CARD, padx=10, pady=8, bd=1, relief="flat")
+            card.grid(row=row, column=col, padx=8, pady=6, sticky="nsew")
+            tk.Label(card, text=label, fg=FG_MUTED, bg=BG_CARD, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+            var = tk.StringVar(value=default_value)
+            tk.Label(card, textvariable=var, fg=FG_TEXT, bg=BG_CARD,
+                     font=("Segoe UI", 9), justify="left", wraplength=320).pack(anchor="w")
+            vars_map[label] = var
+        for c in range(3):
+            grid.grid_columnconfigure(c, weight=1)
+        return vars_map
+
+    def _make_tree(self, parent, columns, headings=None):
+        container = tk.Frame(parent, bg=BG_PANEL)
+        container.pack(fill="both", expand=True, pady=(0, 10))
+        tree = ttk.Treeview(container, columns=columns, show="headings", height=6)
+        yscroll = ttk.Scrollbar(container, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=yscroll.set)
+        tree.pack(side="left", fill="both", expand=True)
+        yscroll.pack(side="right", fill="y")
+        if headings is None:
+            headings = columns
+        for col, heading in zip(columns, headings):
+            tree.heading(col, text=heading)
+            tree.column(col, width=120, anchor="w")
+        return tree
+
+    def _tree_set_rows(self, tree, rows):
+        tree.delete(*tree.get_children())
+        for row in rows:
+            tree.insert("", "end", values=row)
+
+    def _make_json_text(self, parent):
+        container = tk.Frame(parent, bg=BG_PANEL)
+        container.pack(fill="both", expand=True)
+        text = tk.Text(container, height=8, bg=BG_CARD, fg=FG_TEXT, insertbackground=FG_TEXT,
+                       wrap="none", state="disabled", font=("Consolas", 9))
+        yscroll = ttk.Scrollbar(container, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=yscroll.set)
+        text.pack(side="left", fill="both", expand=True)
+        yscroll.pack(side="right", fill="y")
+        return text
+
+    def _set_json_text(self, text_widget, obj):
+        try:
+            payload = json.dumps(obj, indent=2)
+        except (TypeError, ValueError):
+            payload = "{}"
+        cap = 200_000
+        if len(payload) > cap:
+            payload = payload[:cap] + "\n... (truncated)"
+        text_widget.configure(state="normal")
+        text_widget.delete("1.0", "end")
+        text_widget.insert("1.0", payload)
+        text_widget.configure(state="disabled")
+
+    def _build_json_panel(self, parent):
+        frame = tk.Frame(parent, bg=BG_PANEL)
+        frame.pack(fill="both", expand=True)
+        tk.Label(frame, text="Full Analyzer JSON", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 4))
+        return self._make_json_text(frame)
+
+    def _build_ti_capture_quality(self):
+        tab = self.tech_tabs["Capture Quality"]
+        session_frame = ttk.LabelFrame(tab, text="Session")
+        session_frame.pack(fill="x", padx=8, pady=6)
+        kpi_vars_session = self._make_kpi_grid(session_frame, [
+            ("Capture Start", "n/a"),
+            ("Capture End", "n/a"),
+            ("Duration", "n/a"),
+            ("Link Types", "n/a"),
+            ("Snaplen", "n/a"),
+            ("Promiscuous", "n/a"),
+        ])
+
+        drops_frame = ttk.LabelFrame(tab, text="Drops")
+        drops_frame.pack(fill="x", padx=8, pady=6)
+        kpi_vars_drops = self._make_kpi_grid(drops_frame, [
+            ("Dropped Packets", "n/a"),
+            ("Drop Rate", "n/a"),
+        ])
+
+        decode_frame = ttk.LabelFrame(tab, text="Decode Health")
+        decode_frame.pack(fill="x", padx=8, pady=6)
+        kpi_vars_decode = self._make_kpi_grid(decode_frame, [
+            ("Decode Success", "n/a"),
+            ("Malformed Packets", "n/a"),
+            ("Truncated Packets", "n/a"),
+            ("Unknown L3", "n/a"),
+            ("Unknown L4", "n/a"),
+            ("Unsupported Link Types", "n/a"),
+        ])
+        tk.Label(decode_frame, text="Decode Counters", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_decode = self._make_tree(decode_frame, ("key", "value"), ("Key", "Value"))
+
+        filtering_frame = ttk.LabelFrame(tab, text="Filtering / Sampling")
+        filtering_frame.pack(fill="x", padx=8, pady=6)
+        tk.Label(filtering_frame, text="Fields", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_filtering = self._make_tree(filtering_frame, ("key", "value"), ("Key", "Value"))
+
+        json_text = self._build_json_panel(tab)
+
+        self.ti_capture_quality = {
+            "kpi_vars_session": kpi_vars_session,
+            "kpi_vars_drops": kpi_vars_drops,
+            "kpi_vars_decode": kpi_vars_decode,
+            "tree_decode": tree_decode,
+            "tree_filtering": tree_filtering,
+            "json_text": json_text,
+        }
+
+    def _build_ti_traffic_overview(self):
+        tab = self.tech_tabs["Traffic Overview"]
+        throughput_frame = ttk.LabelFrame(tab, text="Throughput and Peaks")
+        throughput_frame.pack(fill="x", padx=8, pady=6)
+        kpi_vars_throughput = self._make_kpi_grid(throughput_frame, [
+            ("BPS Now", "n/a"),
+            ("BPS Avg", "n/a"),
+            ("PPS Now", "n/a"),
+            ("PPS Avg", "n/a"),
+            ("Peak BPS", "n/a"),
+            ("Peak PPS", "n/a"),
+            ("Peak BPS Time", "n/a"),
+            ("Peak PPS Time", "n/a"),
+        ])
+        tk.Label(throughput_frame, text="All Fields", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_throughput = self._make_tree(throughput_frame, ("key", "value"), ("Key", "Value"))
+
+        size_frame = ttk.LabelFrame(tab, text="Packet Size Statistics")
+        size_frame.pack(fill="x", padx=8, pady=6)
+        kpi_vars_sizes = self._make_kpi_grid(size_frame, [
+            ("Captured Len Min", "n/a"),
+            ("Captured Len Median", "n/a"),
+            ("Captured Len P95", "n/a"),
+            ("Captured Len Max", "n/a"),
+            ("Original Len Min", "n/a"),
+            ("Original Len Median", "n/a"),
+            ("Original Len P95", "n/a"),
+            ("Original Len Max", "n/a"),
+            ("IPv4 Fragments", "n/a"),
+            ("IPv6 Fragments", "n/a"),
+        ])
+        tk.Label(size_frame, text="Histogram", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_histogram = self._make_tree(size_frame, ("bucket", "count"), ("Bucket", "Count"))
+
+        l2l3_frame = ttk.LabelFrame(tab, text="L2/L3 Breakdown")
+        l2l3_frame.pack(fill="x", padx=8, pady=6)
+        tree_l2l3 = self._make_tree(l2l3_frame, ("key", "count"), ("Key", "Count"))
+
+        totals_frame = ttk.LabelFrame(tab, text="Global Totals (context)")
+        totals_frame.pack(fill="x", padx=8, pady=6)
+        kpi_vars_totals = self._make_kpi_grid(totals_frame, [
+            ("Packets", "n/a"),
+            ("Bytes", "n/a"),
+            ("Duration", "n/a"),
+        ])
+
+        raw_frame = ttk.LabelFrame(tab, text="Raw JSON")
+        raw_frame.pack(fill="both", expand=True, padx=8, pady=6)
+        raw_notebook = ttk.Notebook(raw_frame)
+        raw_notebook.pack(fill="both", expand=True)
+        raw_tabs = {}
+        json_texts = {}
+        for key, label in [
+            ("throughput_peaks", "Throughput Peaks"),
+            ("packet_size_stats", "Packet Size Stats"),
+            ("l2_l3_breakdown", "L2/L3 Breakdown"),
+        ]:
+            raw_tab = tk.Frame(raw_notebook, bg=BG_PANEL)
+            raw_notebook.add(raw_tab, text=label)
+            raw_tabs[key] = raw_tab
+            json_texts[key] = self._make_json_text(raw_tab)
+
+        self.ti_traffic_overview = {
+            "kpi_vars_throughput": kpi_vars_throughput,
+            "tree_throughput": tree_throughput,
+            "kpi_vars_sizes": kpi_vars_sizes,
+            "tree_histogram": tree_histogram,
+            "tree_l2l3": tree_l2l3,
+            "kpi_vars_totals": kpi_vars_totals,
+            "json_texts": json_texts,
+        }
+
+    def _build_ti_protocol_mix(self):
+        tab = self.tech_tabs["Protocol Mix"]
+        totals_frame = ttk.LabelFrame(tab, text="Totals")
+        totals_frame.pack(fill="x", padx=8, pady=6)
+        kpi_vars_totals = self._make_kpi_grid(totals_frame, [
+            ("Packets", "n/a"),
+            ("Bytes Captured", "n/a"),
+            ("Bytes Original", "n/a"),
+            ("Duration", "n/a"),
+        ])
+
+        mix_frame = ttk.LabelFrame(tab, text="Protocol Mix")
+        mix_frame.pack(fill="x", padx=8, pady=6)
+        tk.Label(mix_frame, text="Protocol Counts", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_counts = self._make_tree(mix_frame, ("protocol", "count"), ("Protocol", "Count"))
+        tk.Label(mix_frame, text="Protocol Percentages", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_percentages = self._make_tree(mix_frame, ("protocol", "percent"), ("Protocol", "Percent"))
+        tk.Label(mix_frame, text="Additional Fields", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_misc = self._make_tree(mix_frame, ("key", "value"), ("Key", "Value"))
+
+        dist_frame = ttk.LabelFrame(tab, text="Global Distributions")
+        dist_frame.pack(fill="x", padx=8, pady=6)
+        dist_trees = {}
+        for key, label in [
+            ("ip_versions", "IP Versions"),
+            ("l4_protocols", "L4 Protocols"),
+            ("tcp_flags", "TCP Flags"),
+            ("decode_quality_flags", "Decode Quality Flags"),
+        ]:
+            tk.Label(dist_frame, text=label, fg=FG_MUTED, bg=BG_PANEL,
+                     font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+            dist_trees[key] = self._make_tree(dist_frame, ("key", "count", "percent"),
+                                              ("Key", "Count", "Percent"))
+
+        raw_frame = ttk.LabelFrame(tab, text="Raw JSON")
+        raw_frame.pack(fill="both", expand=True, padx=8, pady=6)
+        raw_notebook = ttk.Notebook(raw_frame)
+        raw_notebook.pack(fill="both", expand=True)
+        json_texts = {}
+        for key, label in [
+            ("protocol_mix", "Protocol Mix"),
+            ("global_stats", "Global Stats"),
+        ]:
+            raw_tab = tk.Frame(raw_notebook, bg=BG_PANEL)
+            raw_notebook.add(raw_tab, text=label)
+            json_texts[key] = self._make_json_text(raw_tab)
+
+        self.ti_protocol_mix = {
+            "kpi_vars_totals": kpi_vars_totals,
+            "tree_counts": tree_counts,
+            "tree_percentages": tree_percentages,
+            "tree_misc": tree_misc,
+            "dist_trees": dist_trees,
+            "json_texts": json_texts,
+        }
+
+    def _build_ti_flow_analytics(self):
+        tab = self.tech_tabs["Flow Analytics"]
+        summary_frame = ttk.LabelFrame(tab, text="Summary KPIs")
+        summary_frame.pack(fill="x", padx=8, pady=6)
+        kpi_vars_summary = self._make_kpi_grid(summary_frame, [
+            ("Total Flows", "n/a"),
+            ("New Flows/sec", "n/a"),
+            ("Duration Median", "n/a"),
+            ("Duration P95", "n/a"),
+            ("Bytes/Flow Avg", "n/a"),
+            ("Bytes/Flow P95", "n/a"),
+        ])
+
+        heavy_frame = ttk.LabelFrame(tab, text="Heavy Hitters")
+        heavy_frame.pack(fill="x", padx=8, pady=6)
+        tk.Label(heavy_frame, text="Top by Bytes", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        top_bytes_container = tk.Frame(heavy_frame, bg=BG_PANEL)
+        top_bytes_container.pack(fill="x", padx=8, pady=(0, 8))
+        tk.Label(heavy_frame, text="Top by Packets", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        top_packets_container = tk.Frame(heavy_frame, bg=BG_PANEL)
+        top_packets_container.pack(fill="x", padx=8, pady=(0, 4))
+
+        states_frame = ttk.LabelFrame(tab, text="Flow States")
+        states_frame.pack(fill="x", padx=8, pady=6)
+        tree_states = self._make_tree(states_frame, ("key", "value"), ("Key", "Value"))
+
+        summary_raw_frame = ttk.LabelFrame(tab, text="Flow Summary (raw table aggregates)")
+        summary_raw_frame.pack(fill="x", padx=8, pady=6)
+        flow_summary_container = tk.Frame(summary_raw_frame, bg=BG_PANEL)
+        flow_summary_container.pack(fill="x")
+
+        raw_frame = ttk.LabelFrame(tab, text="Raw JSON")
+        raw_frame.pack(fill="both", expand=True, padx=8, pady=6)
+        raw_notebook = ttk.Notebook(raw_frame)
+        raw_notebook.pack(fill="both", expand=True)
+        json_texts = {}
+        for key, label in [
+            ("flow_analytics", "Flow Analytics"),
+            ("flow_summary", "Flow Summary"),
+        ]:
+            raw_tab = tk.Frame(raw_notebook, bg=BG_PANEL)
+            raw_notebook.add(raw_tab, text=label)
+            json_texts[key] = self._make_json_text(raw_tab)
+
+        self.ti_flow_analytics = {
+            "kpi_vars_summary": kpi_vars_summary,
+            "heavy_top_bytes_container": top_bytes_container,
+            "heavy_top_packets_container": top_packets_container,
+            "tree_states": tree_states,
+            "flow_summary_container": flow_summary_container,
+            "json_texts": json_texts,
+            "heavy_top_bytes_tree": None,
+            "heavy_top_packets_tree": None,
+            "flow_summary_tree": None,
+        }
+
+    def _build_ti_tcp_health(self):
+        tab = self.tech_tabs["TCP Health"]
+        handshake_frame = ttk.LabelFrame(tab, text="Handshakes")
+        handshake_frame.pack(fill="x", padx=8, pady=6)
+        kpi_vars_handshakes = self._make_kpi_grid(handshake_frame, [
+            ("Handshakes Total", "n/a"),
+            ("Handshakes Complete", "n/a"),
+            ("Handshakes Incomplete", "n/a"),
+            ("Completion Rate", "n/a"),
+            ("RTT Median (ms)", "n/a"),
+            ("RTT P95 (ms)", "n/a"),
+        ])
+        tk.Label(handshake_frame, text="Additional Fields", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_handshake_extra = self._make_tree(handshake_frame, ("key", "value"), ("Key", "Value"))
+
+        reliability_frame = ttk.LabelFrame(tab, text="Reliability")
+        reliability_frame.pack(fill="x", padx=8, pady=6)
+        kpi_vars_reliability = self._make_kpi_grid(reliability_frame, [
+            ("Retransmissions", "n/a"),
+            ("Retransmission Rate", "n/a"),
+            ("Out of Order", "n/a"),
+            ("Out of Order Rate", "n/a"),
+            ("Dup ACKs", "n/a"),
+            ("Dup ACK Rate", "n/a"),
+            ("RST Packets", "n/a"),
+            ("RST Rate", "n/a"),
+        ])
+        tk.Label(reliability_frame, text="Additional Fields", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_reliability_extra = self._make_tree(reliability_frame, ("key", "value"), ("Key", "Value"))
+
+        performance_frame = ttk.LabelFrame(tab, text="Performance")
+        performance_frame.pack(fill="x", padx=8, pady=6)
+        kpi_vars_performance = self._make_kpi_grid(performance_frame, [
+            ("Window Median", "n/a"),
+            ("Window P95", "n/a"),
+            ("Zero Window", "n/a"),
+            ("MSS Top", "n/a"),
+            ("MSS Top %", "n/a"),
+        ])
+        tk.Label(performance_frame, text="MSS Distribution", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        mss_container = tk.Frame(performance_frame, bg=BG_PANEL)
+        mss_container.pack(fill="x", padx=8, pady=(0, 8))
+        tk.Label(performance_frame, text="Additional Fields", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_perf_extra = self._make_tree(performance_frame, ("key", "value"), ("Key", "Value"))
+
+        raw_frame = ttk.LabelFrame(tab, text="Raw JSON")
+        raw_frame.pack(fill="both", expand=True, padx=8, pady=6)
+        raw_notebook = ttk.Notebook(raw_frame)
+        raw_notebook.pack(fill="both", expand=True)
+        json_texts = {}
+        for key, label in [
+            ("tcp_handshakes", "TCP Handshakes"),
+            ("tcp_reliability", "TCP Reliability"),
+            ("tcp_performance", "TCP Performance"),
+        ]:
+            raw_tab = tk.Frame(raw_notebook, bg=BG_PANEL)
+            raw_notebook.add(raw_tab, text=label)
+            json_texts[key] = self._make_json_text(raw_tab)
+
+        self.ti_tcp_health = {
+            "kpi_vars_handshakes": kpi_vars_handshakes,
+            "tree_handshake_extra": tree_handshake_extra,
+            "kpi_vars_reliability": kpi_vars_reliability,
+            "tree_reliability_extra": tree_reliability_extra,
+            "kpi_vars_performance": kpi_vars_performance,
+            "mss_container": mss_container,
+            "mss_tree": None,
+            "tree_perf_extra": tree_perf_extra,
+            "json_texts": json_texts,
+        }
+
+    def _build_ti_top_entities(self):
+        tab = self.tech_tabs["Top Entities"]
+        ip_frame = ttk.LabelFrame(tab, text="IP Talkers")
+        ip_frame.pack(fill="x", padx=8, pady=6)
+        tk.Label(ip_frame, text="Top Source IPs", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        ip_src_container = tk.Frame(ip_frame, bg=BG_PANEL)
+        ip_src_container.pack(fill="x", padx=8, pady=(0, 8))
+        tk.Label(ip_frame, text="Top Destination IPs", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        ip_dst_container = tk.Frame(ip_frame, bg=BG_PANEL)
+        ip_dst_container.pack(fill="x", padx=8, pady=(0, 8))
+        tk.Label(ip_frame, text="Internal/External Split", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_ip_split = self._make_tree(ip_frame, ("key", "value"), ("Key", "Value"))
+
+        mac_frame = ttk.LabelFrame(tab, text="MAC Talkers")
+        mac_frame.pack(fill="x", padx=8, pady=6)
+        tk.Label(mac_frame, text="Top Source MACs", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        mac_src_container = tk.Frame(mac_frame, bg=BG_PANEL)
+        mac_src_container.pack(fill="x", padx=8, pady=(0, 8))
+        tk.Label(mac_frame, text="Top Destination MACs", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        mac_dst_container = tk.Frame(mac_frame, bg=BG_PANEL)
+        mac_dst_container.pack(fill="x", padx=8, pady=(0, 8))
+
+        ports_frame = ttk.LabelFrame(tab, text="Ports and Services")
+        ports_frame.pack(fill="x", padx=8, pady=6)
+        tk.Label(ports_frame, text="TCP Top Destination Ports", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tcp_ports_container = tk.Frame(ports_frame, bg=BG_PANEL)
+        tcp_ports_container.pack(fill="x", padx=8, pady=(0, 8))
+        tk.Label(ports_frame, text="UDP Top Destination Ports", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        udp_ports_container = tk.Frame(ports_frame, bg=BG_PANEL)
+        udp_ports_container.pack(fill="x", padx=8, pady=(0, 8))
+
+        raw_frame = ttk.LabelFrame(tab, text="Raw JSON")
+        raw_frame.pack(fill="both", expand=True, padx=8, pady=6)
+        raw_notebook = ttk.Notebook(raw_frame)
+        raw_notebook.pack(fill="both", expand=True)
+        json_texts = {}
+        for key, label in [
+            ("top_entities", "Top Entities"),
+            ("ip_talkers", "IP Talkers"),
+            ("mac_talkers", "MAC Talkers"),
+            ("ports", "Ports"),
+        ]:
+            raw_tab = tk.Frame(raw_notebook, bg=BG_PANEL)
+            raw_notebook.add(raw_tab, text=label)
+            json_texts[key] = self._make_json_text(raw_tab)
+
+        self.ti_top_entities = {
+            "ip_src_container": ip_src_container,
+            "ip_dst_container": ip_dst_container,
+            "tree_ip_split": tree_ip_split,
+            "mac_src_container": mac_src_container,
+            "mac_dst_container": mac_dst_container,
+            "tcp_ports_container": tcp_ports_container,
+            "udp_ports_container": udp_ports_container,
+            "json_texts": json_texts,
+            "ip_src_tree": None,
+            "ip_dst_tree": None,
+            "mac_src_tree": None,
+            "mac_dst_tree": None,
+            "tcp_ports_tree": None,
+            "udp_ports_tree": None,
+        }
+
+    def _build_ti_security_signals(self):
+        tab = self.tech_tabs["Security Signals"]
+        scan_frame = ttk.LabelFrame(tab, text="Scan Signals")
+        scan_frame.pack(fill="x", padx=8, pady=6)
+        tk.Label(scan_frame, text="Distinct Ports", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_distinct_ports = self._make_tree(scan_frame, ("key", "value"), ("Key", "Value"))
+        tk.Label(scan_frame, text="Distinct IPs", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_distinct_ips = self._make_tree(scan_frame, ("key", "value"), ("Key", "Value"))
+        tk.Label(scan_frame, text="TCP SYN Ratio", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_syn_ratio = self._make_tree(scan_frame, ("key", "value"), ("Key", "Value"))
+        tk.Label(scan_frame, text="Other Fields", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_scan_extra = self._make_tree(scan_frame, ("key", "value"), ("Key", "Value"))
+
+        arp_frame = ttk.LabelFrame(tab, text="ARP / LAN Signals")
+        arp_frame.pack(fill="x", padx=8, pady=6)
+        tk.Label(arp_frame, text="Multiple MACs (Count)", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_multiple_macs = self._make_tree(arp_frame, ("key", "value"), ("Key", "Value"))
+        tk.Label(arp_frame, text="Multiple MACs Examples", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        multiple_macs_container = tk.Frame(arp_frame, bg=BG_PANEL)
+        multiple_macs_container.pack(fill="x", padx=8, pady=(0, 8))
+        tk.Label(arp_frame, text="ARP Changes", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_arp_changes = self._make_tree(arp_frame, ("key", "value"), ("Key", "Value"))
+        tk.Label(arp_frame, text="ARP Changes Top Entries", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        arp_changes_container = tk.Frame(arp_frame, bg=BG_PANEL)
+        arp_changes_container.pack(fill="x", padx=8, pady=(0, 8))
+        tk.Label(arp_frame, text="Other Fields", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_arp_extra = self._make_tree(arp_frame, ("key", "value"), ("Key", "Value"))
+
+        dns_frame = ttk.LabelFrame(tab, text="DNS Anomalies")
+        dns_frame.pack(fill="x", padx=8, pady=6)
+        tk.Label(dns_frame, text="High Entropy Domains", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_entropy = self._make_tree(dns_frame, ("key", "value"), ("Key", "Value"))
+        tk.Label(dns_frame, text="Entropy Samples", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        entropy_container = tk.Frame(dns_frame, bg=BG_PANEL)
+        entropy_container.pack(fill="x", padx=8, pady=(0, 8))
+        tk.Label(dns_frame, text="Long Labels", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_long_labels = self._make_tree(dns_frame, ("key", "value"), ("Key", "Value"))
+        tk.Label(dns_frame, text="Long Label Samples", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        long_labels_container = tk.Frame(dns_frame, bg=BG_PANEL)
+        long_labels_container.pack(fill="x", padx=8, pady=(0, 8))
+        tk.Label(dns_frame, text="NXDOMAIN", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_nxdomain = self._make_tree(dns_frame, ("key", "value"), ("Key", "Value"))
+        tk.Label(dns_frame, text="Other Fields", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        tree_dns_extra = self._make_tree(dns_frame, ("key", "value"), ("Key", "Value"))
+
+        raw_frame = ttk.LabelFrame(tab, text="Raw JSON")
+        raw_frame.pack(fill="both", expand=True, padx=8, pady=6)
+        raw_notebook = ttk.Notebook(raw_frame)
+        raw_notebook.pack(fill="both", expand=True)
+        json_texts = {}
+        for key, label in [
+            ("scan_signals", "Scan Signals"),
+            ("arp_lan_signals", "ARP/LAN Signals"),
+            ("dns_anomalies", "DNS Anomalies"),
+        ]:
+            raw_tab = tk.Frame(raw_notebook, bg=BG_PANEL)
+            raw_notebook.add(raw_tab, text=label)
+            json_texts[key] = self._make_json_text(raw_tab)
+
+        self.ti_security_signals = {
+            "tree_distinct_ports": tree_distinct_ports,
+            "tree_distinct_ips": tree_distinct_ips,
+            "tree_syn_ratio": tree_syn_ratio,
+            "tree_scan_extra": tree_scan_extra,
+            "tree_multiple_macs": tree_multiple_macs,
+            "multiple_macs_container": multiple_macs_container,
+            "tree_arp_changes": tree_arp_changes,
+            "arp_changes_container": arp_changes_container,
+            "tree_arp_extra": tree_arp_extra,
+            "tree_entropy": tree_entropy,
+            "entropy_container": entropy_container,
+            "tree_long_labels": tree_long_labels,
+            "long_labels_container": long_labels_container,
+            "tree_nxdomain": tree_nxdomain,
+            "tree_dns_extra": tree_dns_extra,
+            "json_texts": json_texts,
+            "multiple_macs_tree": None,
+            "arp_changes_tree": None,
+            "entropy_tree": None,
+            "long_labels_tree": None,
+        }
+
+    def _build_ti_time_series_chunking(self):
+        tab = self.tech_tabs["Time Series & Chunking"]
+        series_frame = ttk.LabelFrame(tab, text="Traffic Over Time")
+        series_frame.pack(fill="x", padx=8, pady=6)
+        tk.Label(series_frame, text="Time Series", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        series_container = tk.Frame(series_frame, bg=BG_PANEL)
+        series_container.pack(fill="x", padx=8, pady=(0, 8))
+
+        chunks_frame = ttk.LabelFrame(tab, text="Packet Chunks")
+        chunks_frame.pack(fill="x", padx=8, pady=6)
+        tk.Label(chunks_frame, text="Chunks Table", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        chunks_container = tk.Frame(chunks_frame, bg=BG_PANEL)
+        chunks_container.pack(fill="x", padx=8, pady=(0, 8))
+        tk.Label(chunks_frame, text="Top Chunks by Bytes", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        top_bytes_container = tk.Frame(chunks_frame, bg=BG_PANEL)
+        top_bytes_container.pack(fill="x", padx=8, pady=(0, 8))
+        tk.Label(chunks_frame, text="Top Chunks by Packets", fg=FG_MUTED, bg=BG_PANEL,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=8, pady=(0, 4))
+        top_packets_container = tk.Frame(chunks_frame, bg=BG_PANEL)
+        top_packets_container.pack(fill="x", padx=8, pady=(0, 8))
+
+        raw_frame = ttk.LabelFrame(tab, text="Raw JSON")
+        raw_frame.pack(fill="both", expand=True, padx=8, pady=6)
+        raw_notebook = ttk.Notebook(raw_frame)
+        raw_notebook.pack(fill="both", expand=True)
+        json_texts = {}
+        for key, label in [
+            ("time_series", "Time Series"),
+            ("packet_chunks", "Packet Chunks"),
+        ]:
+            raw_tab = tk.Frame(raw_notebook, bg=BG_PANEL)
+            raw_notebook.add(raw_tab, text=label)
+            json_texts[key] = self._make_json_text(raw_tab)
+
+        self.ti_time_series = {
+            "series_container": series_container,
+            "chunks_container": chunks_container,
+            "top_bytes_container": top_bytes_container,
+            "top_packets_container": top_packets_container,
+            "json_texts": json_texts,
+            "series_tree": None,
+            "chunks_tree": None,
+            "top_bytes_tree": None,
+            "top_packets_tree": None,
+        }
+
     def _extra_analysis_data(self):
         return []
 
     def _build_packet_table(self):
-        header = tk.Frame(self.content, bg="#0e1117")
+        header = tk.Frame(self.content, bg=BG_MAIN)
         header.pack(fill="x", padx=20, pady=(10, 4))
 
-        tk.Label(header, text="Packet List", fg="#9aa4b2", bg="#0e1117",
+        tk.Label(header, text="Packet List", fg=FG_MUTED, bg=BG_MAIN,
                  font=("Segoe UI", 10, "bold")).pack(side="left")
 
         self.toggle_btn = tk.Button(header, text="Collapse Packet List", command=self.toggle_table,
-                                    bg="#151b23", fg="#e6edf3")
+                                    bg=BG_PANEL, fg=FG_TEXT)
         self.toggle_btn.pack(side="right")
 
-        self.table_frame = tk.Frame(self.content, bg="#0e1117")
+        self.table_frame = tk.Frame(self.content, bg=BG_MAIN)
         self.table_frame.pack(fill="both", expand=True, padx=20, pady=10)
 
         columns = ("id", "time", "stack", "src", "dst", "ports", "l4", "flags", "quality")
@@ -587,9 +1291,11 @@ class AsphaltApp(tk.Tk):
             packets = run_capture(backend, interface, duration, limit)
             analysis = run_analysis(packets)
             self.latest_packets = packets
+            self.latest_analysis = analysis or {}
             self.rows = packets
             self.after(0, self.refresh_table)
             self.after(0, lambda: self.refresh_analysis(analysis))
+            self.after(0, self.refresh_technical_information)
             self.after(0, lambda: self.set_status(f"Loaded {len(packets)} packets"))
             self.after(0, lambda: self.download_btn.config(state="normal" if packets else "disabled"))
         except Exception as exc:
@@ -989,6 +1695,885 @@ class AsphaltApp(tk.Tk):
             )
         else:
             self.analysis_arp_lan.set("-")
+
+    def refresh_technical_information(self):
+        analysis = self.latest_analysis or {}
+        self._refresh_ti_capture_quality(analysis)
+        self._refresh_ti_traffic_overview(analysis)
+        self._refresh_ti_protocol_mix(analysis)
+        self._refresh_ti_flow_analytics(analysis)
+        self._refresh_ti_tcp_health(analysis)
+        self._refresh_ti_top_entities(analysis)
+        self._refresh_ti_security_signals(analysis)
+        self._refresh_ti_time_series_chunking(analysis)
+
+    def _refresh_ti_capture_quality(self, analysis):
+        health = analysis.get("global_results", {}).get("capture_health", {})
+        quality = health.get("capture_quality", {}) if isinstance(health, dict) else {}
+        session = quality.get("session", {}) if isinstance(quality, dict) else {}
+        drops = quality.get("drops", {}) if isinstance(quality, dict) else {}
+        decode = health.get("decode_health", {}) if isinstance(health, dict) else {}
+        filtering = health.get("filtering_sampling", {}) if isinstance(health, dict) else {}
+
+        def _fmt_ts_or_raw(value):
+            if value is None:
+                return "n/a"
+            if isinstance(value, (int, float)) and value > 1_000_000_000:
+                return _fmt_ts_utc(value)
+            return str(value)
+
+        session_vars = self.ti_capture_quality["kpi_vars_session"]
+        session_vars["Capture Start"].set(_fmt_ts_or_raw(session.get("capture_start_us")))
+        session_vars["Capture End"].set(_fmt_ts_or_raw(session.get("capture_end_us")))
+        duration_us = session.get("duration_us")
+        duration_text = _fmt_duration_us(duration_us)
+        if isinstance(duration_us, (int, float)):
+            duration_text = f"{duration_text} ({_fmt_number(duration_us / 1_000_000, 3)} s)"
+        session_vars["Duration"].set(duration_text)
+        session_vars["Link Types"].set(str(session.get("link_types", "n/a")))
+        session_vars["Snaplen"].set(str(session.get("snaplen", "n/a")))
+        session_vars["Promiscuous"].set(str(session.get("promiscuous", "n/a")))
+
+        drops_vars = self.ti_capture_quality["kpi_vars_drops"]
+        dropped_packets = drops.get("dropped_packets")
+        drops_vars["Dropped Packets"].set(_fmt_count(dropped_packets))
+        drop_rate_pct = drops.get("drop_rate_pct")
+        if drop_rate_pct is None:
+            totals = analysis.get("global_results", {}).get("global_stats", {}).get("totals", {})
+            total_packets = totals.get("packets")
+            if isinstance(dropped_packets, (int, float)) and isinstance(total_packets, (int, float)):
+                denom = total_packets + dropped_packets
+                drop_rate_pct = (dropped_packets / denom * 100) if denom else None
+        drops_vars["Drop Rate"].set(_fmt_pct(drop_rate_pct))
+
+        decode_vars = self.ti_capture_quality["kpi_vars_decode"]
+        decode_vars["Decode Success"].set(_fmt_pct(decode.get("decode_success_rate")))
+        decode_vars["Malformed Packets"].set(_fmt_count(decode.get("malformed_packets")))
+        decode_vars["Truncated Packets"].set(_fmt_count(decode.get("truncated_packets")))
+        decode_vars["Unknown L3"].set(_fmt_count(decode.get("unknown_l3_packets")))
+        decode_vars["Unknown L4"].set(_fmt_count(decode.get("unknown_l4_packets")))
+        decode_vars["Unsupported Link Types"].set(str(decode.get("unsupported_link_types", "n/a")))
+
+        decode_rows = []
+        for key, value in (decode or {}).items():
+            if isinstance(value, bool):
+                continue
+            if isinstance(value, (int, float)):
+                if isinstance(value, float) and not value.is_integer():
+                    value_text = _fmt_number(value, 4)
+                else:
+                    value_text = _fmt_count(value)
+                decode_rows.append((key, value_text))
+        decode_rows.sort(key=lambda row: row[0])
+        self._tree_set_rows(self.ti_capture_quality["tree_decode"], decode_rows)
+
+        filtering_rows = []
+        for key, value in (filtering or {}).items():
+            if isinstance(value, dict):
+                value_text = json.dumps(value)
+            else:
+                value_text = str(value)
+            filtering_rows.append((key, value_text))
+        filtering_rows.sort(key=lambda row: row[0])
+        self._tree_set_rows(self.ti_capture_quality["tree_filtering"], filtering_rows)
+
+        self._set_json_text(self.ti_capture_quality["json_text"], health if health else {})
+
+    def _refresh_ti_traffic_overview(self, analysis):
+        throughput = analysis.get("global_results", {}).get("throughput_peaks", {})
+        throughput = throughput if isinstance(throughput, dict) else {}
+        size_stats = analysis.get("global_results", {}).get("packet_size_stats", {})
+        size_stats = size_stats if isinstance(size_stats, dict) else {}
+        l2l3 = analysis.get("global_results", {}).get("l2_l3_breakdown", {})
+        l2l3 = l2l3 if isinstance(l2l3, dict) else {}
+
+        vars_throughput = self.ti_traffic_overview["kpi_vars_throughput"]
+        vars_throughput["BPS Now"].set(_fmt_bps(throughput.get("bps_now")))
+        vars_throughput["BPS Avg"].set(_fmt_bps(throughput.get("bps_avg")))
+        vars_throughput["PPS Now"].set(_fmt_pps(throughput.get("pps_now")))
+        vars_throughput["PPS Avg"].set(_fmt_pps(throughput.get("pps_avg")))
+        vars_throughput["Peak BPS"].set(_fmt_bps(throughput.get("peak_bps")))
+        vars_throughput["Peak PPS"].set(_fmt_pps(throughput.get("peak_pps")))
+        vars_throughput["Peak BPS Time"].set(_fmt_ts_utc(throughput.get("peak_bps_timestamp")))
+        vars_throughput["Peak PPS Time"].set(_fmt_ts_utc(throughput.get("peak_pps_timestamp")))
+
+        throughput_rows = []
+        if isinstance(throughput, dict):
+            ordered_keys = [
+                "bucket_ms",
+                "bps_now",
+                "bps_avg",
+                "pps_now",
+                "pps_avg",
+                "peak_bps",
+                "peak_pps",
+                "peak_bps_timestamp",
+                "peak_pps_timestamp",
+                "peak_timestamp",
+            ]
+            keys = [key for key in ordered_keys if key in throughput]
+            extra_keys = sorted(key for key in throughput.keys() if key not in ordered_keys)
+            for key in keys + extra_keys:
+                value = throughput.get(key)
+                if key.endswith("_timestamp"):
+                    value_text = _fmt_ts_utc(value)
+                elif key.endswith("_bps") or "bps" in key:
+                    value_text = _fmt_bps(value)
+                elif key.endswith("_pps") or "pps" in key:
+                    value_text = _fmt_pps(value)
+                elif key.endswith("_ms") or key == "bucket_ms":
+                    value_text = f"{value} ms" if value is not None else "n/a"
+                else:
+                    value_text = str(value)
+                throughput_rows.append((key, value_text))
+        self._tree_set_rows(self.ti_traffic_overview["tree_throughput"], throughput_rows)
+
+        vars_sizes = self.ti_traffic_overview["kpi_vars_sizes"]
+        captured = size_stats.get("captured_length", {}) if isinstance(size_stats, dict) else {}
+        original = size_stats.get("original_length", {}) if isinstance(size_stats, dict) else {}
+        fragments = size_stats.get("fragments", {}) if isinstance(size_stats, dict) else {}
+        vars_sizes["Captured Len Min"].set(_fmt_bytes(captured.get("min")))
+        vars_sizes["Captured Len Median"].set(_fmt_bytes(captured.get("median")))
+        vars_sizes["Captured Len P95"].set(_fmt_bytes(captured.get("p95")))
+        vars_sizes["Captured Len Max"].set(_fmt_bytes(captured.get("max")))
+        vars_sizes["Original Len Min"].set(_fmt_bytes(original.get("min")))
+        vars_sizes["Original Len Median"].set(_fmt_bytes(original.get("median")))
+        vars_sizes["Original Len P95"].set(_fmt_bytes(original.get("p95")))
+        vars_sizes["Original Len Max"].set(_fmt_bytes(original.get("max")))
+        vars_sizes["IPv4 Fragments"].set(_fmt_count(fragments.get("ipv4_fragments")))
+        vars_sizes["IPv6 Fragments"].set(_fmt_count(fragments.get("ipv6_fragments")))
+
+        histogram_rows = []
+        histogram = size_stats.get("histogram", {}) if isinstance(size_stats, dict) else {}
+        if isinstance(histogram, dict):
+            bucket_order = ["0-63", "64-127", "128-511", "512-1023", "1024-1514", "jumbo"]
+            keys = [key for key in bucket_order if key in histogram]
+            extra_keys = sorted(key for key in histogram.keys() if key not in bucket_order)
+            for key in keys + extra_keys:
+                histogram_rows.append((key, _fmt_count(histogram.get(key))))
+        self._tree_set_rows(self.ti_traffic_overview["tree_histogram"], histogram_rows)
+
+        l2l3_rows = []
+        if isinstance(l2l3, dict):
+            l2l3_order = [
+                "ethernet_frames",
+                "vlan_frames",
+                "arp_packets",
+                "icmp_packets",
+                "icmpv6_packets",
+                "multicast_packets",
+                "broadcast_packets",
+            ]
+            keys = [key for key in l2l3_order if key in l2l3]
+            extra_keys = sorted(key for key in l2l3.keys() if key not in l2l3_order)
+            for key in keys + extra_keys:
+                l2l3_rows.append((key, _fmt_count(l2l3.get(key))))
+        self._tree_set_rows(self.ti_traffic_overview["tree_l2l3"], l2l3_rows)
+
+        totals = analysis.get("global_results", {}).get("global_stats", {}).get("totals", {})
+        totals = totals if isinstance(totals, dict) else {}
+        totals_packets = totals.get("packets")
+        if totals_packets is None:
+            totals_packets = totals.get("packets_total")
+        totals_bytes = totals.get("bytes")
+        if totals_bytes is None:
+            totals_bytes = totals.get("bytes_captured")
+        if totals_bytes is None:
+            totals_bytes = totals.get("bytes_captured_total")
+        totals_duration = totals.get("duration_us")
+        vars_totals = self.ti_traffic_overview["kpi_vars_totals"]
+        vars_totals["Packets"].set(_fmt_count(totals_packets))
+        vars_totals["Bytes"].set(_fmt_bytes(totals_bytes))
+        vars_totals["Duration"].set(_fmt_duration_us(totals_duration))
+
+        json_texts = self.ti_traffic_overview["json_texts"]
+        self._set_json_text(json_texts["throughput_peaks"], throughput or {})
+        self._set_json_text(json_texts["packet_size_stats"], size_stats or {})
+        self._set_json_text(json_texts["l2_l3_breakdown"], l2l3 or {})
+
+    def _refresh_ti_protocol_mix(self, analysis):
+        protocol = analysis.get("global_results", {}).get("protocol_mix", {})
+        protocol = protocol if isinstance(protocol, dict) else {}
+        global_stats = analysis.get("global_results", {}).get("global_stats", {})
+        global_stats = global_stats if isinstance(global_stats, dict) else {}
+
+        totals = global_stats.get("totals", {})
+        totals = totals if isinstance(totals, dict) else {}
+        packets_total = totals.get("packets")
+        if packets_total is None:
+            packets_total = totals.get("packets_total")
+        if packets_total is None:
+            packets_total = global_stats.get("packets_total")
+
+        bytes_captured = totals.get("bytes_captured")
+        if bytes_captured is None:
+            bytes_captured = totals.get("bytes_captured_total")
+        if bytes_captured is None:
+            bytes_captured = global_stats.get("bytes_captured_total")
+
+        bytes_original = totals.get("bytes_original")
+        if bytes_original is None:
+            bytes_original = totals.get("bytes_original_total")
+        if bytes_original is None:
+            bytes_original = global_stats.get("bytes_original_total")
+
+        duration_us = totals.get("duration_us")
+        if duration_us is None:
+            duration_us = global_stats.get("duration_us")
+
+        vars_totals = self.ti_protocol_mix["kpi_vars_totals"]
+        vars_totals["Packets"].set(_fmt_count(packets_total))
+        vars_totals["Bytes Captured"].set(_fmt_bytes(bytes_captured))
+        vars_totals["Bytes Original"].set(_fmt_bytes(bytes_original))
+        vars_totals["Duration"].set(_fmt_duration_us(duration_us))
+
+        counts = protocol.get("protocol_counts", {})
+        counts = counts if isinstance(counts, dict) else {}
+        count_rows = []
+        for key in sorted(counts.keys()):
+            count_rows.append((key, _fmt_count(counts.get(key))))
+        self._tree_set_rows(self.ti_protocol_mix["tree_counts"], count_rows)
+
+        percents = protocol.get("protocol_percentages", {})
+        if not isinstance(percents, dict) or not percents:
+            percents = {}
+            denom = sum(counts.values()) if counts else 0
+            for key, count in counts.items():
+                pct = (count / denom * 100.0) if denom else None
+                percents[key] = pct
+        percent_rows = []
+        for key in sorted(percents.keys()):
+            percent_rows.append((key, _fmt_pct(percents.get(key))))
+        self._tree_set_rows(self.ti_protocol_mix["tree_percentages"], percent_rows)
+
+        misc_rows = []
+        for key in sorted(protocol.keys()):
+            if key in ("protocol_counts", "protocol_percentages"):
+                continue
+            value = protocol.get(key)
+            if isinstance(value, (dict, list)):
+                value_text = json.dumps(value)
+            else:
+                value_text = str(value)
+            misc_rows.append((key, value_text))
+        self._tree_set_rows(self.ti_protocol_mix["tree_misc"], misc_rows)
+
+        distributions = global_stats.get("distributions", {})
+        distributions = distributions if isinstance(distributions, dict) else {}
+
+        def _render_distribution(tree_key, fallback_key):
+            dist = distributions.get(tree_key)
+            if not isinstance(dist, dict):
+                dist = global_stats.get(fallback_key, {})
+            dist = dist if isinstance(dist, dict) else {}
+            denom = sum(dist.values()) if dist else 0
+            rows = []
+            for key in sorted(dist.keys()):
+                count = dist.get(key)
+                pct = (count / denom * 100.0) if denom else None
+                rows.append((key, _fmt_count(count), _fmt_pct(pct)))
+            self._tree_set_rows(self.ti_protocol_mix["dist_trees"][tree_key], rows)
+
+        _render_distribution("ip_versions", "ip_versions")
+        _render_distribution("l4_protocols", "l4_protocols")
+        _render_distribution("tcp_flags", "tcp_flags")
+        _render_distribution("decode_quality_flags", "quality_flags")
+
+        json_texts = self.ti_protocol_mix["json_texts"]
+        self._set_json_text(json_texts["protocol_mix"], protocol if protocol else {})
+        self._set_json_text(json_texts["global_stats"], global_stats if global_stats else {})
+
+    def _refresh_ti_flow_analytics(self, analysis):
+        flow = analysis.get("global_results", {}).get("flow_analytics", {})
+        flow = flow if isinstance(flow, dict) else {}
+        summary = flow.get("summary", {}) if isinstance(flow, dict) else {}
+        states = flow.get("states", {}) if isinstance(flow, dict) else {}
+
+        vars_summary = self.ti_flow_analytics["kpi_vars_summary"]
+        vars_summary["Total Flows"].set(_fmt_count(summary.get("total_flows")))
+        vars_summary["New Flows/sec"].set(_fmt_number(summary.get("new_flows_per_sec")))
+        vars_summary["Duration Median"].set(_fmt_duration_us(summary.get("duration_us_median")))
+        vars_summary["Duration P95"].set(_fmt_duration_us(summary.get("duration_us_p95")))
+        vars_summary["Bytes/Flow Avg"].set(_fmt_bytes(summary.get("bytes_per_flow_avg")))
+        vars_summary["Bytes/Flow P95"].set(_fmt_bytes(summary.get("bytes_per_flow_p95")))
+
+        def _build_dynamic_tree(container, items):
+            for child in container.winfo_children():
+                child.destroy()
+            keys = set()
+            for item in items:
+                if isinstance(item, dict):
+                    keys.update(item.keys())
+            columns = sorted(keys) if keys else ["value"]
+            tree = ttk.Treeview(container, columns=columns, show="headings", height=6)
+            yscroll = ttk.Scrollbar(container, orient="vertical", command=tree.yview)
+            tree.configure(yscrollcommand=yscroll.set)
+            tree.pack(side="left", fill="both", expand=True)
+            yscroll.pack(side="right", fill="y")
+            for col in columns:
+                tree.heading(col, text=col)
+                tree.column(col, width=120, anchor="w")
+            rows = []
+            for item in items:
+                if isinstance(item, dict):
+                    row = []
+                    for col in columns:
+                        value = item.get(col)
+                        if col in ("bytes", "bytes_captured_total", "bytes_original_total", "bytes_captured", "bytes_original"):
+                            value = _fmt_bytes(value)
+                        elif col in ("packets", "packets_total"):
+                            value = _fmt_count(value)
+                        elif col.endswith("_us") and isinstance(value, (int, float)):
+                            value = _fmt_duration_us(value)
+                        row.append(value)
+                    rows.append(tuple(row))
+                else:
+                    rows.append((item,))
+            self._tree_set_rows(tree, rows)
+            return tree
+
+        heavy = flow.get("heavy_hitters", {}) if isinstance(flow, dict) else {}
+        top_by_bytes = heavy.get("top_by_bytes", []) if isinstance(heavy, dict) else []
+        top_by_packets = heavy.get("top_by_packets", []) if isinstance(heavy, dict) else []
+        self.ti_flow_analytics["heavy_top_bytes_tree"] = _build_dynamic_tree(
+            self.ti_flow_analytics["heavy_top_bytes_container"],
+            top_by_bytes or [],
+        )
+        self.ti_flow_analytics["heavy_top_packets_tree"] = _build_dynamic_tree(
+            self.ti_flow_analytics["heavy_top_packets_container"],
+            top_by_packets or [],
+        )
+
+        state_rows = []
+        if isinstance(states, dict):
+            for key in sorted(states.keys()):
+                state_rows.append((key, _fmt_count(states.get(key))))
+        self._tree_set_rows(self.ti_flow_analytics["tree_states"], state_rows)
+
+        flow_summary = analysis.get("flow_results", {}).get("flow_summary", {})
+        flow_summary = flow_summary if isinstance(flow_summary, dict) else {}
+        flow_summary_container = self.ti_flow_analytics["flow_summary_container"]
+        for child in flow_summary_container.winfo_children():
+            child.destroy()
+
+        flows = flow_summary.get("flows")
+        if isinstance(flows, list) and flows:
+            self.ti_flow_analytics["flow_summary_tree"] = _build_dynamic_tree(
+                flow_summary_container,
+                flows,
+            )
+        else:
+            tree = self._make_tree(flow_summary_container, ("key", "value"), ("Key", "Value"))
+            rows = []
+            if isinstance(flow_summary, dict):
+                for key in sorted(flow_summary.keys()):
+                    if key == "flows":
+                        continue
+                    value = flow_summary.get(key)
+                    if isinstance(value, (dict, list)):
+                        value_text = json.dumps(value)
+                    else:
+                        value_text = str(value)
+                    rows.append((key, value_text))
+            self._tree_set_rows(tree, rows)
+            self.ti_flow_analytics["flow_summary_tree"] = tree
+
+        json_texts = self.ti_flow_analytics["json_texts"]
+        self._set_json_text(json_texts["flow_analytics"], flow if flow else {})
+        self._set_json_text(json_texts["flow_summary"], flow_summary if flow_summary else {})
+
+    def _refresh_ti_tcp_health(self, analysis):
+        handshake = analysis.get("global_results", {}).get("tcp_handshakes", {})
+        handshake = handshake if isinstance(handshake, dict) else {}
+        reliability = analysis.get("global_results", {}).get("tcp_reliability", {})
+        reliability = reliability if isinstance(reliability, dict) else {}
+        performance = analysis.get("global_results", {}).get("tcp_performance", {})
+        performance = performance if isinstance(performance, dict) else {}
+
+        vars_handshakes = self.ti_tcp_health["kpi_vars_handshakes"]
+        vars_handshakes["Handshakes Total"].set(_fmt_count(handshake.get("handshakes_total")))
+        vars_handshakes["Handshakes Complete"].set(_fmt_count(handshake.get("handshakes_complete")))
+        vars_handshakes["Handshakes Incomplete"].set(_fmt_count(handshake.get("handshakes_incomplete")))
+        vars_handshakes["Completion Rate"].set(_fmt_pct(handshake.get("completion_rate")))
+        vars_handshakes["RTT Median (ms)"].set(_fmt_number(handshake.get("rtt_median_ms")))
+        vars_handshakes["RTT P95 (ms)"].set(_fmt_number(handshake.get("rtt_p95_ms")))
+        handshake_rows = []
+        for key in sorted(handshake.keys()):
+            if key in {
+                "handshakes_total",
+                "handshakes_complete",
+                "handshakes_incomplete",
+                "completion_rate",
+                "rtt_median_ms",
+                "rtt_p95_ms",
+            }:
+                continue
+            value = handshake.get(key)
+            if isinstance(value, (dict, list)):
+                value_text = json.dumps(value)
+            else:
+                value_text = str(value)
+            handshake_rows.append((key, value_text))
+        self._tree_set_rows(self.ti_tcp_health["tree_handshake_extra"], handshake_rows)
+
+        vars_reliability = self.ti_tcp_health["kpi_vars_reliability"]
+        vars_reliability["Retransmissions"].set(_fmt_count(reliability.get("retransmissions")))
+        vars_reliability["Retransmission Rate"].set(_fmt_pct(reliability.get("retransmission_rate")))
+        vars_reliability["Out of Order"].set(_fmt_count(reliability.get("out_of_order")))
+        vars_reliability["Out of Order Rate"].set(_fmt_pct(reliability.get("out_of_order_rate")))
+        vars_reliability["Dup ACKs"].set(_fmt_count(reliability.get("dup_acks")))
+        vars_reliability["Dup ACK Rate"].set(_fmt_pct(reliability.get("dup_ack_rate")))
+        vars_reliability["RST Packets"].set(_fmt_count(reliability.get("rst_packets")))
+        vars_reliability["RST Rate"].set(_fmt_pct(reliability.get("rst_rate")))
+        reliability_rows = []
+        for key in sorted(reliability.keys()):
+            if key in {
+                "retransmissions",
+                "retransmission_rate",
+                "out_of_order",
+                "out_of_order_rate",
+                "dup_acks",
+                "dup_ack_rate",
+                "rst_packets",
+                "rst_rate",
+            }:
+                continue
+            value = reliability.get(key)
+            if isinstance(value, (dict, list)):
+                value_text = json.dumps(value)
+            else:
+                value_text = str(value)
+            reliability_rows.append((key, value_text))
+        self._tree_set_rows(self.ti_tcp_health["tree_reliability_extra"], reliability_rows)
+
+        vars_performance = self.ti_tcp_health["kpi_vars_performance"]
+        vars_performance["Window Median"].set(_fmt_number(performance.get("window_median")))
+        vars_performance["Window P95"].set(_fmt_number(performance.get("window_p95")))
+        vars_performance["Zero Window"].set(_fmt_count(performance.get("zero_window")))
+        vars_performance["MSS Top"].set(str(performance.get("mss_top_value", "n/a")))
+        vars_performance["MSS Top %"].set(_fmt_pct(performance.get("mss_top_pct")))
+
+        mss_container = self.ti_tcp_health["mss_container"]
+        for child in mss_container.winfo_children():
+            child.destroy()
+        mss_list = performance.get("mss_top_k")
+        if isinstance(mss_list, list) and mss_list:
+            keys = set()
+            for item in mss_list:
+                if isinstance(item, dict):
+                    keys.update(item.keys())
+            columns = sorted(keys) if keys else ["value"]
+            tree = ttk.Treeview(mss_container, columns=columns, show="headings", height=4)
+            yscroll = ttk.Scrollbar(mss_container, orient="vertical", command=tree.yview)
+            tree.configure(yscrollcommand=yscroll.set)
+            tree.pack(side="left", fill="both", expand=True)
+            yscroll.pack(side="right", fill="y")
+            for col in columns:
+                tree.heading(col, text=col)
+                tree.column(col, width=120, anchor="w")
+            rows = []
+            for item in mss_list:
+                if isinstance(item, dict):
+                    rows.append(tuple(item.get(col) for col in columns))
+                else:
+                    rows.append((item,))
+            self._tree_set_rows(tree, rows)
+            self.ti_tcp_health["mss_tree"] = tree
+        else:
+            tree = self._make_tree(mss_container, ("field", "value"), ("Field", "Value"))
+            rows = [
+                ("mss_top_value", performance.get("mss_top_value")),
+                ("mss_top_pct", performance.get("mss_top_pct")),
+            ]
+            self._tree_set_rows(tree, rows)
+            self.ti_tcp_health["mss_tree"] = tree
+
+        perf_rows = []
+        for key in sorted(performance.keys()):
+            if key in {"window_median", "window_p95", "zero_window", "mss_top_value", "mss_top_pct", "mss_top_k"}:
+                continue
+            value = performance.get(key)
+            if isinstance(value, (dict, list)):
+                value_text = json.dumps(value)
+            else:
+                value_text = str(value)
+            perf_rows.append((key, value_text))
+        self._tree_set_rows(self.ti_tcp_health["tree_perf_extra"], perf_rows)
+
+        json_texts = self.ti_tcp_health["json_texts"]
+        self._set_json_text(json_texts["tcp_handshakes"], handshake if handshake else {})
+        self._set_json_text(json_texts["tcp_reliability"], reliability if reliability else {})
+        self._set_json_text(json_texts["tcp_performance"], performance if performance else {})
+
+    def _refresh_ti_top_entities(self, analysis):
+        top = analysis.get("global_results", {}).get("top_entities", {})
+        top = top if isinstance(top, dict) else {}
+        ip = top.get("ip_talkers", {}) if isinstance(top, dict) else {}
+        mac = top.get("mac_talkers", {}) if isinstance(top, dict) else {}
+        ports = top.get("ports", {}) if isinstance(top, dict) else {}
+
+        def _build_dynamic_tree(container, items):
+            for child in container.winfo_children():
+                child.destroy()
+            keys = set()
+            for item in items:
+                if isinstance(item, dict):
+                    keys.update(item.keys())
+            columns = sorted(keys) if keys else ["value"]
+            tree = ttk.Treeview(container, columns=columns, show="headings", height=6)
+            yscroll = ttk.Scrollbar(container, orient="vertical", command=tree.yview)
+            tree.configure(yscrollcommand=yscroll.set)
+            tree.pack(side="left", fill="both", expand=True)
+            yscroll.pack(side="right", fill="y")
+            for col in columns:
+                tree.heading(col, text=col)
+                tree.column(col, width=120, anchor="w")
+            rows = []
+            for item in items:
+                if isinstance(item, dict):
+                    row = []
+                    for col in columns:
+                        value = item.get(col)
+                        if col in ("bytes", "bytes_total", "bytes_captured_total", "bytes_original_total"):
+                            value = _fmt_bytes(value)
+                        elif col in ("packets", "packets_total"):
+                            value = _fmt_count(value)
+                        elif col.endswith("_pct") or col.endswith("_percent"):
+                            value = _fmt_pct(value)
+                        row.append(value)
+                    rows.append(tuple(row))
+                else:
+                    rows.append((item,))
+            self._tree_set_rows(tree, rows)
+            return tree
+
+        self.ti_top_entities["ip_src_tree"] = _build_dynamic_tree(
+            self.ti_top_entities["ip_src_container"],
+            ip.get("top_src", []) if isinstance(ip, dict) else [],
+        )
+        self.ti_top_entities["ip_dst_tree"] = _build_dynamic_tree(
+            self.ti_top_entities["ip_dst_container"],
+            ip.get("top_dst", []) if isinstance(ip, dict) else [],
+        )
+
+        split_rows = []
+        internal_external = ip.get("internal_external", {}) if isinstance(ip, dict) else {}
+        if isinstance(internal_external, dict):
+            for key in sorted(internal_external.keys()):
+                value = internal_external.get(key)
+                if key.endswith("_pct") or key.endswith("_percent"):
+                    value_text = _fmt_pct(value)
+                else:
+                    value_text = str(value)
+                split_rows.append((key, value_text))
+        self._tree_set_rows(self.ti_top_entities["tree_ip_split"], split_rows)
+
+        self.ti_top_entities["mac_src_tree"] = _build_dynamic_tree(
+            self.ti_top_entities["mac_src_container"],
+            mac.get("top_src", []) if isinstance(mac, dict) else [],
+        )
+        self.ti_top_entities["mac_dst_tree"] = _build_dynamic_tree(
+            self.ti_top_entities["mac_dst_container"],
+            mac.get("top_dst", []) if isinstance(mac, dict) else [],
+        )
+
+        tcp = ports.get("tcp", {}) if isinstance(ports, dict) else {}
+        udp = ports.get("udp", {}) if isinstance(ports, dict) else {}
+        self.ti_top_entities["tcp_ports_tree"] = _build_dynamic_tree(
+            self.ti_top_entities["tcp_ports_container"],
+            tcp.get("top_dst_ports", []) if isinstance(tcp, dict) else [],
+        )
+        self.ti_top_entities["udp_ports_tree"] = _build_dynamic_tree(
+            self.ti_top_entities["udp_ports_container"],
+            udp.get("top_dst_ports", []) if isinstance(udp, dict) else [],
+        )
+
+        json_texts = self.ti_top_entities["json_texts"]
+        self._set_json_text(json_texts["top_entities"], top if top else {})
+        self._set_json_text(json_texts["ip_talkers"], ip if ip else {})
+        self._set_json_text(json_texts["mac_talkers"], mac if mac else {})
+        self._set_json_text(json_texts["ports"], ports if ports else {})
+
+    def _refresh_ti_security_signals(self, analysis):
+        scan = analysis.get("global_results", {}).get("scan_signals", {})
+        scan = scan if isinstance(scan, dict) else {}
+        dns = analysis.get("global_results", {}).get("dns_anomalies", {})
+        dns = dns if isinstance(dns, dict) else {}
+        arp = analysis.get("global_results", {}).get("arp_lan_signals", {})
+        arp = arp if isinstance(arp, dict) else {}
+
+        def _kv_rows(obj, keys=None):
+            rows = []
+            if isinstance(obj, dict):
+                iterable = keys if keys is not None else sorted(obj.keys())
+                for key in iterable:
+                    if key not in obj:
+                        continue
+                    value = obj.get(key)
+                    if key.endswith("_pct") or key.endswith("_percent"):
+                        value_text = _fmt_pct(value)
+                    else:
+                        value_text = str(value)
+                    rows.append((key, value_text))
+            return rows
+
+        distinct_ports = scan.get("distinct_ports", {}) if isinstance(scan, dict) else {}
+        ports_keys = ["src_ip", "max_count"]
+        ports_rows = _kv_rows(distinct_ports, ports_keys + [k for k in sorted(distinct_ports.keys()) if k not in ports_keys])
+        self._tree_set_rows(self.ti_security_signals["tree_distinct_ports"], ports_rows)
+
+        distinct_ips = scan.get("distinct_ips", {}) if isinstance(scan, dict) else {}
+        self._tree_set_rows(self.ti_security_signals["tree_distinct_ips"], _kv_rows(distinct_ips))
+
+        syn_ratio = scan.get("tcp_syn_ratio", {}) if isinstance(scan, dict) else {}
+        syn_keys = ["syn_count", "synack_count", "ratio", "ratio_note"]
+        self._tree_set_rows(
+            self.ti_security_signals["tree_syn_ratio"],
+            _kv_rows(syn_ratio, syn_keys + [k for k in sorted(syn_ratio.keys()) if k not in syn_keys]),
+        )
+
+        scan_extra_rows = []
+        for key in sorted(scan.keys()):
+            if key in ("distinct_ports", "distinct_ips", "tcp_syn_ratio"):
+                continue
+            value = scan.get(key)
+            if isinstance(value, (dict, list)):
+                value_text = json.dumps(value)
+            else:
+                value_text = str(value)
+            scan_extra_rows.append((key, value_text))
+        self._tree_set_rows(self.ti_security_signals["tree_scan_extra"], scan_extra_rows)
+
+        multiple_macs = arp.get("multiple_macs", {}) if isinstance(arp, dict) else {}
+        multiple_rows = _kv_rows(multiple_macs, ["count"] + [k for k in sorted(multiple_macs.keys()) if k != "examples"])
+        self._tree_set_rows(self.ti_security_signals["tree_multiple_macs"], multiple_rows)
+        multiple_examples = multiple_macs.get("examples", []) if isinstance(multiple_macs, dict) else []
+
+        def _build_dynamic_tree(container, items, limit=200):
+            for child in container.winfo_children():
+                child.destroy()
+            if not items:
+                tree = self._make_tree(container, ("value",), ("Value",))
+                self._tree_set_rows(tree, [])
+                return tree
+            keys = set()
+            for item in items[:limit]:
+                if isinstance(item, dict):
+                    keys.update(item.keys())
+            columns = sorted(keys) if keys else ["value"]
+            tree = ttk.Treeview(container, columns=columns, show="headings", height=6)
+            yscroll = ttk.Scrollbar(container, orient="vertical", command=tree.yview)
+            tree.configure(yscrollcommand=yscroll.set)
+            tree.pack(side="left", fill="both", expand=True)
+            yscroll.pack(side="right", fill="y")
+            for col in columns:
+                tree.heading(col, text=col)
+                tree.column(col, width=120, anchor="w")
+            rows = []
+            for item in items[:limit]:
+                if isinstance(item, dict):
+                    rows.append(tuple(item.get(col) for col in columns))
+                else:
+                    rows.append((item,))
+            self._tree_set_rows(tree, rows)
+            return tree
+
+        self.ti_security_signals["multiple_macs_tree"] = _build_dynamic_tree(
+            self.ti_security_signals["multiple_macs_container"],
+            multiple_examples,
+        )
+
+        arp_changes = arp.get("arp_changes", {}) if isinstance(arp, dict) else {}
+        arp_rows = _kv_rows(arp_changes, ["count", "threshold"] + [k for k in sorted(arp_changes.keys()) if k not in ("top_changes",)])
+        self._tree_set_rows(self.ti_security_signals["tree_arp_changes"], arp_rows)
+        top_changes = arp_changes.get("top_changes", []) if isinstance(arp_changes, dict) else []
+        self.ti_security_signals["arp_changes_tree"] = _build_dynamic_tree(
+            self.ti_security_signals["arp_changes_container"],
+            top_changes,
+        )
+
+        arp_extra_rows = []
+        for key in sorted(arp.keys()):
+            if key in ("multiple_macs", "arp_changes"):
+                continue
+            value = arp.get(key)
+            if isinstance(value, (dict, list)):
+                value_text = json.dumps(value)
+            else:
+                value_text = str(value)
+            arp_extra_rows.append((key, value_text))
+        self._tree_set_rows(self.ti_security_signals["tree_arp_extra"], arp_extra_rows)
+
+        entropy = dns.get("entropy", {}) if isinstance(dns, dict) else {}
+        entropy_rows = _kv_rows(entropy, ["count"] + [k for k in sorted(entropy.keys()) if k != "samples"])
+        self._tree_set_rows(self.ti_security_signals["tree_entropy"], entropy_rows)
+        entropy_samples = entropy.get("samples", []) if isinstance(entropy, dict) else []
+        self.ti_security_signals["entropy_tree"] = _build_dynamic_tree(
+            self.ti_security_signals["entropy_container"],
+            entropy_samples,
+        )
+
+        long_labels = dns.get("long_labels", {}) if isinstance(dns, dict) else {}
+        long_rows = _kv_rows(long_labels, ["count"] + [k for k in sorted(long_labels.keys()) if k != "samples"])
+        self._tree_set_rows(self.ti_security_signals["tree_long_labels"], long_rows)
+        long_samples = long_labels.get("samples", []) if isinstance(long_labels, dict) else []
+        self.ti_security_signals["long_labels_tree"] = _build_dynamic_tree(
+            self.ti_security_signals["long_labels_container"],
+            long_samples,
+        )
+
+        nxdomain = dns.get("nxdomain", {}) if isinstance(dns, dict) else {}
+        self._tree_set_rows(self.ti_security_signals["tree_nxdomain"], _kv_rows(nxdomain))
+
+        dns_extra_rows = []
+        for key in sorted(dns.keys()):
+            if key in ("entropy", "long_labels", "nxdomain"):
+                continue
+            value = dns.get(key)
+            if isinstance(value, (dict, list)):
+                value_text = json.dumps(value)
+            else:
+                value_text = str(value)
+            dns_extra_rows.append((key, value_text))
+        self._tree_set_rows(self.ti_security_signals["tree_dns_extra"], dns_extra_rows)
+
+        json_texts = self.ti_security_signals["json_texts"]
+        self._set_json_text(json_texts["scan_signals"], scan if scan else {})
+        self._set_json_text(json_texts["arp_lan_signals"], arp if arp else {})
+        self._set_json_text(json_texts["dns_anomalies"], dns if dns else {})
+
+    def _refresh_ti_time_series_chunking(self, analysis):
+        raw_time_series = analysis.get("time_series", {})
+        if isinstance(raw_time_series, dict):
+            ts_obj = raw_time_series
+        else:
+            ts_obj = {}
+
+        packet_chunks = ts_obj.get("packet_chunks")
+        if packet_chunks is None:
+            packet_chunks = analysis.get("packet_chunks", {})
+        packet_chunks = packet_chunks if isinstance(packet_chunks, dict) else {}
+        chunks = packet_chunks.get("chunks")
+        if chunks is None:
+            chunks = packet_chunks if isinstance(packet_chunks, list) else []
+        chunks = chunks if isinstance(chunks, list) else []
+
+        series = ts_obj.get("time_series") or ts_obj.get("series") or ts_obj.get("buckets")
+        if series is None and isinstance(raw_time_series, list):
+            series = raw_time_series
+        if series is None:
+            series = ts_obj.get("time_series", {}) or ts_obj
+        points = []
+        if isinstance(series, dict):
+            if isinstance(series.get("buckets"), list):
+                points = series.get("buckets")
+            elif isinstance(series.get("series"), list):
+                points = series.get("series")
+            elif isinstance(series.get("time_series"), list):
+                points = series.get("time_series")
+            elif isinstance(series.get("points"), list):
+                points = series.get("points")
+            elif isinstance(series.get("data"), list):
+                points = series.get("data")
+            else:
+                points = [{"bucket": key, "value": value} for key, value in series.items()]
+        elif isinstance(series, list):
+            points = series
+
+        def _build_dynamic_tree(container, items):
+            for child in container.winfo_children():
+                child.destroy()
+            keys = set()
+            for item in items:
+                if isinstance(item, dict):
+                    keys.update(item.keys())
+            if not keys:
+                columns = ["value"]
+            else:
+                has_time = any(key in keys for key in ("timestamp_us", "start_us", "start", "bucket", "index", "idx"))
+                if not has_time:
+                    keys.add("index")
+                columns = sorted(keys)
+            tree = ttk.Treeview(container, columns=columns, show="headings", height=8)
+            yscroll = ttk.Scrollbar(container, orient="vertical", command=tree.yview)
+            tree.configure(yscrollcommand=yscroll.set)
+            tree.pack(side="left", fill="both", expand=True)
+            yscroll.pack(side="right", fill="y")
+            for col in columns:
+                tree.heading(col, text=col)
+                tree.column(col, width=120, anchor="w")
+            rows = []
+            for idx, item in enumerate(items):
+                if isinstance(item, dict):
+                    if ("index" not in item) and ("idx" not in item) and ("bucket" not in item):
+                        item = dict(item)
+                        item.setdefault("index", idx)
+                    rows.append(tuple(item.get(col) for col in columns))
+                else:
+                    rows.append((item,))
+            self._tree_set_rows(tree, rows)
+            return tree
+
+        self.ti_time_series["series_tree"] = _build_dynamic_tree(
+            self.ti_time_series["series_container"],
+            points,
+        )
+        self.ti_time_series["chunks_tree"] = _build_dynamic_tree(
+            self.ti_time_series["chunks_container"],
+            chunks,
+        )
+
+        def _get_numeric(item, keys):
+            for key in keys:
+                value = item.get(key)
+                if isinstance(value, (int, float)):
+                    return value
+            return 0
+
+        def _top_chunks(items, metric_keys, top_n=3):
+            indexed = []
+            for idx, item in enumerate(items):
+                if isinstance(item, dict):
+                    metric = _get_numeric(item, metric_keys)
+                    indexed.append((idx, metric, item))
+            ranked = sorted(indexed, key=lambda x: (-x[1], x[0]))[:top_n]
+            rows = []
+            for rank, (idx, metric, item) in enumerate(ranked, start=1):
+                label = item.get("start_us") or item.get("start") or item.get("bucket") or idx
+                rows.append((rank, label, metric))
+            return rows
+
+        top_bytes_rows = _top_chunks(chunks, ["bytes", "bytes_captured", "bytes_total", "bytes_captured_total"])
+        top_packets_rows = _top_chunks(chunks, ["packets", "packets_total"])
+        for child in self.ti_time_series["top_bytes_container"].winfo_children():
+            child.destroy()
+        self.ti_time_series["top_bytes_tree"] = self._make_tree(
+            self.ti_time_series["top_bytes_container"],
+            ("rank", "chunk", "bytes"),
+            ("Rank", "Chunk", "Bytes"),
+        )
+        self._tree_set_rows(
+            self.ti_time_series["top_bytes_tree"],
+            [(rank, chunk, _fmt_bytes(value)) for rank, chunk, value in top_bytes_rows],
+        )
+        for child in self.ti_time_series["top_packets_container"].winfo_children():
+            child.destroy()
+        self.ti_time_series["top_packets_tree"] = self._make_tree(
+            self.ti_time_series["top_packets_container"],
+            ("rank", "chunk", "packets"),
+            ("Rank", "Chunk", "Packets"),
+        )
+        self._tree_set_rows(
+            self.ti_time_series["top_packets_tree"],
+            [(rank, chunk, _fmt_count(value)) for rank, chunk, value in top_packets_rows],
+        )
+
+        json_texts = self.ti_time_series["json_texts"]
+        if isinstance(raw_time_series, (dict, list)):
+            self._set_json_text(json_texts["time_series"], raw_time_series)
+        else:
+            self._set_json_text(json_texts["time_series"], ts_obj if ts_obj else {})
+        self._set_json_text(json_texts["packet_chunks"], packet_chunks if packet_chunks else {})
 
     def download_capture(self):
         if not self.latest_packets:
