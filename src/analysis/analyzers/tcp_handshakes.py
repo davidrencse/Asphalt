@@ -67,6 +67,7 @@ class TcpHandshakeAnalyzer(Analyzer):
         results = []
         complete = 0
         incomplete = 0
+        rtt_samples = []
 
         for handshake in self.handshakes.values():
             status = "incomplete"
@@ -80,6 +81,7 @@ class TcpHandshakeAnalyzer(Analyzer):
             rtt_ack = None
             if handshake.syn_ts and handshake.synack_ts:
                 rtt_synack = handshake.synack_ts - handshake.syn_ts
+                rtt_samples.append(rtt_synack)
             if handshake.syn_ts and handshake.ack_ts:
                 rtt_ack = handshake.ack_ts - handshake.syn_ts
 
@@ -95,14 +97,41 @@ class TcpHandshakeAnalyzer(Analyzer):
                 "status": status,
             })
 
+        total = len(self.handshakes)
+        completion_rate = round(complete / total, 4) if total else 0.0
+        rtt_median_ms = _percentile(rtt_samples, 50.0)
+        rtt_p95_ms = _percentile(rtt_samples, 95.0)
+        if rtt_median_ms is not None:
+            rtt_median_ms = round(rtt_median_ms / 1000.0, 3)
+        if rtt_p95_ms is not None:
+            rtt_p95_ms = round(rtt_p95_ms / 1000.0, 3)
+
         return AnalyzerResult(
             analyzer=self.name,
             global_results={
                 "handshakes_total": len(self.handshakes),
                 "handshakes_complete": complete,
                 "handshakes_incomplete": incomplete,
+                "completion_rate": completion_rate,
+                "rtt_median_ms": rtt_median_ms,
+                "rtt_p95_ms": rtt_p95_ms,
             },
             flow_results={
                 "handshakes": results,
             },
         )
+
+
+def _percentile(values, percent: float):
+    if not values:
+        return None
+    if len(values) == 1:
+        return float(values[0])
+    sorted_vals = sorted(values)
+    position = (percent / 100.0) * (len(sorted_vals) - 1)
+    lower = int(position)
+    upper = min(lower + 1, len(sorted_vals) - 1)
+    if lower == upper:
+        return float(sorted_vals[lower])
+    weight = position - lower
+    return sorted_vals[lower] + (sorted_vals[upper] - sorted_vals[lower]) * weight

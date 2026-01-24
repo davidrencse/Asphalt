@@ -3,6 +3,7 @@ const interfaceInput = document.getElementById('interfaceInput');
 const durationInput = document.getElementById('durationInput');
 const limitInput = document.getElementById('limitInput');
 const startBtn = document.getElementById('startBtn');
+const downloadBtn = document.getElementById('downloadBtn');
 const filterInput = document.getElementById('filterInput');
 const tableBody = document.getElementById('tableBody');
 const statusEl = document.getElementById('status');
@@ -24,6 +25,7 @@ const decodeHealthEl = document.getElementById('decodeHealth');
 const filteringSamplingEl = document.getElementById('filteringSampling');
 
 let allRows = [];
+let latestCapture = { packets: [], analysis: null };
 
 function formatNumber(value, digits = 2) {
   if (value == null || Number.isNaN(value)) return 'n/a';
@@ -181,6 +183,8 @@ function loadPackets(packets, analysis) {
   updateStats(allRows);
   setStatus(`Loaded ${allRows.length} packets`);
   renderAnalysis(analysis);
+  latestCapture = { packets, analysis };
+  downloadBtn.disabled = packets.length === 0;
 }
 
 async function runCapture() {
@@ -371,7 +375,24 @@ function renderAnalysis(analysis) {
   }
 }
 
+function downloadCapture() {
+  if (!latestCapture || !Array.isArray(latestCapture.packets) || latestCapture.packets.length === 0) {
+    return;
+  }
+  const payload = JSON.stringify(latestCapture, null, 2);
+  const blob = new Blob([payload], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `asphalt_capture_${Date.now()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 startBtn.addEventListener('click', runCapture);
+downloadBtn.addEventListener('click', downloadCapture);
 filterInput.addEventListener('input', applyFilter);
 
 // Auto-run on page load

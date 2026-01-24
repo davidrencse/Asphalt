@@ -25,6 +25,8 @@ from analysis.analyzers.packet_size_stats import PacketSizeStatsAnalyzer
 from analysis.analyzers.l2_l3_breakdown import L2L3BreakdownAnalyzer
 from analysis.analyzers.top_entities import TopEntitiesAnalyzer
 from analysis.analyzers.flow_analytics import FlowAnalyticsAnalyzer
+from analysis.analyzers.tcp_reliability import TcpReliabilityAnalyzer
+from analysis.analyzers.tcp_performance import TcpPerformanceAnalyzer
 
 
 def _make_decoded(packet_id: int,
@@ -80,6 +82,10 @@ def _packet_dict(packet_id: int,
                  src_port: int = 1234,
                  dst_port: int = 80,
                  tcp_flags: int = None,
+                 tcp_seq: int = None,
+                 tcp_ack: int = None,
+                 tcp_window: int = None,
+                 tcp_mss: int = None,
                  is_vlan: bool = False,
                  is_arp: bool = False,
                  is_multicast: bool = False,
@@ -106,6 +112,10 @@ def _packet_dict(packet_id: int,
         "src_port": src_port,
         "dst_port": dst_port,
         "tcp_flags": effective_tcp_flags,
+        "tcp_seq": tcp_seq,
+        "tcp_ack": tcp_ack,
+        "tcp_window": tcp_window,
+        "tcp_mss": tcp_mss,
         "ttl": 64,
         "quality_flags": 0,
         "stack_summary": "ETH/IP4/TCP",
@@ -720,6 +730,141 @@ def test_flow_analytics_states_tcp_udp():
     assert states["udp_unpaired"] == 1
 
 
+def test_tcp_reliability_metrics():
+    analyzer = TcpReliabilityAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    # retransmission: same seq twice
+    engine.process_packet_dict(_packet_dict(
+        1, 1_000_000, 100, 100,
+        src_ip="10.0.0.1", dst_ip="10.0.0.2", src_port=1000, dst_port=80,
+        ip_proto=6, l4="TCP", tcp_flags=0x10, tcp_seq=100, tcp_ack=0
+    ))
+    engine.process_packet_dict(_packet_dict(
+        2, 1_010_000, 100, 100,
+        src_ip="10.0.0.1", dst_ip="10.0.0.2", src_port=1000, dst_port=80,
+        ip_proto=6, l4="TCP", tcp_flags=0x10, tcp_seq=100, tcp_ack=0
+    ))
+    # out of order: seq regression
+    engine.process_packet_dict(_packet_dict(
+        3, 1_020_000, 100, 100,
+        src_ip="10.0.0.2", dst_ip="10.0.0.1", src_port=80, dst_port=1000,
+        ip_proto=6, l4="TCP", tcp_flags=0x10, tcp_seq=300, tcp_ack=0
+    ))
+    engine.process_packet_dict(_packet_dict(
+        4, 1_030_000, 100, 100,
+        src_ip="10.0.0.2", dst_ip="10.0.0.1", src_port=80, dst_port=1000,
+        ip_proto=6, l4="TCP", tcp_flags=0x10, tcp_seq=200, tcp_ack=0
+    ))
+    # dup ack + rst
+    engine.process_packet_dict(_packet_dict(
+        5, 1_040_000, 100, 100,
+        src_ip="10.0.0.1", dst_ip="10.0.0.2", src_port=1000, dst_port=80,
+        ip_proto=6, l4="TCP", tcp_flags=0x10, tcp_seq=150, tcp_ack=400
+    ))
+    engine.process_packet_dict(_packet_dict(
+        6, 1_050_000, 100, 100,
+        src_ip="10.0.0.1", dst_ip="10.0.0.2", src_port=1000, dst_port=80,
+        ip_proto=6, l4="TCP", tcp_flags=0x10, tcp_seq=160, tcp_ack=400
+    ))
+    engine.process_packet_dict(_packet_dict(
+        7, 1_060_000, 100, 100,
+        src_ip="10.0.0.1", dst_ip="10.0.0.2", src_port=1000, dst_port=80,
+        ip_proto=6, l4="TCP", tcp_flags=0x04, tcp_seq=170, tcp_ack=0
+    ))
+    report = engine.finalize()
+    rel = report.global_results["tcp_reliability"]
+    assert rel["retransmissions"] == 1
+    assert rel["out_of_order"] == 1
+    assert rel["dup_acks"] == 1
+    assert rel["rst_packets"] == 1
+
+
+def test_tcp_performance_metrics():
+    analyzer = TcpPerformanceAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(
+        1, 1_000_000, 100, 100,
+        ip_proto=6, l4="TCP", tcp_flags=0x12, tcp_window=1000, tcp_mss=1460
+    ))
+    engine.process_packet_dict(_packet_dict(
+        2, 1_010_000, 100, 100,
+        ip_proto=6, l4="TCP", tcp_flags=0x10, tcp_window=2000
+    ))
+    engine.process_packet_dict(_packet_dict(
+        3, 1_020_000, 100, 100,
+        ip_proto=6, l4="TCP", tcp_flags=0x10, tcp_window=3000
+    ))
+    engine.process_packet_dict(_packet_dict(
+        4, 1_030_000, 100, 100,
+        ip_proto=6, l4="TCP", tcp_flags=0x10, tcp_window=0
+    ))
+    report = engine.finalize()
+    perf = report.global_results["tcp_performance"]
+    assert perf["window_median"] == 2000.0
+    assert perf["window_p95"] == 2900.0
+    assert perf["zero_window"] == 1
+    assert perf["mss_top_value"] == 1460
+
+
+def test_tcp_handshake_rtt_quantiles():
+    analyzer = TcpHandshakeAnalyzer()
+    engine = AnalysisEngine(analyzers=[analyzer])
+    # flow 1: 50ms
+    engine.process_packet_dict(_packet_dict(
+        1, 1_000_000, 100, 100,
+        src_ip="10.0.0.1", dst_ip="10.0.0.2", src_port=1000, dst_port=80,
+        ip_proto=6, l4="TCP", tcp_flags=0x02, tcp_seq=100
+    ))
+    engine.process_packet_dict(_packet_dict(
+        2, 1_050_000, 100, 100,
+        src_ip="10.0.0.2", dst_ip="10.0.0.1", src_port=80, dst_port=1000,
+        ip_proto=6, l4="TCP", tcp_flags=0x12, tcp_seq=200
+    ))
+    engine.process_packet_dict(_packet_dict(
+        3, 1_060_000, 100, 100,
+        src_ip="10.0.0.1", dst_ip="10.0.0.2", src_port=1000, dst_port=80,
+        ip_proto=6, l4="TCP", tcp_flags=0x10, tcp_seq=101
+    ))
+    # flow 2: 100ms
+    engine.process_packet_dict(_packet_dict(
+        4, 2_000_000, 100, 100,
+        src_ip="10.0.0.3", dst_ip="10.0.0.4", src_port=2000, dst_port=443,
+        ip_proto=6, l4="TCP", tcp_flags=0x02, tcp_seq=100
+    ))
+    engine.process_packet_dict(_packet_dict(
+        5, 2_100_000, 100, 100,
+        src_ip="10.0.0.4", dst_ip="10.0.0.3", src_port=443, dst_port=2000,
+        ip_proto=6, l4="TCP", tcp_flags=0x12, tcp_seq=200
+    ))
+    engine.process_packet_dict(_packet_dict(
+        6, 2_110_000, 100, 100,
+        src_ip="10.0.0.3", dst_ip="10.0.0.4", src_port=2000, dst_port=443,
+        ip_proto=6, l4="TCP", tcp_flags=0x10, tcp_seq=101
+    ))
+    report = engine.finalize()
+    handshakes = report.global_results["tcp_handshakes"]
+    assert handshakes["completion_rate"] == 1.0
+    assert handshakes["rtt_median_ms"] == 75.0
+    assert handshakes["rtt_p95_ms"] == 97.5
+
+
+def test_tcp_reliability_bounded_memory():
+    analyzer = TcpReliabilityAnalyzer(max_flows=1)
+    engine = AnalysisEngine(analyzers=[analyzer])
+    engine.process_packet_dict(_packet_dict(
+        1, 1_000_000, 100, 100,
+        src_ip="10.0.0.1", dst_ip="10.0.0.2", src_port=1000, dst_port=80,
+        ip_proto=6, l4="TCP", tcp_flags=0x10, tcp_seq=100
+    ))
+    engine.process_packet_dict(_packet_dict(
+        2, 1_010_000, 100, 100,
+        src_ip="10.0.0.3", dst_ip="10.0.0.4", src_port=2000, dst_port=80,
+        ip_proto=6, l4="TCP", tcp_flags=0x10, tcp_seq=200
+    ))
+    report = engine.finalize()
+    rel = report.global_results["tcp_reliability"]
+    assert rel["tcp_packets"] == 2
+
 def main():
     tests = [
         test_flow_state_direction_counts,
@@ -746,6 +891,10 @@ def main():
         test_flow_analytics_rates_and_percentiles,
         test_flow_analytics_heavy_hitters_and_duration,
         test_flow_analytics_states_tcp_udp,
+        test_tcp_reliability_metrics,
+        test_tcp_performance_metrics,
+        test_tcp_handshake_rtt_quantiles,
+        test_tcp_reliability_bounded_memory,
     ]
 
     print("=" * 60)

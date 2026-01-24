@@ -11,7 +11,7 @@ import sys
 import threading
 import subprocess
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from datetime import datetime, timezone
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -105,6 +105,8 @@ def run_analysis(packets, bucket_ms: int = 1000, chunk_size: int = 200):
         "protocol_mix",
         "flow_summary",
         "tcp_handshakes",
+        "tcp_reliability",
+        "tcp_performance",
         "abnormal_activity",
         "packet_chunks",
         "time_series",
@@ -211,6 +213,20 @@ def _fmt_pct(value):
         return "n/a"
 
 
+def _fmt_duration_us(value):
+    if value is None:
+        return "n/a"
+    try:
+        us = float(value)
+        if us < 1_000:
+            return f"{_fmt_number(us, 0)} us"
+        if us < 1_000_000:
+            return f"{_fmt_number(us / 1_000, 2)} ms"
+        return f"{_fmt_number(us / 1_000_000, 2)} s"
+    except (TypeError, ValueError):
+        return "n/a"
+
+
 class AsphaltApp(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -220,6 +236,7 @@ class AsphaltApp(tk.Tk):
 
         self.rows = []
         self.table_visible = True
+        self.latest_packets = []
 
         self._build_ui()
 
@@ -272,6 +289,10 @@ class AsphaltApp(tk.Tk):
         self.start_btn = tk.Button(controls, text="Start", command=self.start_capture, bg="#4fd1c5", fg="#0b0f12")
         self.start_btn.grid(row=0, column=8, padx=8, pady=8)
 
+        self.download_btn = tk.Button(controls, text="Download", command=self.download_capture,
+                                       bg="#151b23", fg="#e6edf3", state="disabled")
+        self.download_btn.grid(row=0, column=9, padx=8, pady=8)
+
         tk.Label(controls, text="Filter", fg="#9aa4b2", bg="#151b23").grid(row=1, column=0, padx=8, pady=8)
         self.filter_var = tk.StringVar()
         filter_entry = tk.Entry(controls, textvariable=self.filter_var, width=35)
@@ -302,6 +323,12 @@ class AsphaltApp(tk.Tk):
         self.analysis_top_talkers = tk.StringVar(value="-")
         self.analysis_top_macs = tk.StringVar(value="-")
         self.analysis_top_ports = tk.StringVar(value="-")
+        self.analysis_flow_summary = tk.StringVar(value="-")
+        self.analysis_flow_heavy = tk.StringVar(value="-")
+        self.analysis_flow_states = tk.StringVar(value="-")
+        self.analysis_tcp_handshake = tk.StringVar(value="-")
+        self.analysis_tcp_reliability = tk.StringVar(value="-")
+        self.analysis_tcp_performance = tk.StringVar(value="-")
 
         self._stat_block(stats, "Packets", self.stat_packets, 0)
         self._stat_block(stats, "IPv4 / IPv6", self.stat_ip, 1)
@@ -437,6 +464,34 @@ class AsphaltApp(tk.Tk):
         for c in range(3):
             grid.grid_columnconfigure(c, weight=1)
 
+        frame, body = self._collapsible_section(
+            sections,
+            "Flow analytics",
+            "Summary · Heavy hitters · Flow states"
+        )
+        frame.pack(fill="x", pady=6)
+        grid = tk.Frame(body, bg="#151b23")
+        grid.pack(fill="x")
+        self._info_card_var(grid, "Flow Summary", self.analysis_flow_summary, 0, 0)
+        self._info_card_var(grid, "Heavy Hitters", self.analysis_flow_heavy, 1, 0)
+        self._info_card_var(grid, "Flow States", self.analysis_flow_states, 2, 0)
+        for c in range(3):
+            grid.grid_columnconfigure(c, weight=1)
+
+        frame, body = self._collapsible_section(
+            sections,
+            "TCP health and behavior",
+            "Handshake Detail · Reliability Indicators · TCP Performance Signals"
+        )
+        frame.pack(fill="x", pady=6)
+        grid = tk.Frame(body, bg="#151b23")
+        grid.pack(fill="x")
+        self._info_card_var(grid, "Handshake Detail", self.analysis_tcp_handshake, 0, 0)
+        self._info_card_var(grid, "Reliability Indicators", self.analysis_tcp_reliability, 1, 0)
+        self._info_card_var(grid, "TCP Performance Signals", self.analysis_tcp_performance, 2, 0)
+        for c in range(3):
+            grid.grid_columnconfigure(c, weight=1)
+
     def _extra_analysis_data(self):
         return []
 
@@ -511,10 +566,12 @@ class AsphaltApp(tk.Tk):
         try:
             packets = run_capture(backend, interface, duration, limit)
             analysis = run_analysis(packets)
+            self.latest_packets = packets
             self.rows = packets
             self.after(0, self.refresh_table)
             self.after(0, lambda: self.refresh_analysis(analysis))
             self.after(0, lambda: self.set_status(f"Loaded {len(packets)} packets"))
+            self.after(0, lambda: self.download_btn.config(state="normal" if packets else "disabled"))
         except Exception as exc:
             self.after(0, lambda: messagebox.showerror("Capture failed", str(exc)))
             self.after(0, lambda: self.set_status("Capture failed"))
@@ -595,6 +652,12 @@ class AsphaltApp(tk.Tk):
             self.analysis_top_talkers.set("-")
             self.analysis_top_macs.set("-")
             self.analysis_top_ports.set("-")
+            self.analysis_flow_summary.set("-")
+            self.analysis_flow_heavy.set("-")
+            self.analysis_flow_states.set("-")
+            self.analysis_tcp_handshake.set("-")
+            self.analysis_tcp_reliability.set("-")
+            self.analysis_tcp_performance.set("-")
             return
 
         protocol = analysis.get("global_results", {}).get("protocol_mix", {})
@@ -771,6 +834,105 @@ class AsphaltApp(tk.Tk):
             self.analysis_top_ports.set("\n".join(tcp_lines + udp_lines) if (tcp_lines or udp_lines) else "-")
         else:
             self.analysis_top_ports.set("-")
+
+        flow_analytics = analysis.get("global_results", {}).get("flow_analytics", {})
+        if flow_analytics:
+            summary = flow_analytics.get("summary", {})
+            self.analysis_flow_summary.set(
+                f"total flows {_fmt_count(summary.get('total_flows', 0))}\n"
+                f"new flows/sec {_fmt_number(summary.get('new_flows_per_sec'))}\n"
+                f"duration med {_fmt_duration_us(summary.get('duration_us_median'))}\n"
+                f"duration p95 {_fmt_duration_us(summary.get('duration_us_p95'))}\n"
+                f"bytes/flow avg {_fmt_bytes(summary.get('bytes_per_flow_avg'))}\n"
+                f"bytes/flow p95 {_fmt_bytes(summary.get('bytes_per_flow_p95'))}"
+            )
+
+            heavy = flow_analytics.get("heavy_hitters", {})
+            by_bytes = heavy.get("top_by_bytes", [])
+            by_packets = heavy.get("top_by_packets", [])
+            heavy_lines = []
+            for item in by_bytes[:3]:
+                heavy_lines.append(
+                    f"bytes {item.get('label')} {_fmt_bytes(item.get('bytes'))} "
+                    f"{_fmt_duration_us(item.get('duration_us'))}"
+                )
+            for item in by_packets[:3]:
+                heavy_lines.append(
+                    f"pkts {item.get('label')} {_fmt_count(item.get('packets'))} "
+                    f"{_fmt_duration_us(item.get('duration_us'))}"
+                )
+            self.analysis_flow_heavy.set("\n".join(heavy_lines) if heavy_lines else "-")
+
+            states = flow_analytics.get("states", {})
+            self.analysis_flow_states.set(
+                f"TCP established {_fmt_count(states.get('tcp_established', 0))}\n"
+                f"TCP half-open {_fmt_count(states.get('tcp_half_open', 0))}\n"
+                f"TCP reset/failed {_fmt_count(states.get('tcp_reset_failed', 0))}\n"
+                f"UDP paired {_fmt_count(states.get('udp_paired', 0))}\n"
+                f"UDP unpaired {_fmt_count(states.get('udp_unpaired', 0))}"
+            )
+        else:
+            self.analysis_flow_summary.set("-")
+            self.analysis_flow_heavy.set("-")
+            self.analysis_flow_states.set("-")
+
+        handshake = analysis.get("global_results", {}).get("tcp_handshakes", {})
+        if handshake:
+            self.analysis_tcp_handshake.set(
+                f"total {_fmt_count(handshake.get('handshakes_total', 0))}\n"
+                f"complete {_fmt_count(handshake.get('handshakes_complete', 0))}\n"
+                f"completion {_fmt_pct(handshake.get('completion_rate'))}\n"
+                f"rtt median {handshake.get('rtt_median_ms', 'n/a')} ms\n"
+                f"rtt p95 {handshake.get('rtt_p95_ms', 'n/a')} ms"
+            )
+        else:
+            self.analysis_tcp_handshake.set("-")
+
+        reliability = analysis.get("global_results", {}).get("tcp_reliability", {})
+        if reliability:
+            self.analysis_tcp_reliability.set(
+                f"retrans {_fmt_count(reliability.get('retransmissions', 0))} "
+                f"({_fmt_pct(reliability.get('retransmission_rate'))})\n"
+                f"out-of-order {_fmt_count(reliability.get('out_of_order', 0))} "
+                f"({_fmt_pct(reliability.get('out_of_order_rate'))})\n"
+                f"dup ACKs {_fmt_count(reliability.get('dup_acks', 0))} "
+                f"({_fmt_pct(reliability.get('dup_ack_rate'))})\n"
+                f"RST {_fmt_count(reliability.get('rst_packets', 0))} "
+                f"({_fmt_pct(reliability.get('rst_rate'))})"
+            )
+        else:
+            self.analysis_tcp_reliability.set("-")
+
+        performance = analysis.get("global_results", {}).get("tcp_performance", {})
+        if performance:
+            mss_top = performance.get("mss_top_value")
+            mss_pct = performance.get("mss_top_pct")
+            self.analysis_tcp_performance.set(
+                f"window median {_fmt_number(performance.get('window_median'))}\n"
+                f"window p95 {_fmt_number(performance.get('window_p95'))}\n"
+                f"zero-window {_fmt_count(performance.get('zero_window', 0))}\n"
+                f"mss top {mss_top if mss_top is not None else 'n/a'} "
+                f"({_fmt_pct(mss_pct)})"
+            )
+        else:
+            self.analysis_tcp_performance.set("-")
+
+    def download_capture(self):
+        if not self.latest_packets:
+            messagebox.showinfo("No capture", "No packets available to download.")
+            return
+        filename = filedialog.asksaveasfilename(
+            title="Save capture data",
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+        )
+        if not filename:
+            return
+        try:
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump(self.latest_packets, f, indent=2)
+        except Exception as exc:
+            messagebox.showerror("Save failed", str(exc))
 
 
 if __name__ == "__main__":

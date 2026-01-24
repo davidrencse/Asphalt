@@ -64,6 +64,8 @@ def run_analysis(packets, bucket_ms: int, chunk_size: int):
         "flow_summary",
         "flow_analytics",
         "tcp_handshakes",
+        "tcp_reliability",
+        "tcp_performance",
         "abnormal_activity",
         "packet_chunks",
         "time_series",

@@ -36,6 +36,10 @@ class AnalysisPacket:
     src_port: Optional[int]
     dst_port: Optional[int]
     tcp_flags: Optional[int]
+    tcp_seq: Optional[int]
+    tcp_ack: Optional[int]
+    tcp_window: Optional[int]
+    tcp_mss: Optional[int]
     ttl: Optional[int]
     quality_flags: int
     is_vlan: bool = False
@@ -67,6 +71,10 @@ class AnalysisPacket:
             src_port=decoded.src_port,
             dst_port=decoded.dst_port,
             tcp_flags=decoded.tcp_flags,
+            tcp_seq=getattr(decoded, "tcp_seq", None),
+            tcp_ack=getattr(decoded, "tcp_ack", None),
+            tcp_window=getattr(decoded, "tcp_window", None),
+            tcp_mss=getattr(decoded, "tcp_mss", None),
             ttl=decoded.ttl,
             quality_flags=decoded.quality_flags,
             is_vlan=getattr(decoded, "is_vlan", False),
@@ -97,6 +105,10 @@ class AnalysisPacket:
             "src_port": self.src_port,
             "dst_port": self.dst_port,
             "tcp_flags": self.tcp_flags,
+            "tcp_seq": self.tcp_seq,
+            "tcp_ack": self.tcp_ack,
+            "tcp_window": self.tcp_window,
+            "tcp_mss": self.tcp_mss,
             "ttl": self.ttl,
             "quality_flags": self.quality_flags,
             "is_vlan": self.is_vlan,

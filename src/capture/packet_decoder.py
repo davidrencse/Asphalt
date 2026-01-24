@@ -77,6 +77,10 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
     src_port = None
     dst_port = None
     tcp_flags = None
+    tcp_seq = None
+    tcp_ack = None
+    tcp_window = None
+    tcp_mss = None
     ttl = None
     eth_type = None
     src_mac = None
@@ -138,8 +142,9 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
                 return _finalize(raw, protocol_stack, ip_version, src_ip, dst_ip, l4_protocol,
                                  ip_protocol, src_port, dst_port, tcp_flags, ttl, quality,
                                  eth_type, src_mac, dst_mac, is_vlan, is_arp, is_multicast, is_broadcast,
-                                 is_ipv4_fragment, is_ipv6_fragment)
-            l4_protocol, src_port, dst_port, tcp_flags, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
+                                 is_ipv4_fragment, is_ipv6_fragment,
+                                 tcp_seq, tcp_ack, tcp_window, tcp_mss)
+            l4_protocol, src_port, dst_port, tcp_flags, tcp_seq, tcp_ack, tcp_window, tcp_mss, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
             quality |= l4_quality
             if l4_protocol:
                 protocol_stack.append(l4_protocol)
@@ -151,8 +156,9 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
                 return _finalize(raw, protocol_stack, ip_version, src_ip, dst_ip, l4_protocol,
                                  ip_protocol, src_port, dst_port, tcp_flags, ttl, quality,
                                  eth_type, src_mac, dst_mac, is_vlan, is_arp, is_multicast, is_broadcast,
-                                 is_ipv4_fragment, is_ipv6_fragment)
-            l4_protocol, src_port, dst_port, tcp_flags, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
+                                 is_ipv4_fragment, is_ipv6_fragment,
+                                 tcp_seq, tcp_ack, tcp_window, tcp_mss)
+            l4_protocol, src_port, dst_port, tcp_flags, tcp_seq, tcp_ack, tcp_window, tcp_mss, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
             quality |= l4_quality
             if l4_protocol:
                 protocol_stack.append(l4_protocol)
@@ -180,7 +186,7 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
             quality |= DecodeQuality.UNKNOWN_L3
             l4_offset = None
         if l4_offset is not None:
-            l4_protocol, src_port, dst_port, tcp_flags, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
+            l4_protocol, src_port, dst_port, tcp_flags, tcp_seq, tcp_ack, tcp_window, tcp_mss, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
             quality |= l4_quality
             if l4_protocol:
                 protocol_stack.append(l4_protocol)
@@ -198,7 +204,7 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
             quality |= l3_quality
             protocol_stack.append("IP4")
             if l4_offset is not None:
-                l4_protocol, src_port, dst_port, tcp_flags, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
+                l4_protocol, src_port, dst_port, tcp_flags, tcp_seq, tcp_ack, tcp_window, tcp_mss, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
                 quality |= l4_quality
                 if l4_protocol:
                     protocol_stack.append(l4_protocol)
@@ -207,7 +213,7 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
             quality |= l3_quality
             protocol_stack.append("IP6")
             if l4_offset is not None:
-                l4_protocol, src_port, dst_port, tcp_flags, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
+                l4_protocol, src_port, dst_port, tcp_flags, tcp_seq, tcp_ack, tcp_window, tcp_mss, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
                 quality |= l4_quality
                 if l4_protocol:
                     protocol_stack.append(l4_protocol)
@@ -234,7 +240,7 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
                 quality |= DecodeQuality.UNKNOWN_L3
                 l4_offset = None
             if l4_offset is not None:
-                l4_protocol, src_port, dst_port, tcp_flags, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
+                l4_protocol, src_port, dst_port, tcp_flags, tcp_seq, tcp_ack, tcp_window, tcp_mss, l4_quality = _parse_l4(data, l4_offset, ip_protocol)
                 quality |= l4_quality
                 if l4_protocol:
                     protocol_stack.append(l4_protocol)
@@ -256,7 +262,8 @@ def decode_packet(raw: RawPacket) -> DecodedPacket:
     return _finalize(raw, protocol_stack, ip_version, src_ip, dst_ip, l4_protocol,
                      ip_protocol, src_port, dst_port, tcp_flags, ttl, quality,
                      eth_type, src_mac, dst_mac, is_vlan, is_arp, is_multicast, is_broadcast,
-                     is_ipv4_fragment, is_ipv6_fragment)
+                     is_ipv4_fragment, is_ipv6_fragment,
+                     tcp_seq, tcp_ack, tcp_window, tcp_mss)
 
 
 def _finalize(raw: RawPacket,
@@ -279,7 +286,11 @@ def _finalize(raw: RawPacket,
               is_multicast: bool,
               is_broadcast: bool,
               is_ipv4_fragment: bool,
-              is_ipv6_fragment: bool) -> DecodedPacket:
+              is_ipv6_fragment: bool,
+              tcp_seq: Optional[int],
+              tcp_ack: Optional[int],
+              tcp_window: Optional[int],
+              tcp_mss: Optional[int]) -> DecodedPacket:
     return DecodedPacket(
         raw_packet=raw,
         protocol_stack=tuple(protocol_stack),
@@ -300,6 +311,10 @@ def _finalize(raw: RawPacket,
         src_port=src_port,
         dst_port=dst_port,
         tcp_flags=tcp_flags,
+        tcp_seq=tcp_seq,
+        tcp_ack=tcp_ack,
+        tcp_window=tcp_window,
+        tcp_mss=tcp_mss,
         ttl=ttl,
         quality_flags=int(quality),
     )
@@ -347,32 +362,39 @@ def _parse_ipv6(data: bytes, offset: int) -> Tuple[int, Optional[str], Optional[
     return 6, src_ip, dst_ip, next_header, hop_limit, l4_offset, DecodeQuality.OK, is_fragment
 
 
-def _parse_l4(data: bytes, offset: int, ip_protocol: int) -> Tuple[Optional[str], Optional[int], Optional[int], Optional[int], DecodeQuality]:
+def _parse_l4(data: bytes, offset: int, ip_protocol: int) -> Tuple[Optional[str], Optional[int], Optional[int], Optional[int], Optional[int], Optional[int], Optional[int], Optional[int], DecodeQuality]:
     cap_len = len(data)
 
     if ip_protocol == IP_PROTO_TCP:
         if offset + 20 > cap_len:
-            return None, None, None, None, DecodeQuality.MALFORMED_L4
+            return None, None, None, None, None, None, None, None, DecodeQuality.MALFORMED_L4
         src_port, dst_port = struct.unpack_from("!HH", data, offset)
+        seq = struct.unpack_from("!I", data, offset + 4)[0]
+        ack = struct.unpack_from("!I", data, offset + 8)[0]
         data_offset = (data[offset + 12] >> 4) * 4
         if data_offset < 20 or offset + data_offset > cap_len:
-            return "TCP", src_port, dst_port, None, DecodeQuality.MALFORMED_L4
+            return "TCP", src_port, dst_port, None, seq, ack, None, None, DecodeQuality.MALFORMED_L4
         flags = data[offset + 13]
-        return "TCP", src_port, dst_port, flags, DecodeQuality.OK
+        window = struct.unpack_from("!H", data, offset + 14)[0]
+        mss = None
+        if data_offset > 20:
+            options = data[offset + 20: offset + data_offset]
+            mss = _parse_mss_option(options)
+        return "TCP", src_port, dst_port, flags, seq, ack, window, mss, DecodeQuality.OK
 
     if ip_protocol == IP_PROTO_UDP:
         if offset + 8 > cap_len:
-            return None, None, None, None, DecodeQuality.MALFORMED_L4
+            return None, None, None, None, None, None, None, None, DecodeQuality.MALFORMED_L4
         src_port, dst_port = struct.unpack_from("!HH", data, offset)
-        return "UDP", src_port, dst_port, None, DecodeQuality.OK
+        return "UDP", src_port, dst_port, None, None, None, None, None, DecodeQuality.OK
 
     if ip_protocol == IP_PROTO_ICMP:
-        return "ICMP", None, None, None, DecodeQuality.OK
+        return "ICMP", None, None, None, None, None, None, None, DecodeQuality.OK
 
     if ip_protocol == IP_PROTO_ICMPV6:
-        return "ICMP6", None, None, None, DecodeQuality.OK
+        return "ICMP6", None, None, None, None, None, None, None, DecodeQuality.OK
 
-    return None, None, None, None, DecodeQuality.UNKNOWN_L4
+    return None, None, None, None, None, None, None, None, DecodeQuality.UNKNOWN_L4
 
 
 def _format_ipv4(addr: bytes) -> Optional[str]:
@@ -394,3 +416,24 @@ def _format_mac(addr: Optional[bytes]) -> Optional[str]:
     if not addr or len(addr) != 6:
         return None
     return ":".join(f"{b:02x}" for b in addr)
+
+
+def _parse_mss_option(options: bytes) -> Optional[int]:
+    idx = 0
+    length = len(options)
+    while idx < length:
+        kind = options[idx]
+        if kind == 0:
+            break
+        if kind == 1:
+            idx += 1
+            continue
+        if idx + 1 >= length:
+            break
+        opt_len = options[idx + 1]
+        if opt_len < 2 or idx + opt_len > length:
+            break
+        if kind == 2 and opt_len == 4:
+            return struct.unpack_from("!H", options, idx + 2)[0]
+        idx += opt_len
+    return None

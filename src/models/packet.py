@@ -131,10 +131,19 @@ class DecodedPacket:
     
     src_port: Optional[int] = None
     dst_port: Optional[int] = None
-    
+
     tcp_flags: Optional[int] = None
     """TCP flags bitmask (FIN=0x01, SYN=0x02, RST=0x04, PSH=0x08, 
     ACK=0x10, URG=0x20, ECE=0x40, CWR=0x80)."""
+
+    tcp_seq: Optional[int] = None
+    """TCP sequence number."""
+    tcp_ack: Optional[int] = None
+    """TCP acknowledgment number."""
+    tcp_window: Optional[int] = None
+    """Advertised TCP receive window (unscaled)."""
+    tcp_mss: Optional[int] = None
+    """TCP MSS option value if present."""
     
     ttl: Optional[int] = None
     """IPv4 TTL or IPv6 Hop Limit."""
@@ -227,6 +236,10 @@ class DecodedPacket:
             "src_port": self.src_port,
             "dst_port": self.dst_port,
             "tcp_flags": self.tcp_flags,
+            "tcp_seq": self.tcp_seq,
+            "tcp_ack": self.tcp_ack,
+            "tcp_window": self.tcp_window,
+            "tcp_mss": self.tcp_mss,
             "tcp_flags_names": list(self.tcp_flag_names),
             "ttl": self.ttl,
             "quality_flags": self.quality_flags,
