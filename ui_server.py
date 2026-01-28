@@ -5,7 +5,7 @@ Usage:
   python ui_server.py --port 8000
 
 Optional:
-  python ui_server.py --backend dummy --interface dummy0 --duration 3 --limit 50
+  python ui_server.py --interface "Ethernet" --duration 3 --limit 50
 """
 import argparse
 import json
@@ -25,16 +25,59 @@ from analysis.engine import AnalysisEngine
 from analysis.registry import create_analyzer
 
 
-def run_capture(backend: str, interface: str, duration: int, limit: int):
+def _resolve_scapy_interface(requested: str) -> str:
+    try:
+        from capture.scapy_backend import ScapyBackend
+    except Exception:
+        return requested
+    try:
+        backend = ScapyBackend()
+        interfaces = backend.list_interfaces()
+    except Exception:
+        return requested
+
+    if not interfaces:
+        return requested
+
+    req = (requested or "").strip()
+    if req and req.startswith(r"\Device\NPF_"):
+        return req
+
+    for iface in interfaces:
+        name = (iface.get("name") or "").strip()
+        display = (iface.get("display_name") or "").strip()
+        desc = (iface.get("description") or "").strip()
+        if req and (req.lower() == name.lower() or req.lower() == display.lower() or req.lower() == desc.lower()):
+            return name
+        if req and req.lower() in desc.lower():
+            return name
+
+    for iface in interfaces:
+        name = iface.get("name") or ""
+        ips = iface.get("ips") or []
+        if name.startswith(r"\Device\NPF_") and ips and "127.0.0.1" not in ips:
+            return name
+
+    for iface in interfaces:
+        name = iface.get("name") or ""
+        if name.startswith(r"\Device\NPF_"):
+            return name
+
+    return requested
+
+
+def run_capture(interface: str, duration: int, limit: int):
     env = os.environ.copy()
     env["PYTHONPATH"] = str(SRC_DIR)
+
+    interface = _resolve_scapy_interface(interface)
+    if not interface:
+        raise RuntimeError("No valid scapy interface found. Set an NPF interface and try again.")
 
     cmd = [
         sys.executable,
         os.path.join(PROJECT_ROOT, "run.py"),
         "capture-decode",
-        "--backend",
-        backend,
         "--format",
         "json",
     ]
@@ -106,7 +149,6 @@ class UIHandler(SimpleHTTPRequestHandler):
                 key, _, value = part.partition("=")
                 params[key] = value
 
-            backend = params.get("backend", self.server.defaults["backend"])
             interface = params.get("interface", self.server.defaults["interface"])
             duration = int(params.get("duration", self.server.defaults["duration"]))
             limit = int(params.get("limit", self.server.defaults["limit"]))
@@ -115,7 +157,7 @@ class UIHandler(SimpleHTTPRequestHandler):
             chunk_size = int(params.get("chunk_size", self.server.defaults["chunk_size"]))
 
             try:
-                packets = run_capture(backend, interface, duration, limit)
+                packets = run_capture(interface, duration, limit)
                 payload_obj = {"packets": packets}
                 if include_analysis:
                     payload_obj["analysis"] = run_analysis(packets, bucket_ms=bucket_ms, chunk_size=chunk_size)
@@ -142,8 +184,7 @@ class UIHandler(SimpleHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--backend", default="dummy")
-    parser.add_argument("--interface", default="dummy0")
+    parser.add_argument("--interface", default="")
     parser.add_argument("--duration", type=int, default=3)
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--bucket-ms", type=int, default=1000)
@@ -153,7 +194,6 @@ def main():
     os.chdir(PROJECT_ROOT)
     server = ThreadingHTTPServer(("0.0.0.0", args.port), UIHandler)
     server.defaults = {
-        "backend": args.backend,
         "interface": args.interface,
         "duration": args.duration,
         "limit": args.limit,

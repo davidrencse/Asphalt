@@ -1,4 +1,3 @@
-const backendSelect = document.getElementById('backendSelect');
 const interfaceInput = document.getElementById('interfaceInput');
 const durationInput = document.getElementById('durationInput');
 const limitInput = document.getElementById('limitInput');
@@ -188,13 +187,11 @@ function loadPackets(packets, analysis) {
 }
 
 async function runCapture() {
-  const backend = backendSelect.value;
   const iface = interfaceInput.value.trim();
   const duration = Number(durationInput.value || 0);
   const limit = Number(limitInput.value || 0);
 
   const params = new URLSearchParams();
-  params.set('backend', backend);
   if (iface) params.set('interface', iface);
   if (duration > 0) params.set('duration', String(duration));
   if (limit > 0) params.set('limit', String(limit));

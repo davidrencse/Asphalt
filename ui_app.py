@@ -53,6 +53,12 @@ GOOD = "#4caf50"
 WARN_BADGE = "#ffb300"
 BAD = "#e53935"
 INFO_BADGE = "#9e9e9e"
+BORDER_DARK = "#111111"
+TITLEBAR_BG = "#050505"
+TITLEBAR_BTN_BG = "#0d0d0d"
+TITLEBAR_BTN_HOVER = "#1a1a1a"
+TITLEBAR_BTN_DANGER = "#3a0c0c"
+TITLEBAR_BTN_DANGER_HOVER = "#5a1414"
 
 DROP_RATE_WARN = 1.0
 DROP_RATE_BAD = 5.0
@@ -65,6 +71,7 @@ RST_BAD = 3.0
 SCAN_PORTS_WARN = 100
 ARP_CONFLICT_WARN = 1
 NXDOMAIN_SPIKE_WARN = True
+ABNORMAL_RST_RATIO_THRESHOLD = 20.0
 
 
 def _extract_json_array(text: str):
@@ -76,14 +83,14 @@ def _extract_json_array(text: str):
 
 
 def _run_capture_direct(backend: str, interface: str, duration: int, limit: int):
+    if backend != "scapy":
+        raise RuntimeError("Only scapy backend is supported.")
     try:
-        from capture.dummy_backend import DummyBackend
         from capture.scapy_backend import ScapyBackend
     except Exception as exc:
-        raise RuntimeError(f"Failed to import capture backend: {exc}") from exc
+        raise RuntimeError(f"Failed to import scapy backend: {exc}") from exc
 
-    backend_class = ScapyBackend if backend == "scapy" else DummyBackend
-    capture_backend = backend_class()
+    capture_backend = ScapyBackend()
     config = CaptureConfig(interface=interface, filter=None, buffer_size=10000)
 
     decoder = PacketDecoder()
@@ -142,8 +149,6 @@ def run_capture(backend: str, interface: str, duration: int, limit: int):
         sys.executable,
         os.path.join(PROJECT_ROOT, "run.py"),
         "capture-decode",
-        "--backend",
-        backend,
         "--format",
         "json",
     ]
@@ -163,7 +168,7 @@ def run_capture(backend: str, interface: str, duration: int, limit: int):
 
     try:
         # Prefer direct capture to avoid subprocess hangs.
-        return _run_capture_direct(backend, interface, duration, limit)
+        return _run_capture_direct("scapy", interface, duration, limit)
     except Exception:
         pass
 
@@ -216,7 +221,13 @@ def get_default_scapy_iface():
     return rf"\Device\NPF_{preferred.get('guid')}"
 
 
-def run_analysis(packets, bucket_ms: int = 1000, chunk_size: int = 200):
+def run_analysis(
+    packets,
+    bucket_ms: int = 1000,
+    chunk_size: int = 200,
+    scan_port_threshold: int = SCAN_PORTS_WARN,
+    rst_ratio_threshold: float = 0.2,
+):
     analyzer_names = [
         "capture_health",
         "global_stats",
@@ -243,6 +254,12 @@ def run_analysis(packets, bucket_ms: int = 1000, chunk_size: int = 200):
             analyzers.append(create_analyzer(name, bucket_ms=bucket_ms))
         elif name == "packet_chunks":
             analyzers.append(create_analyzer(name, chunk_size=chunk_size))
+        elif name == "abnormal_activity":
+            analyzers.append(create_analyzer(
+                name,
+                scan_port_threshold=scan_port_threshold,
+                rst_ratio_threshold=rst_ratio_threshold,
+            ))
         else:
             analyzers.append(create_analyzer(name))
     engine = AnalysisEngine(analyzers)
@@ -367,8 +384,10 @@ class AsphaltApp(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Asphalt")
+        self.setWindowFlags(QtCore.Qt.FramelessWindowHint | QtCore.Qt.Window)
         self.resize(1280, 860)
         self.has_mpl = _HAS_MPL
+        self._drag_pos = None
 
         self.latest_packets = []
         self.latest_analysis = {}
@@ -379,9 +398,28 @@ class AsphaltApp(QtWidgets.QMainWindow):
     def _build_ui(self):
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
-        root = QtWidgets.QVBoxLayout(central)
-        root.setContentsMargins(16, 16, 16, 16)
-        root.setSpacing(10)
+        outer = QtWidgets.QVBoxLayout(central)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        chrome = QtWidgets.QFrame()
+        chrome.setObjectName("chrome")
+        chrome_layout = QtWidgets.QVBoxLayout(chrome)
+        chrome_layout.setContentsMargins(1, 1, 1, 1)
+        chrome_layout.setSpacing(0)
+        outer.addWidget(chrome)
+
+        self.title_bar = self._build_title_bar()
+        chrome_layout.addWidget(self.title_bar)
+
+        body = QtWidgets.QFrame()
+        body.setObjectName("body")
+        body_layout = QtWidgets.QVBoxLayout(body)
+        body_layout.setContentsMargins(16, 12, 16, 16)
+        body_layout.setSpacing(10)
+        chrome_layout.addWidget(body, 1)
+
+        root = body_layout
 
         header = QtWidgets.QVBoxLayout()
         title = QtWidgets.QLabel("Asphalt Live Decode")
@@ -401,12 +439,14 @@ class AsphaltApp(QtWidgets.QMainWindow):
 
         controls_layout.addWidget(self._label("Backend"), 0, 0)
         self.backend_combo = QtWidgets.QComboBox()
-        self.backend_combo.addItems(["dummy", "scapy"])
-        self.backend_combo.setCurrentText("dummy")
+        self.backend_combo.addItems(["scapy"])
+        self.backend_combo.setCurrentText("scapy")
+        self.backend_combo.setEnabled(False)
         controls_layout.addWidget(self.backend_combo, 0, 1)
 
         controls_layout.addWidget(self._label("Interface"), 0, 2)
-        self.interface_edit = QtWidgets.QLineEdit("dummy0")
+        default_iface = get_default_scapy_iface()
+        self.interface_edit = QtWidgets.QLineEdit(default_iface)
         controls_layout.addWidget(self.interface_edit, 0, 3)
 
         controls_layout.addWidget(self._label("Duration (s)"), 0, 4)
@@ -487,6 +527,82 @@ class AsphaltApp(QtWidgets.QMainWindow):
 
         self._apply_theme()
 
+    def _build_title_bar(self):
+        bar = QtWidgets.QFrame()
+        bar.setObjectName("titlebar")
+        bar.setFixedHeight(36)
+
+        layout = QtWidgets.QHBoxLayout(bar)
+        layout.setContentsMargins(10, 0, 8, 0)
+        layout.setSpacing(8)
+
+        title = QtWidgets.QLabel("Asphalt")
+        title.setObjectName("titlebarTitle")
+        layout.addWidget(title)
+        layout.addStretch(1)
+
+        self.btn_min = QtWidgets.QPushButton("_")
+        self.btn_min.setObjectName("titlebarBtn")
+        self.btn_min.setFixedSize(36, 24)
+        self.btn_min.clicked.connect(self.showMinimized)
+
+        self.btn_max = QtWidgets.QPushButton("[]")
+        self.btn_max.setObjectName("titlebarBtn")
+        self.btn_max.setFixedSize(36, 24)
+        self.btn_max.clicked.connect(self._toggle_max_restore)
+
+        self.btn_close = QtWidgets.QPushButton("X")
+        self.btn_close.setObjectName("titlebarClose")
+        self.btn_close.setFixedSize(36, 24)
+        self.btn_close.clicked.connect(self.close)
+
+        layout.addWidget(self.btn_min)
+        layout.addWidget(self.btn_max)
+        layout.addWidget(self.btn_close)
+
+        bar.mousePressEvent = self._titlebar_mouse_press
+        bar.mouseMoveEvent = self._titlebar_mouse_move
+        bar.mouseReleaseEvent = self._titlebar_mouse_release
+        bar.mouseDoubleClickEvent = self._titlebar_mouse_double_click
+        return bar
+
+    def _toggle_max_restore(self):
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
+        self._update_window_controls()
+
+    def _update_window_controls(self):
+        if self.isMaximized():
+            self.btn_max.setText("O")
+        else:
+            self.btn_max.setText("[]")
+
+    def _titlebar_mouse_press(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def _titlebar_mouse_move(self, event):
+        if event.buttons() & QtCore.Qt.LeftButton and self._drag_pos is not None:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+
+    def _titlebar_mouse_release(self, event):
+        self._drag_pos = None
+        event.accept()
+
+    def _titlebar_mouse_double_click(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            self._toggle_max_restore()
+            event.accept()
+
+    def changeEvent(self, event):
+        if event.type() == QtCore.QEvent.WindowStateChange:
+            self._update_window_controls()
+        super().changeEvent(event)
+
     def _resolve_scapy_interface(self, requested):
         try:
             from capture.scapy_backend import ScapyBackend
@@ -562,6 +678,31 @@ class AsphaltApp(QtWidgets.QMainWindow):
         palette.setColor(QtGui.QPalette.Button, QtGui.QColor(BG_PANEL))
         palette.setColor(QtGui.QPalette.ButtonText, QtGui.QColor(FG_TEXT))
         self.setPalette(palette)
+        self.setStyleSheet(
+            "QFrame#chrome { background: %s; border: 1px solid %s; }"
+            "QFrame#body { background: %s; }"
+            "QFrame#titlebar { background: %s; }"
+            "QLabel#titlebarTitle { color: %s; font-weight: 600; }"
+            "QPushButton#titlebarBtn { background: %s; color: %s; border: 1px solid %s; }"
+            "QPushButton#titlebarBtn:hover { background: %s; }"
+            "QPushButton#titlebarClose { background: %s; color: %s; border: 1px solid %s; }"
+            "QPushButton#titlebarClose:hover { background: %s; }"
+            % (
+                BG_MAIN,
+                BORDER_DARK,
+                BG_MAIN,
+                TITLEBAR_BG,
+                FG_TEXT,
+                TITLEBAR_BTN_BG,
+                FG_TEXT,
+                BORDER_DARK,
+                TITLEBAR_BTN_HOVER,
+                TITLEBAR_BTN_DANGER,
+                FG_TEXT,
+                BORDER_DARK,
+                TITLEBAR_BTN_DANGER_HOVER,
+            )
+        )
 
     def _get_global_totals(self, analysis):
         gs = analysis.get("global_results", {}).get("global_stats", {})
@@ -735,6 +876,43 @@ class AsphaltApp(QtWidgets.QMainWindow):
         grid.addWidget(self.raw_cards["filtering"], 0, 2)
         vbox.addWidget(box)
 
+        # Thresholds
+        box, box_layout = self._make_section("Thresholds")
+        form = QtWidgets.QFormLayout()
+        form.setLabelAlignment(QtCore.Qt.AlignLeft)
+        form.setFormAlignment(QtCore.Qt.AlignTop)
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(6)
+        box_layout.addLayout(form)
+
+        self.threshold_inputs = {}
+        self.threshold_inputs["drop_warn"] = self._make_threshold_spin(DROP_RATE_WARN, 0, 100, 0.1, 2)
+        form.addRow(self._label("Drop rate warn (%)"), self.threshold_inputs["drop_warn"])
+        self.threshold_inputs["drop_bad"] = self._make_threshold_spin(DROP_RATE_BAD, 0, 100, 0.1, 2)
+        form.addRow(self._label("Drop rate bad (%)"), self.threshold_inputs["drop_bad"])
+        self.threshold_inputs["handshake_warn"] = self._make_threshold_spin(HANDSHAKE_WARN_LO, 0, 100, 0.5, 2)
+        form.addRow(self._label("Handshake warn >= (%)"), self.threshold_inputs["handshake_warn"])
+        self.threshold_inputs["handshake_good"] = self._make_threshold_spin(HANDSHAKE_GOOD_LO, 0, 100, 0.5, 2)
+        form.addRow(self._label("Handshake good >= (%)"), self.threshold_inputs["handshake_good"])
+        self.threshold_inputs["retrans_warn"] = self._make_threshold_spin(RETX_WARN, 0, 100, 0.1, 2)
+        form.addRow(self._label("Retransmission warn (%)"), self.threshold_inputs["retrans_warn"])
+        self.threshold_inputs["retrans_bad"] = self._make_threshold_spin(RETX_BAD, 0, 100, 0.1, 2)
+        form.addRow(self._label("Retransmission bad (%)"), self.threshold_inputs["retrans_bad"])
+        self.threshold_inputs["rst_warn"] = self._make_threshold_spin(RST_WARN, 0, 100, 0.1, 2)
+        form.addRow(self._label("RST warn (%)"), self.threshold_inputs["rst_warn"])
+        self.threshold_inputs["rst_bad"] = self._make_threshold_spin(RST_BAD, 0, 100, 0.1, 2)
+        form.addRow(self._label("RST bad (%)"), self.threshold_inputs["rst_bad"])
+        self.threshold_inputs["scan_ports_warn"] = self._make_threshold_int(SCAN_PORTS_WARN, 1, 100000, 1)
+        form.addRow(self._label("Scan ports warn (count)"), self.threshold_inputs["scan_ports_warn"])
+        self.threshold_inputs["arp_conflict_warn"] = self._make_threshold_int(ARP_CONFLICT_WARN, 0, 100000, 1)
+        form.addRow(self._label("ARP conflict warn (count)"), self.threshold_inputs["arp_conflict_warn"])
+        self.threshold_inputs["nxdomain_warn"] = QtWidgets.QCheckBox("Enable NXDOMAIN spike warning")
+        self.threshold_inputs["nxdomain_warn"].setChecked(bool(NXDOMAIN_SPIKE_WARN))
+        form.addRow(self._label("NXDOMAIN spike warn"), self.threshold_inputs["nxdomain_warn"])
+        self.threshold_inputs["abnormal_rst_ratio"] = self._make_threshold_spin(ABNORMAL_RST_RATIO_THRESHOLD, 0, 100, 0.5, 2)
+        form.addRow(self._label("Abnormal RST ratio threshold (%)"), self.threshold_inputs["abnormal_rst_ratio"])
+        vbox.addWidget(box)
+
         # Traffic overview
         box, box_layout = self._make_section("Traffic overview")
         grid = QtWidgets.QGridLayout()
@@ -817,6 +995,50 @@ class AsphaltApp(QtWidgets.QMainWindow):
         layout.addWidget(value)
         frame.value_label = value
         return frame
+
+    def _make_threshold_spin(self, value, minimum, maximum, step, decimals):
+        spin = QtWidgets.QDoubleSpinBox()
+        spin.setRange(minimum, maximum)
+        spin.setDecimals(decimals)
+        spin.setSingleStep(step)
+        spin.setValue(float(value))
+        spin.setFixedWidth(140)
+        return spin
+
+    def _make_threshold_int(self, value, minimum, maximum, step):
+        spin = QtWidgets.QSpinBox()
+        spin.setRange(minimum, maximum)
+        spin.setSingleStep(step)
+        spin.setValue(int(value))
+        spin.setFixedWidth(140)
+        return spin
+
+    def _get_thresholds(self):
+        def get_value(key, default):
+            widget = getattr(self, "threshold_inputs", {}).get(key)
+            if widget is None:
+                return default
+            if isinstance(widget, QtWidgets.QCheckBox):
+                return widget.isChecked()
+            try:
+                return widget.value()
+            except Exception:
+                return default
+
+        return {
+            "drop_warn": get_value("drop_warn", DROP_RATE_WARN),
+            "drop_bad": get_value("drop_bad", DROP_RATE_BAD),
+            "handshake_warn": get_value("handshake_warn", HANDSHAKE_WARN_LO),
+            "handshake_good": get_value("handshake_good", HANDSHAKE_GOOD_LO),
+            "retrans_warn": get_value("retrans_warn", RETX_WARN),
+            "retrans_bad": get_value("retrans_bad", RETX_BAD),
+            "rst_warn": get_value("rst_warn", RST_WARN),
+            "rst_bad": get_value("rst_bad", RST_BAD),
+            "scan_ports_warn": get_value("scan_ports_warn", SCAN_PORTS_WARN),
+            "arp_conflict_warn": get_value("arp_conflict_warn", ARP_CONFLICT_WARN),
+            "nxdomain_warn": get_value("nxdomain_warn", NXDOMAIN_SPIKE_WARN),
+            "abnormal_rst_ratio": get_value("abnormal_rst_ratio", ABNORMAL_RST_RATIO_THRESHOLD),
+        }
 
     def _build_technical_info_tab(self):
         layout = QtWidgets.QVBoxLayout(self.tech_info_tab)
@@ -1411,9 +1633,6 @@ class AsphaltApp(QtWidgets.QMainWindow):
             else:
                 self.status_label.setText("No valid scapy interface found. Set an NPF interface and try again.")
                 return
-        if backend == "dummy" and not interface:
-            interface = "dummy0"
-            self.interface_edit.setText(interface)
         try:
             duration = int(self.duration_edit.text().strip() or "0")
         except ValueError:
@@ -1448,7 +1667,12 @@ class AsphaltApp(QtWidgets.QMainWindow):
                         interface = alt_iface
                         self.ui_call.emit(lambda: self.interface_edit.setText(interface))
                         break
-            analysis = run_analysis(packets)
+            thresholds = self._get_thresholds()
+            analysis = run_analysis(
+                packets,
+                scan_port_threshold=int(thresholds["scan_ports_warn"]),
+                rst_ratio_threshold=float(thresholds["abnormal_rst_ratio"]) / 100.0,
+            )
             print(f"DEBUG: Analysis keys: {list(analysis.keys())}")
             self.latest_packets = packets
             self.latest_analysis = analysis
@@ -1485,6 +1709,16 @@ class AsphaltApp(QtWidgets.QMainWindow):
         udp = totals.get("udp_packets")
         self.stat_l4.setText(f"{_fmt_count(tcp)} / {_fmt_count(udp)}")
         flows = totals.get("flows") or totals.get("flow_count")
+        if flows is None:
+            flow_analytics = self.latest_analysis.get("global_results", {}).get("flow_analytics", {})
+            summary = flow_analytics.get("summary", {}) if isinstance(flow_analytics, dict) else {}
+            flows = summary.get("total_flows")
+        if flows is None:
+            flow_results = self.latest_analysis.get("flow_results", {}) if isinstance(self.latest_analysis, dict) else {}
+            flow_summary_block = flow_results.get("flow_summary", {}) if isinstance(flow_results, dict) else {}
+            flow_list = flow_summary_block.get("flows", []) if isinstance(flow_summary_block, dict) else []
+            if isinstance(flow_list, list) and flow_list:
+                flows = len(flow_list)
         self.stat_flows.setText(_fmt_count(flows))
 
         protocol_mix = self.latest_analysis.get("global_results", {}).get("protocol_mix", {})
@@ -1493,15 +1727,31 @@ class AsphaltApp(QtWidgets.QMainWindow):
         self.analysis_abnormal.setText(str(abnormal.get("summary", "-")))
         handshake = self.latest_analysis.get("global_results", {}).get("tcp_handshakes", {})
         if handshake:
-            completion = handshake.get("completion_rate")
-            self.analysis_handshake.setText(f"{_fmt_pct(completion)}")
+            total = handshake.get("handshakes_total")
+            complete = handshake.get("handshakes_complete")
+            incomplete = handshake.get("handshakes_incomplete")
+            if total is not None and complete is not None:
+                if incomplete is None and total is not None and complete is not None:
+                    try:
+                        incomplete = int(total) - int(complete)
+                    except Exception:
+                        incomplete = None
+                if incomplete is not None:
+                    self.analysis_handshake.setText(f"{_fmt_count(complete)} / {_fmt_count(total)} ({_fmt_count(incomplete)} incomplete)")
+                else:
+                    self.analysis_handshake.setText(f"{_fmt_count(complete)} / {_fmt_count(total)}")
+            else:
+                completion = handshake.get("completion_rate")
+                self.analysis_handshake.setText(f"{_fmt_pct(completion)}")
         else:
             self.analysis_handshake.setText("-")
-        chunks = self.latest_analysis.get("packet_chunks", {})
-        if isinstance(chunks, dict):
-            count = chunks.get("chunk_count") or len(chunks.get("chunks", []) or [])
-        else:
-            count = len(chunks) if isinstance(chunks, list) else 0
+        ts_obj = self.latest_analysis.get("time_series", {}) if isinstance(self.latest_analysis, dict) else {}
+        packet_chunks = ts_obj.get("packet_chunks") if isinstance(ts_obj, dict) else {}
+        packet_chunks = packet_chunks if isinstance(packet_chunks, dict) else {}
+        chunks = packet_chunks.get("chunks")
+        if chunks is None:
+            chunks = packet_chunks if isinstance(packet_chunks, list) else []
+        count = len(chunks) if isinstance(chunks, list) else 0
         self.analysis_chunks.setText(_fmt_count(count))
 
     def refresh_raw_data(self):
@@ -1544,14 +1794,38 @@ class AsphaltApp(QtWidgets.QMainWindow):
 
         flow_analytics = analysis.get("flow_analytics", {})
         summary = flow_analytics.get("summary", {})
-        self.raw_cards["flow_summary"].value_label.setText(f"total_flows {summary.get('total_flows', 'n/a')}")
+        flow_results = self.latest_analysis.get("flow_results", {}) if isinstance(self.latest_analysis, dict) else {}
+        flow_summary_block = flow_results.get("flow_summary", {}) if isinstance(flow_results, dict) else {}
+        flow_list = flow_summary_block.get("flows", []) if isinstance(flow_summary_block, dict) else []
+        total_flows = summary.get("total_flows", "n/a")
+        if isinstance(flow_list, list) and flow_list:
+            total_flows = len(flow_list)
+        self.raw_cards["flow_summary"].value_label.setText(f"total_flows {total_flows}")
         self.raw_cards["flow_heavy"].value_label.setText(f"by_bytes {len((flow_analytics.get('heavy_hitters', {}) or {}).get('top_by_bytes', []) or [])}")
         self.raw_cards["flow_states"].value_label.setText(json.dumps(flow_analytics.get("states", {})) if flow_analytics.get("states") else "n/a")
 
         tcp_handshakes = analysis.get("tcp_handshakes", {})
         tcp_reliability = analysis.get("tcp_reliability", {})
         tcp_performance = analysis.get("tcp_performance", {})
-        self.raw_cards["tcp_handshake"].value_label.setText(_fmt_pct(tcp_handshakes.get("completion_rate")))
+        if isinstance(tcp_handshakes, dict):
+            total = tcp_handshakes.get("handshakes_total")
+            complete = tcp_handshakes.get("handshakes_complete")
+            incomplete = tcp_handshakes.get("handshakes_incomplete")
+            if total is not None and complete is not None:
+                if incomplete is None and total is not None and complete is not None:
+                    try:
+                        incomplete = int(total) - int(complete)
+                    except Exception:
+                        incomplete = None
+                if incomplete is not None:
+                    text = f"{_fmt_count(complete)} / {_fmt_count(total)} ({_fmt_count(incomplete)} incomplete)"
+                else:
+                    text = f"{_fmt_count(complete)} / {_fmt_count(total)}"
+                self.raw_cards["tcp_handshake"].value_label.setText(text)
+            else:
+                self.raw_cards["tcp_handshake"].value_label.setText(_fmt_pct(tcp_handshakes.get("completion_rate")))
+        else:
+            self.raw_cards["tcp_handshake"].value_label.setText("n/a")
         self.raw_cards["tcp_reliability"].value_label.setText(_fmt_pct(tcp_reliability.get("retransmission_rate")))
         self.raw_cards["tcp_performance"].value_label.setText(_fmt_count(tcp_performance.get("zero_window")))
 
@@ -1608,6 +1882,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
 
     def refresh_dashboard(self):
         analysis = self.latest_analysis
+        thresholds = self._get_thresholds()
         totals = self._get_global_totals(analysis)
         throughput = analysis.get("global_results", {}).get("throughput_peaks", {})
         tcp_handshakes = analysis.get("global_results", {}).get("tcp_handshakes", {})
@@ -1623,18 +1898,51 @@ class AsphaltApp(QtWidgets.QMainWindow):
         self._set_kpi("Peak bps", _fmt_bps(throughput.get("peak_bps")), "INFO")
 
         completion = _safe_float(tcp_handshakes.get("completion_rate"))
-        completion_sev = self._sev_from_pct(completion, HANDSHAKE_GOOD_LO, HANDSHAKE_WARN_LO, 100.0)
-        self._set_kpi("TCP handshake completion", _fmt_pct(completion), completion_sev)
+        total_hs = tcp_handshakes.get("handshakes_total")
+        complete_hs = tcp_handshakes.get("handshakes_complete")
+        incomplete_hs = tcp_handshakes.get("handshakes_incomplete")
+        completion_sev = self._sev_from_pct(
+            completion,
+            thresholds["handshake_good"],
+            thresholds["handshake_warn"],
+            100.0,
+        )
+        if total_hs is not None and complete_hs is not None:
+            if incomplete_hs is None:
+                try:
+                    incomplete_hs = int(total_hs) - int(complete_hs)
+                except Exception:
+                    incomplete_hs = None
+            if incomplete_hs is not None:
+                display = f"{_fmt_count(complete_hs)} / {_fmt_count(total_hs)} ({_fmt_count(incomplete_hs)} incomplete)"
+            else:
+                display = f"{_fmt_count(complete_hs)} / {_fmt_count(total_hs)}"
+        else:
+            display = _fmt_pct(completion)
+        self._set_kpi("TCP handshakes", display, completion_sev)
 
         retrans = _safe_float(tcp_reliability.get("retransmission_rate"))
-        retrans_sev = self._sev_from_pct(retrans, RETX_WARN, RETX_WARN, RETX_BAD)
+        retrans_sev = self._sev_from_pct(
+            retrans,
+            thresholds["retrans_warn"],
+            thresholds["retrans_warn"],
+            thresholds["retrans_bad"],
+        )
         self._set_kpi("TCP retransmission rate", _fmt_pct(retrans), retrans_sev)
 
         drop_rate = _safe_float(drops)
-        drop_sev = self._sev_from_pct(drop_rate, DROP_RATE_WARN, DROP_RATE_WARN, DROP_RATE_BAD)
+        drop_sev = self._sev_from_pct(
+            drop_rate,
+            thresholds["drop_warn"],
+            thresholds["drop_warn"],
+            thresholds["drop_bad"],
+        )
         self._set_kpi("Drop rate", _fmt_pct(drop_rate), drop_sev)
 
-        nx_sev = self._sev_from_bool(nxdomain_spike)
+        if thresholds["nxdomain_warn"]:
+            nx_sev = self._sev_from_bool(nxdomain_spike)
+        else:
+            nx_sev = "INFO"
         self._set_kpi("NXDOMAIN spike", "yes" if nxdomain_spike else "no", nx_sev)
 
         self._refresh_dashboard_charts(analysis)
@@ -1920,23 +2228,39 @@ class AsphaltApp(QtWidgets.QMainWindow):
                 state_rows.append((key, str(states.get(key))))
         self._set_kv_rows(self.ti_flow_analytics["states"], state_rows)
 
-        flow_summary = analysis.get("global_results", {}).get("flow_summary", {})
-        if isinstance(flow_summary, dict):
-            if any(isinstance(v, list) for v in flow_summary.values()):
-                list_value = None
-                for v in flow_summary.values():
-                    if isinstance(v, list):
-                        list_value = v
-                        break
-                self._set_dynamic_rows(self.ti_flow_analytics["flow_summary"], list_value or [])
+        flow_results = analysis.get("flow_results", {}) if isinstance(analysis, dict) else {}
+        flow_summary_block = flow_results.get("flow_summary", {}) if isinstance(flow_results, dict) else {}
+        flow_list = None
+        if isinstance(flow_summary_block, dict):
+            if isinstance(flow_summary_block.get("flows"), list):
+                flow_list = flow_summary_block.get("flows")
             else:
-                rows = [{"field": k, "value": v} for k, v in flow_summary.items()]
-                self._set_dynamic_rows(self.ti_flow_analytics["flow_summary"], rows, ["field", "value"])
+                list_value = []
+                for v in flow_summary_block.values():
+                    if isinstance(v, list):
+                        list_value.extend(v)
+                if list_value:
+                    flow_list = list_value
+        if isinstance(flow_list, list) and flow_list:
+            self._set_dynamic_rows(self.ti_flow_analytics["flow_summary"], flow_list)
         else:
-            self._set_dynamic_rows(self.ti_flow_analytics["flow_summary"], [])
+            flow_summary = analysis.get("global_results", {}).get("flow_summary", {})
+            if isinstance(flow_summary, dict):
+                if any(isinstance(v, list) for v in flow_summary.values()):
+                    list_value = None
+                    for v in flow_summary.values():
+                        if isinstance(v, list):
+                            list_value = v
+                            break
+                    self._set_dynamic_rows(self.ti_flow_analytics["flow_summary"], list_value or [])
+                else:
+                    rows = [{"field": k, "value": v} for k, v in flow_summary.items()]
+                    self._set_dynamic_rows(self.ti_flow_analytics["flow_summary"], rows, ["field", "value"])
+            else:
+                self._set_dynamic_rows(self.ti_flow_analytics["flow_summary"], [])
 
         self._set_json_text(self.ti_flow_analytics["json_flow_analytics"], flow_analytics if flow_analytics else {})
-        self._set_json_text(self.ti_flow_analytics["json_flow_summary"], flow_summary if flow_summary else {})
+        self._set_json_text(self.ti_flow_analytics["json_flow_summary"], flow_summary_block if flow_summary_block else {})
 
     def _refresh_ti_tcp_health(self, analysis):
         hand = analysis.get("global_results", {}).get("tcp_handshakes", {})
@@ -2262,6 +2586,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
 
     def _refresh_dashboard_diagnostics(self, analysis):
         findings = []
+        thresholds = self._get_thresholds()
 
         def add_line(sev, title, detail):
             findings.append({"severity": sev, "message": f"[{sev}] {title}  {detail}"})
@@ -2273,7 +2598,12 @@ class AsphaltApp(QtWidgets.QMainWindow):
         if drops is None:
             add_line("INFO", "Drop rate", "not available in this capture.")
         else:
-            sev = self._sev_from_pct(drops, DROP_RATE_WARN, DROP_RATE_WARN, DROP_RATE_BAD)
+            sev = self._sev_from_pct(
+                drops,
+                thresholds["drop_warn"],
+                thresholds["drop_warn"],
+                thresholds["drop_bad"],
+            )
             add_line(sev, "Drop rate", f"{_fmt_pct(drops)}")
 
         hand = analysis.get("global_results", {}).get("tcp_handshakes", {})
@@ -2281,22 +2611,52 @@ class AsphaltApp(QtWidgets.QMainWindow):
         if completion is None:
             add_line("INFO", "Handshake completion", "not available in this capture.")
         else:
-            sev = self._sev_from_pct(completion, HANDSHAKE_GOOD_LO, HANDSHAKE_WARN_LO, 100.0)
-            add_line(sev, "Handshake completion", f"{_fmt_pct(completion)}")
+            sev = self._sev_from_pct(
+                completion,
+                thresholds["handshake_good"],
+                thresholds["handshake_warn"],
+                100.0,
+            )
+            total_hs = hand.get("handshakes_total") if isinstance(hand, dict) else None
+            complete_hs = hand.get("handshakes_complete") if isinstance(hand, dict) else None
+            if total_hs is not None and complete_hs is not None:
+                incomplete_hs = hand.get("handshakes_incomplete") if isinstance(hand, dict) else None
+                if incomplete_hs is None:
+                    try:
+                        incomplete_hs = int(total_hs) - int(complete_hs)
+                    except Exception:
+                        incomplete_hs = None
+                if incomplete_hs is not None:
+                    detail = f"{_fmt_count(complete_hs)} / {_fmt_count(total_hs)} ({_fmt_count(incomplete_hs)} incomplete)"
+                else:
+                    detail = f"{_fmt_count(complete_hs)} / {_fmt_count(total_hs)} complete"
+            else:
+                detail = f"{_fmt_pct(completion)}"
+            add_line(sev, "Handshakes", detail)
 
         tcp_rel = analysis.get("global_results", {}).get("tcp_reliability", {})
         retr = tcp_rel.get("retransmission_rate") if isinstance(tcp_rel, dict) else None
         if retr is None:
             add_line("INFO", "Retransmission rate", "not available in this capture.")
         else:
-            sev = self._sev_from_pct(retr, RETX_WARN, RETX_WARN, RETX_BAD)
+            sev = self._sev_from_pct(
+                retr,
+                thresholds["retrans_warn"],
+                thresholds["retrans_warn"],
+                thresholds["retrans_bad"],
+            )
             add_line(sev, "Retransmission rate", f"{_fmt_pct(retr)}")
 
         rst = tcp_rel.get("rst_rate") if isinstance(tcp_rel, dict) else None
         if rst is None:
             add_line("INFO", "RST rate", "not available in this capture.")
         else:
-            sev = self._sev_from_pct(rst, RST_WARN, RST_WARN, RST_BAD)
+            sev = self._sev_from_pct(
+                rst,
+                thresholds["rst_warn"],
+                thresholds["rst_warn"],
+                thresholds["rst_bad"],
+            )
             add_line(sev, "RST rate", f"{_fmt_pct(rst)}")
 
         scan = analysis.get("global_results", {}).get("scan_signals", {})
@@ -2305,7 +2665,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
         if max_count is None:
             add_line("INFO", "Scan signals", "not available in this capture.")
         else:
-            sev = "WARN" if max_count >= SCAN_PORTS_WARN else "GOOD"
+            sev = "WARN" if max_count >= thresholds["scan_ports_warn"] else "GOOD"
             add_line(sev, "Scan signals", f"max distinct ports {max_count}")
 
         arp = analysis.get("global_results", {}).get("arp_lan_signals", {})
@@ -2314,7 +2674,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
         if mac_count is None:
             add_line("INFO", "ARP conflicts", "not available in this capture.")
         else:
-            sev = "WARN" if mac_count >= ARP_CONFLICT_WARN else "GOOD"
+            sev = "WARN" if mac_count >= thresholds["arp_conflict_warn"] else "GOOD"
             add_line(sev, "ARP conflicts", f"multiple MACs {mac_count}")
 
         dns = analysis.get("global_results", {}).get("dns_anomalies", {})
@@ -2323,8 +2683,13 @@ class AsphaltApp(QtWidgets.QMainWindow):
         if spike is None:
             add_line("INFO", "NXDOMAIN spike", "not available in this capture.")
         else:
-            sev = "WARN" if spike else "GOOD"
-            add_line(sev, "NXDOMAIN spike", "spike detected" if spike else "no spike")
+            if thresholds["nxdomain_warn"]:
+                sev = "WARN" if spike else "GOOD"
+                detail = "spike detected" if spike else "no spike"
+            else:
+                sev = "INFO"
+                detail = "disabled"
+            add_line(sev, "NXDOMAIN spike", detail)
 
         self._set_dynamic_rows(self.diag_table, findings, ["severity", "message"])
 

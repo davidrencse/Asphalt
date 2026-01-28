@@ -17,8 +17,6 @@ from capture.packet_decoder import quality_flag_names
 @click.option("--interface", "-i", required=True, help="Interface to capture from")
 @click.option("--duration", "-d", type=int, help="Duration in seconds (default: run until limit)")
 @click.option("--filter", "-f", help="BPF filter (e.g., \"tcp port 80\")")
-@click.option("--backend", type=click.Choice(["scapy", "dummy"]), default="dummy",
-              help="Capture backend to use")
 @click.option("--limit", type=int, default=50, show_default=True,
               help="Max packets to decode (0 = no limit)")
 @click.option("--show-quality", is_flag=True, help="Show decode quality flags")
@@ -29,7 +27,6 @@ from capture.packet_decoder import quality_flag_names
 def capture_decode(interface: str,
                    duration: Optional[int],
                    filter: Optional[str],
-                   backend: str,
                    limit: int,
                    show_quality: bool,
                    format: str,
@@ -38,19 +35,16 @@ def capture_decode(interface: str,
     Live capture and decode packets, printing a compact summary.
     """
     try:
-        from capture.dummy_backend import DummyBackend
         from capture.scapy_backend import ScapyBackend
         from capture.icapture_backend import CaptureConfig
     except ImportError as e:
         click.echo(f"Error importing capture modules: {e}", err=True)
         sys.exit(1)
 
-    backend_class = ScapyBackend if backend == "scapy" else DummyBackend
-
     try:
-        capture_backend = backend_class()
+        capture_backend = ScapyBackend()
     except Exception as e:
-        click.echo(f"Error initializing {backend} backend: {e}", err=True)
+        click.echo(f"Error initializing scapy backend: {e}", err=True)
         sys.exit(1)
 
     config = CaptureConfig(
