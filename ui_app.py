@@ -1524,7 +1524,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
         scroll.setMinimumHeight(520)
         layout.addWidget(scroll)
 
-    def _mpl_bar(self, frame, labels, values, title, xrot=0):
+    def _mpl_bar(self, frame, labels, values, title, xrot=0, orientation="v", label_fontsize=9, grid=True, xlabel=None):
         self._mpl_clear_frame(frame)
         layout = frame.layout()
         if not self.has_mpl:
@@ -1535,10 +1535,26 @@ class AsphaltApp(QtWidgets.QMainWindow):
             return
         fig = Figure(figsize=(12, 8))
         ax = fig.add_subplot(111)
-        ax.bar(labels, values)
+        if orientation == "h":
+            y_pos = list(range(len(labels)))
+            ax.barh(y_pos, values)
+            ax.set_yticks(y_pos)
+            ax.set_yticklabels(labels, fontsize=label_fontsize)
+            ax.invert_yaxis()
+            ax.tick_params(axis='x', labelsize=label_fontsize)
+            fig.subplots_adjust(left=0.35, right=0.98, top=0.92, bottom=0.12)
+        else:
+            ax.bar(labels, values)
+            if xrot:
+                ax.tick_params(axis='x', rotation=xrot, labelsize=label_fontsize)
+            else:
+                ax.tick_params(axis='x', labelsize=label_fontsize)
+            fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.18)
         ax.set_title(title)
-        if xrot:
-            ax.tick_params(axis='x', rotation=xrot)
+        if xlabel:
+            ax.set_xlabel(xlabel)
+        if grid:
+            ax.grid(axis='x' if orientation == "h" else 'y', linestyle='--', alpha=0.3)
         canvas = FigureCanvas(fig)
         canvas.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Expanding)
 
@@ -1641,8 +1657,11 @@ class AsphaltApp(QtWidgets.QMainWindow):
             limit = int(self.limit_edit.text().strip() or "0")
         except ValueError:
             limit = 0
+        if duration > 0:
+            pass
         if duration <= 0 and limit <= 0:
             limit = 50
+            self.limit_edit.setText(str(limit))
         if backend == "scapy" and duration <= 0:
             duration = 5
 
@@ -1653,7 +1672,10 @@ class AsphaltApp(QtWidgets.QMainWindow):
 
     def _capture_thread(self, backend, interface, duration, limit):
         try:
-            packets = run_capture(backend, interface, duration, limit)
+            capture_limit = 0 if duration > 0 else limit
+            packets = run_capture(backend, interface, duration, capture_limit)
+            if limit > 0 and len(packets) > limit:
+                packets = packets[:limit]
             print(f"DEBUG: UI capture returned {len(packets)} packets")
             self.ui_call.emit(lambda: self.status_label.setText(f"Captured {len(packets)} packets. Analyzing..."))
             if backend == "scapy" and not packets:
@@ -2526,7 +2548,15 @@ class AsphaltApp(QtWidgets.QMainWindow):
             values = [t.get("bytes", 0) for t in sorted_talkers]
         else:
             labels, values = [], []
-        self._mpl_bar(self.chart_frames["Talkers"], labels, values, "Top Source IPs by Bytes", xrot=45)
+        self._mpl_bar(
+            self.chart_frames["Talkers"],
+            labels,
+            values,
+            "Top Source IPs by Bytes",
+            orientation="h",
+            label_fontsize=8,
+            xlabel="Bytes",
+        )
 
         tcp = analysis.get("global_results", {}).get("tcp_reliability", {})
         if isinstance(tcp, dict):
