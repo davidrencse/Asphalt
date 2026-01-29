@@ -1544,7 +1544,10 @@ class AsphaltApp(QtWidgets.QMainWindow):
             self._set_dynamic_rows(table, [{"label": r[0], "value": r[1]} for r in rows], ["label", "value"])
             layout.addWidget(table)
             return
-        fig = Figure(figsize=(12, 8))
+        fig_height = 8
+        if orientation == "h":
+            fig_height = max(4, min(12, 0.45 * max(1, len(labels)) + 2))
+        fig = Figure(figsize=(12, fig_height))
         ax = fig.add_subplot(111)
         if orientation == "h":
             y_pos = list(range(len(labels)))
@@ -1553,7 +1556,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
             ax.set_yticklabels(labels, fontsize=label_fontsize)
             ax.invert_yaxis()
             ax.tick_params(axis='x', labelsize=label_fontsize)
-            fig.subplots_adjust(left=0.35, right=0.98, top=0.92, bottom=0.12)
+            fig.subplots_adjust(left=0.28, right=0.98, top=0.92, bottom=0.12)
         else:
             ax.bar(labels, values)
             if xrot:
@@ -1609,6 +1612,71 @@ class AsphaltApp(QtWidgets.QMainWindow):
         scroll.setWidget(canvas)
         scroll.setMinimumHeight(520)
         layout.addWidget(scroll)
+
+    def _short_flow_label(self, text, max_len=28):
+        if not isinstance(text, str):
+            text = str(text)
+        if len(text) <= max_len:
+            return text
+        head = max(6, (max_len // 2) - 2)
+        tail = max_len - head - 3
+        return f"{text[:head]}...{text[-tail:]}"
+
+    def _render_top_flows(self, frame, items, title, value_key, xlabel):
+        self._mpl_clear_frame(frame)
+        layout = frame.layout()
+        items = [i for i in items if isinstance(i, dict)]
+        if not items:
+            layout.addWidget(QtWidgets.QLabel("No flow data available."))
+            return
+
+        labels = [self._short_flow_label(i.get("label", i.get("flow_id", "?"))) for i in items]
+        values = [i.get(value_key, 0) for i in items]
+
+        if not self.has_mpl:
+            table = self._make_table(["flow", value_key])
+            rows = [{"flow": i.get("label", i.get("flow_id", "?")), value_key: i.get(value_key, 0)} for i in items]
+            self._set_dynamic_rows(table, rows, ["flow", value_key])
+            layout.addWidget(table)
+            return
+
+        fig_height = max(4, min(10, 0.45 * len(labels) + 2))
+        fig = Figure(figsize=(12, fig_height))
+        ax = fig.add_subplot(111)
+        y_pos = list(range(len(labels)))
+        bars = ax.barh(y_pos, values, color="#00d4ff", alpha=0.85)
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(labels, fontsize=8)
+        ax.invert_yaxis()
+        ax.set_xlabel(xlabel)
+        ax.set_title(title)
+        ax.grid(axis='x', linestyle='--', alpha=0.25)
+        for bar, val in zip(bars, values):
+            ax.text(
+                bar.get_width(),
+                bar.get_y() + bar.get_height() / 2,
+                f" {val}",
+                va="center",
+                ha="left",
+                fontsize=8,
+                color="#e6e9ef",
+            )
+        fig.subplots_adjust(left=0.28, right=0.98, top=0.92, bottom=0.12)
+        canvas = FigureCanvas(fig)
+        canvas.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Expanding)
+
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
+        scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        scroll.setWidget(canvas)
+        scroll.setMinimumHeight(360)
+        layout.addWidget(scroll)
+
+        table = self._make_table(["flow", value_key], min_rows=min(10, len(items) + 2))
+        rows = [{"flow": i.get("label", i.get("flow_id", "?")), value_key: i.get(value_key, 0)} for i in items]
+        self._set_dynamic_rows(table, rows, ["flow", value_key])
+        layout.addWidget(table)
 
     def _mpl_hist(self, frame, bucket_labels, counts, title):
         self._mpl_clear_frame(frame)
@@ -2623,35 +2691,24 @@ class AsphaltApp(QtWidgets.QMainWindow):
         flow_analytics = analysis.get("global_results", {}).get("flow_analytics", {})
         heavy = flow_analytics.get("heavy_hitters", {}) if isinstance(flow_analytics, dict) else {}
         top_by_bytes = heavy.get("top_by_bytes", []) if isinstance(heavy, dict) else []
-        if isinstance(top_by_bytes, list):
-            flow_labels = [f.get("label", f.get("flow_id", "?")) for f in top_by_bytes]
-            flow_values = [f.get("bytes", 0) for f in top_by_bytes]
-        else:
-            flow_labels, flow_values = [], []
-        self._mpl_bar(
-            self.chart_frames["Top Flows (Bytes)"],
-            flow_labels,
-            flow_values,
-            "Top Flows by Bytes",
-            orientation="h",
-            label_fontsize=8,
-            xlabel="Bytes",
-        )
-
         top_by_packets = heavy.get("top_by_packets", []) if isinstance(heavy, dict) else []
+        if isinstance(top_by_bytes, list):
+            top_by_bytes = top_by_bytes[:8]
         if isinstance(top_by_packets, list):
-            flow_labels = [f.get("label", f.get("flow_id", "?")) for f in top_by_packets]
-            flow_values = [f.get("packets", 0) for f in top_by_packets]
-        else:
-            flow_labels, flow_values = [], []
-        self._mpl_bar(
+            top_by_packets = top_by_packets[:8]
+        self._render_top_flows(
+            self.chart_frames["Top Flows (Bytes)"],
+            top_by_bytes if isinstance(top_by_bytes, list) else [],
+            "Top Flows by Bytes",
+            "bytes",
+            "Bytes",
+        )
+        self._render_top_flows(
             self.chart_frames["Top Flows (Packets)"],
-            flow_labels,
-            flow_values,
+            top_by_packets if isinstance(top_by_packets, list) else [],
             "Top Flows by Packets",
-            orientation="h",
-            label_fontsize=8,
-            xlabel="Packets",
+            "packets",
+            "Packets",
         )
 
         states = flow_analytics.get("states", {}) if isinstance(flow_analytics, dict) else {}
