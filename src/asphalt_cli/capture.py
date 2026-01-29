@@ -43,8 +43,7 @@ def capture(interface: str, duration: Optional[int], filter: Optional[str]):
         interfaces = capture_backend.list_interfaces()
 
         if interfaces:
-            click.echo("
-=== Network Interfaces ===")
+            click.echo("\n=== Network Interfaces ===")
             for iface in interfaces:
                 display_name = iface.get('display_name', iface['name'])
                 desc = iface.get('description', '')
@@ -53,22 +52,21 @@ def capture(interface: str, duration: Optional[int], filter: Optional[str]):
                 if len(display_name) > 30 and 'NPF_' in display_name:
                     display_name = desc if desc and desc != iface['name'] else f"...{display_name[-20:]}"
 
-                status = "???" if iface.get('is_up', True) else "???"
+                status = "UP" if iface.get('is_up', True) else "DOWN"
 
                 click.echo(f"  {status} {display_name:30}")
                 if iface.get('ips'):
                     click.echo(f"      IPs: {', '.join(iface['ips'])}")
-                click.echo(f"      Use: asphalt capture --interface "{iface['name']}"")
+                click.echo(f"      Use: asphalt capture --interface \"{iface['name']}\"")
 
         if not interfaces:
-            click.echo("
-No real interfaces found.")
-            click.echo("Note: Interface names are GUIDs like \Device\NPF_{...}")
+            click.echo("\nNo real interfaces found.")
+            click.echo("Note: Interface names are GUIDs like \\Device\\NPF_{...}")
             click.echo("      Use the exact name shown above for capture.")
 
         return
 
-# Create config
+    # Create config
     config = CaptureConfig(
         interface=interface,
         filter=filter,

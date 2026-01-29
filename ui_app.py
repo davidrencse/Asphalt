@@ -391,6 +391,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
 
         self.latest_packets = []
         self.latest_analysis = {}
+        self._packet_search_cache = []
 
         self.ui_call.connect(lambda fn: fn())
         self._build_ui()
@@ -1414,7 +1415,17 @@ class AsphaltApp(QtWidgets.QMainWindow):
         self.chart_tabs = QtWidgets.QTabWidget()
         charts_layout.addWidget(self.chart_tabs)
         self.chart_frames = {}
-        for name in ["Traffic", "Protocols", "Talkers", "TCP", "Packet Sizes"]:
+        for name in [
+            "Traffic",
+            "Protocols",
+            "IP Versions",
+            "Talkers",
+            "Top Flows (Bytes)",
+            "Top Flows (Packets)",
+            "Flow States",
+            "TCP",
+            "Packet Sizes",
+        ]:
             frame = QtWidgets.QWidget()
             frame.setLayout(QtWidgets.QVBoxLayout())
             frame.layout().setContentsMargins(6, 6, 6, 6)
@@ -1603,16 +1614,42 @@ class AsphaltApp(QtWidgets.QMainWindow):
         self._mpl_clear_frame(frame)
         layout = frame.layout()
         if not self.has_mpl:
-            table = self._make_table(["bucket", "count"])
-            rows = [{"bucket": b, "count": c} for b, c in zip(bucket_labels, counts)]
-            self._set_dynamic_rows(table, rows, ["bucket", "count"])
+            table = self._make_table(["bucket", "count", "percent"])
+            total = sum(c for c in counts if isinstance(c, (int, float)))
+            rows = []
+            for b, c in zip(bucket_labels, counts):
+                pct = (float(c) / total * 100.0) if total else 0.0
+                rows.append({"bucket": b, "count": c, "percent": f"{pct:.1f}%"})
+            self._set_dynamic_rows(table, rows, ["bucket", "count", "percent"])
             layout.addWidget(table)
             return
         fig = Figure(figsize=(12, 9))
         ax = fig.add_subplot(111)
-        ax.bar(bucket_labels, counts)
+        safe_counts = [c if isinstance(c, (int, float)) else 0 for c in counts]
+        total = sum(safe_counts)
+        bars = ax.bar(bucket_labels, safe_counts, color="#7b6cff", alpha=0.85)
         ax.set_title(title)
-        ax.tick_params(axis='x', rotation=30)
+        ax.set_xlabel("Packet size buckets (bytes)")
+        ax.set_ylabel("Packets")
+        ax.tick_params(axis='x', rotation=25, labelsize=9)
+        ax.grid(axis='y', linestyle='--', alpha=0.25)
+        if total:
+            ax.text(0.99, 0.98, f"Total: {int(total):,}", transform=ax.transAxes,
+                    ha="right", va="top", fontsize=9, color="#c7c7c7")
+        for bar, count in zip(bars, safe_counts):
+            if count <= 0:
+                continue
+            pct = (count / total * 100.0) if total else 0.0
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height(),
+                f"{int(count)} ({pct:.1f}%)",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+                color="#e6e9ef",
+            )
+        fig.subplots_adjust(bottom=0.22, top=0.92, left=0.08, right=0.98)
         canvas = FigureCanvas(fig)
         canvas.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Expanding)
 
@@ -1698,6 +1735,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
             print(f"DEBUG: Analysis keys: {list(analysis.keys())}")
             self.latest_packets = packets
             self.latest_analysis = analysis
+            self._packet_search_cache = self._build_packet_search_cache(packets)
             self.ui_call.emit(self.refresh_all)
         except Exception as exc:
             msg = str(exc)
@@ -2012,9 +2050,11 @@ class AsphaltApp(QtWidgets.QMainWindow):
         if not term:
             self.refresh_packets()
             return
+        if len(self._packet_search_cache) != len(self.latest_packets):
+            self._packet_search_cache = self._build_packet_search_cache(self.latest_packets)
         filtered = []
-        for packet in self.latest_packets:
-            if term in json.dumps(packet).lower():
+        for packet, hay in zip(self.latest_packets, self._packet_search_cache):
+            if term in hay:
                 filtered.append(packet)
         packets = filtered
         preferred = [
@@ -2051,6 +2091,15 @@ class AsphaltApp(QtWidgets.QMainWindow):
                     self.packet_table.setItem(r, c, QtWidgets.QTableWidgetItem(str(val)))
             else:
                 self.packet_table.setItem(r, 0, QtWidgets.QTableWidgetItem(str(pkt)))
+
+    def _build_packet_search_cache(self, packets):
+        cache = []
+        for packet in packets or []:
+            try:
+                cache.append(json.dumps(packet).lower())
+            except Exception:
+                cache.append(str(packet).lower())
+        return cache
 
     def download_capture(self):
         if not self.latest_packets:
@@ -2541,6 +2590,19 @@ class AsphaltApp(QtWidgets.QMainWindow):
             values = [(float(counts[k]) / total * 100.0) if total else 0.0 for k in labels]
         self._mpl_pie(self.chart_frames["Protocols"], labels, values, "Protocol Mix")
 
+        gs = analysis.get("global_results", {}).get("global_stats", {})
+        ip_versions = {}
+        if isinstance(gs, dict):
+            ip_versions = gs.get("ip_versions") or (gs.get("distributions", {}) or {}).get("ip_versions") or {}
+        if isinstance(ip_versions, dict) and ip_versions:
+            v4 = ip_versions.get("4") or ip_versions.get(4) or 0
+            v6 = ip_versions.get("6") or ip_versions.get(6) or 0
+            ip_labels = ["IPv4", "IPv6"]
+            ip_values = [v4, v6]
+        else:
+            ip_labels, ip_values = [], []
+        self._mpl_pie(self.chart_frames["IP Versions"], ip_labels, ip_values, "IP Version Mix")
+
         talkers = analysis.get("global_results", {}).get("top_entities", {}).get("ip_talkers", {}).get("top_src", [])
         if isinstance(talkers, list):
             sorted_talkers = sorted([t for t in talkers if isinstance(t, dict)], key=lambda x: x.get("bytes", 0), reverse=True)[:10]
@@ -2556,6 +2618,54 @@ class AsphaltApp(QtWidgets.QMainWindow):
             orientation="h",
             label_fontsize=8,
             xlabel="Bytes",
+        )
+
+        flow_analytics = analysis.get("global_results", {}).get("flow_analytics", {})
+        heavy = flow_analytics.get("heavy_hitters", {}) if isinstance(flow_analytics, dict) else {}
+        top_by_bytes = heavy.get("top_by_bytes", []) if isinstance(heavy, dict) else []
+        if isinstance(top_by_bytes, list):
+            flow_labels = [f.get("label", f.get("flow_id", "?")) for f in top_by_bytes]
+            flow_values = [f.get("bytes", 0) for f in top_by_bytes]
+        else:
+            flow_labels, flow_values = [], []
+        self._mpl_bar(
+            self.chart_frames["Top Flows (Bytes)"],
+            flow_labels,
+            flow_values,
+            "Top Flows by Bytes",
+            orientation="h",
+            label_fontsize=8,
+            xlabel="Bytes",
+        )
+
+        top_by_packets = heavy.get("top_by_packets", []) if isinstance(heavy, dict) else []
+        if isinstance(top_by_packets, list):
+            flow_labels = [f.get("label", f.get("flow_id", "?")) for f in top_by_packets]
+            flow_values = [f.get("packets", 0) for f in top_by_packets]
+        else:
+            flow_labels, flow_values = [], []
+        self._mpl_bar(
+            self.chart_frames["Top Flows (Packets)"],
+            flow_labels,
+            flow_values,
+            "Top Flows by Packets",
+            orientation="h",
+            label_fontsize=8,
+            xlabel="Packets",
+        )
+
+        states = flow_analytics.get("states", {}) if isinstance(flow_analytics, dict) else {}
+        if isinstance(states, dict) and states:
+            state_labels = list(states.keys())
+            state_values = [states[k] for k in state_labels]
+        else:
+            state_labels, state_values = [], []
+        self._mpl_bar(
+            self.chart_frames["Flow States"],
+            state_labels,
+            state_values,
+            "Flow State Breakdown",
+            xrot=30,
         )
 
         tcp = analysis.get("global_results", {}).get("tcp_reliability", {})
