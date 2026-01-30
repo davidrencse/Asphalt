@@ -336,8 +336,8 @@ def _fmt_ts_utc(ts_us):
     if ts_us is None:
         return "n/a"
     try:
-        dt = datetime.fromtimestamp(ts_us / 1_000_000, tz=timezone.utc)
-        return dt.strftime("%H:%M:%S.%f")[:-3] + "Z"
+        dt = datetime.fromtimestamp(ts_us / 1_000_000)
+        return dt.strftime("%I:%M:%S %p").lstrip("0")
     except (TypeError, ValueError, OSError):
         return "n/a"
 
@@ -416,11 +416,20 @@ class AsphaltApp(QtWidgets.QMainWindow):
         body = QtWidgets.QFrame()
         body.setObjectName("body")
         body_layout = QtWidgets.QVBoxLayout(body)
-        body_layout.setContentsMargins(16, 12, 16, 16)
-        body_layout.setSpacing(10)
+        body_layout.setContentsMargins(8, 8, 8, 8)
+        body_layout.setSpacing(0)
         chrome_layout.addWidget(body, 1)
 
-        root = body_layout
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+        body_layout.addWidget(scroll)
+
+        content = QtWidgets.QWidget()
+        scroll.setWidget(content)
+        root = QtWidgets.QVBoxLayout(content)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(10)
 
         header = QtWidgets.QVBoxLayout()
         title = QtWidgets.QLabel("Asphalt Live Decode")
@@ -503,6 +512,43 @@ class AsphaltApp(QtWidgets.QMainWindow):
         analysis_row.addWidget(self._stat_block("Packet Chunks", self.analysis_chunks))
         root.addLayout(analysis_row)
 
+        # Packet overview (Wireshark-style list with inline details)
+        overview_box, overview_layout = self._make_section("Packet Overview")
+        overview_controls = QtWidgets.QHBoxLayout()
+        overview_controls.addWidget(QtWidgets.QLabel("Group by"))
+        self.group_ip_btn = QtWidgets.QPushButton("IP Version")
+        self.group_ip_btn.setCheckable(True)
+        self.group_l4_btn = QtWidgets.QPushButton("L4 Protocol")
+        self.group_l4_btn.setCheckable(True)
+        self.group_ip_btn.setChecked(True)
+        group_buttons = QtWidgets.QButtonGroup(self)
+        group_buttons.setExclusive(True)
+        group_buttons.addButton(self.group_ip_btn)
+        group_buttons.addButton(self.group_l4_btn)
+        overview_controls.addWidget(self.group_ip_btn)
+        overview_controls.addWidget(self.group_l4_btn)
+        overview_controls.addStretch(1)
+        overview_layout.addLayout(overview_controls)
+
+        self.packet_overview = QtWidgets.QTreeWidget()
+        self.packet_overview.setColumnCount(7)
+        self.packet_overview.setHeaderLabels(["No.", "Time", "Source", "Destination", "Protocol", "Length", "Info"])
+        self.packet_overview.setRootIsDecorated(True)
+        self.packet_overview.setAlternatingRowColors(True)
+        self.packet_overview.setStyleSheet("background-color: %s; color: %s;" % (BG_PANEL, FG_TEXT))
+        self.packet_overview.setMinimumHeight(280)
+        header = self.packet_overview.header()
+        header.setStretchLastSection(True)
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
+        header.setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
+        header.setSectionResizeMode(4, QtWidgets.QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QtWidgets.QHeaderView.ResizeToContents)
+        self.packet_overview.setTextElideMode(QtCore.Qt.ElideNone)
+        overview_layout.addWidget(self.packet_overview)
+        root.addWidget(overview_box)
+
         self.main_tabs = QtWidgets.QTabWidget()
         self.main_tabs.setStyleSheet(
             "QTabWidget::pane { border: 0; }"
@@ -527,6 +573,9 @@ class AsphaltApp(QtWidgets.QMainWindow):
         self._build_packet_tab()
 
         self._apply_theme()
+        self.group_ip_btn.clicked.connect(lambda _checked=False: self.refresh_packet_overview())
+        self.group_l4_btn.clicked.connect(lambda _checked=False: self.refresh_packet_overview())
+        self.packet_overview.itemClicked.connect(self._on_packet_overview_click)
 
     def _build_title_bar(self):
         bar = QtWidgets.QFrame()
@@ -1823,6 +1872,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
         self.refresh_technical_information()
         self.refresh_dashboard()
         self.refresh_packets()
+        self.refresh_packet_overview()
 
     def refresh_summary(self):
         totals = self._get_global_totals(self.latest_analysis)
@@ -2076,8 +2126,8 @@ class AsphaltApp(QtWidgets.QMainWindow):
         self._refresh_dashboard_charts(analysis)
         self._refresh_dashboard_diagnostics(analysis)
 
-    def refresh_packets(self):
-        packets = self.latest_packets or []
+    def refresh_packets(self, packets=None):
+        packets = packets if packets is not None else (self.latest_packets or [])
         preferred = [
             "packet_id", "timestamp_us", "stack_summary",
             "src_ip", "dst_ip", "src_port", "dst_port",
@@ -2117,6 +2167,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
         term = self.filter_edit.text().strip().lower()
         if not term:
             self.refresh_packets()
+            self.refresh_packet_overview()
             return
         if len(self._packet_search_cache) != len(self.latest_packets):
             self._packet_search_cache = self._build_packet_search_cache(self.latest_packets)
@@ -2159,6 +2210,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
                     self.packet_table.setItem(r, c, QtWidgets.QTableWidgetItem(str(val)))
             else:
                 self.packet_table.setItem(r, 0, QtWidgets.QTableWidgetItem(str(pkt)))
+        self.refresh_packet_overview(packets)
 
     def _build_packet_search_cache(self, packets):
         cache = []
@@ -2168,6 +2220,135 @@ class AsphaltApp(QtWidgets.QMainWindow):
             except Exception:
                 cache.append(str(packet).lower())
         return cache
+
+    def refresh_packet_overview(self, packets=None):
+        if isinstance(packets, bool):
+            packets = None
+        packets = packets if packets is not None else (self.latest_packets or [])
+        grouping = "ip" if self.group_ip_btn.isChecked() else "l4"
+        self.packet_overview.clear()
+
+        groups = self._group_packets(packets, grouping)
+        for group_name, group_packets in groups:
+            group_item = QtWidgets.QTreeWidgetItem([group_name])
+            group_item.setFirstColumnSpanned(True)
+            group_item.setFlags(group_item.flags() & ~QtCore.Qt.ItemIsSelectable)
+            group_item.setExpanded(True)
+            self.packet_overview.addTopLevelItem(group_item)
+
+            for pkt in group_packets:
+                row = self._packet_row(pkt)
+                item = QtWidgets.QTreeWidgetItem(row)
+                item.setChildIndicatorPolicy(QtWidgets.QTreeWidgetItem.ShowIndicator)
+                group_item.addChild(item)
+                self._add_packet_details(item, pkt)
+
+        for col in range(6):
+            self.packet_overview.resizeColumnToContents(col)
+
+    def _group_packets(self, packets, mode):
+        groups = {}
+        if mode == "ip":
+            for pkt in packets:
+                ip_version = pkt.get("ip_version") if isinstance(pkt, dict) else None
+                if ip_version == 4:
+                    key = "IPv4"
+                elif ip_version == 6:
+                    key = "IPv6"
+                elif pkt.get("is_arp") if isinstance(pkt, dict) else False:
+                    key = "ARP"
+                else:
+                    key = "Other"
+                groups.setdefault(key, []).append(pkt)
+        else:
+            for pkt in packets:
+                proto = pkt.get("l4_protocol") if isinstance(pkt, dict) else None
+                if not proto:
+                    if pkt.get("is_arp") if isinstance(pkt, dict) else False:
+                        proto = "ARP"
+                    elif pkt.get("ip_protocol") == 1:
+                        proto = "ICMP"
+                    elif pkt.get("ip_protocol") == 2:
+                        proto = "IGMP"
+                    else:
+                        proto = "Other"
+                groups.setdefault(proto, []).append(pkt)
+        order = sorted(groups.keys(), key=lambda k: ("Other" in k, k))
+        return [(k, groups[k]) for k in order]
+
+    def _packet_row(self, pkt):
+        if not isinstance(pkt, dict):
+            return ["-", "-", "-", "-", "-", "-", str(pkt)]
+        ts = pkt.get("timestamp_us")
+        time_str = _fmt_ts_utc(ts) if ts else "-"
+        src = pkt.get("src_ip") or pkt.get("src_mac") or "-"
+        dst = pkt.get("dst_ip") or pkt.get("dst_mac") or "-"
+        proto = pkt.get("l4_protocol") or ("ARP" if pkt.get("is_arp") else pkt.get("stack_summary")) or "-"
+        length = pkt.get("captured_length") or pkt.get("original_length") or "-"
+        info = pkt.get("stack_summary") or "-"
+        if pkt.get("dns_qname"):
+            info = f"DNS {pkt.get('dns_qname')}"
+        elif pkt.get("tcp_flags_names"):
+            info = f"TCP {','.join(pkt.get('tcp_flags_names') or [])}"
+        return [
+            str(pkt.get("packet_id", "-")),
+            time_str,
+            str(src),
+            str(dst),
+            str(proto),
+            str(length),
+            str(info),
+        ]
+
+    def _add_packet_details(self, parent_item, pkt):
+        if not isinstance(pkt, dict):
+            return
+        self._add_detail_section(parent_item, "Ethernet", [
+            ("src_mac", pkt.get("src_mac")),
+            ("dst_mac", pkt.get("dst_mac")),
+            ("eth_type", pkt.get("eth_type")),
+        ])
+        self._add_detail_section(parent_item, "IP", [
+            ("ip_version", pkt.get("ip_version")),
+            ("src_ip", pkt.get("src_ip")),
+            ("dst_ip", pkt.get("dst_ip")),
+            ("ttl", pkt.get("ttl")),
+        ])
+        self._add_detail_section(parent_item, "Transport", [
+            ("l4_protocol", pkt.get("l4_protocol")),
+            ("src_port", pkt.get("src_port")),
+            ("dst_port", pkt.get("dst_port")),
+            ("tcp_flags", ",".join(pkt.get("tcp_flags_names") or []) if pkt.get("tcp_flags_names") else None),
+            ("tcp_seq", pkt.get("tcp_seq")),
+            ("tcp_ack", pkt.get("tcp_ack")),
+            ("tcp_window", pkt.get("tcp_window")),
+            ("tcp_mss", pkt.get("tcp_mss")),
+        ])
+        self._add_detail_section(parent_item, "DNS", [
+            ("qname", pkt.get("dns_qname")),
+            ("is_query", pkt.get("dns_is_query")),
+            ("is_response", pkt.get("dns_is_response")),
+            ("rcode", pkt.get("dns_rcode")),
+        ])
+
+    def _add_detail_section(self, parent_item, title, rows):
+        section = QtWidgets.QTreeWidgetItem([title])
+        section.setFirstColumnSpanned(True)
+        section.setFlags(section.flags() & ~QtCore.Qt.ItemIsSelectable)
+        parent_item.addChild(section)
+        for key, value in rows:
+            if value is None or value == "":
+                continue
+            item = QtWidgets.QTreeWidgetItem([str(key), "", "", "", "", "", str(value)])
+            section.addChild(item)
+
+    def _on_packet_overview_click(self, item, _column):
+        # Toggle packet rows (depth=1 under group)
+        parent = item.parent()
+        if parent is None:
+            return
+        if parent.parent() is None:
+            item.setExpanded(not item.isExpanded())
 
     def download_capture(self):
         if not self.latest_packets:
