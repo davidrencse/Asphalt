@@ -495,21 +495,30 @@ class AsphaltApp(QtWidgets.QMainWindow):
         self.stat_ip = self._value_label("0 / 0")
         self.stat_l4 = self._value_label("0 / 0")
         self.stat_flows = self._value_label("0")
-        stats_row.addWidget(self._stat_block("Packets", self.stat_packets))
-        stats_row.addWidget(self._stat_block("IPv4 / IPv6", self.stat_ip))
-        stats_row.addWidget(self._stat_block("TCP / UDP", self.stat_l4))
-        stats_row.addWidget(self._stat_block("Flows", self.stat_flows))
+        stats_row.addWidget(self._stat_block("Packets", self.stat_packets, width=150))
+        self.stat_rst = self._value_label("-")
+        stats_row.addWidget(self._stat_block("RST %", self.stat_rst, width=150))
+        stats_row.addWidget(self._stat_block("IPv4 / IPv6", self.stat_ip, width=150))
+        self.stat_drops = self._value_label("-")
+        stats_row.addWidget(self._stat_block("Drops", self.stat_drops, width=150))
+        stats_row.addWidget(self._stat_block("TCP / UDP", self.stat_l4, width=150))
+        self.stat_top_proto = self._value_label("-")
+        stats_row.addWidget(self._stat_block("Top Protocol", self.stat_top_proto, width=150))
+        stats_row.addWidget(self._stat_block("Flows", self.stat_flows, width=150))
         root.addLayout(stats_row)
 
         analysis_row = QtWidgets.QHBoxLayout()
         self.analysis_protocol = self._value_label("-")
-        self.analysis_abnormal = self._value_label("-")
+        self.analysis_bytes = self._value_label("-")
         self.analysis_handshake = self._value_label("-")
         self.analysis_chunks = self._value_label("-")
-        analysis_row.addWidget(self._stat_block("Protocol Mix", self.analysis_protocol))
-        analysis_row.addWidget(self._stat_block("Abnormal Activity", self.analysis_abnormal))
-        analysis_row.addWidget(self._stat_block("TCP Handshakes", self.analysis_handshake))
-        analysis_row.addWidget(self._stat_block("Packet Chunks", self.analysis_chunks))
+        analysis_row.addWidget(self._stat_block("Protocol Mix", self.analysis_protocol, width=150))
+        analysis_row.addWidget(self._stat_block("", self._value_label(""), width=150))
+        analysis_row.addWidget(self._stat_block("Bytes Captured", self.analysis_bytes, width=150))
+        analysis_row.addWidget(self._stat_block("", self._value_label(""), width=150))
+        analysis_row.addWidget(self._stat_block("TCP Handshakes", self.analysis_handshake, width=150))
+        analysis_row.addWidget(self._stat_block("Packet Chunks", self.analysis_chunks, width=150))
+        analysis_row.addWidget(self._stat_block("", self._value_label(""), width=150))
         root.addLayout(analysis_row)
 
         # Packet overview (Wireshark-style list with inline details)
@@ -803,11 +812,13 @@ class AsphaltApp(QtWidgets.QMainWindow):
         label.setWordWrap(True)
         return label
 
-    def _stat_block(self, title, value_label):
+    def _stat_block(self, title, value_label, width=None):
         frame = QtWidgets.QFrame()
         frame.setStyleSheet("background-color: %s;" % BG_PANEL)
+        if width:
+            frame.setFixedWidth(width)
         layout = QtWidgets.QVBoxLayout(frame)
-        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setContentsMargins(8, 6, 8, 6)
         title_label = QtWidgets.QLabel(title)
         title_label.setStyleSheet("color: %s;" % FG_MUTED)
         layout.addWidget(title_label)
@@ -1899,10 +1910,24 @@ class AsphaltApp(QtWidgets.QMainWindow):
                 flows = len(flow_list)
         self.stat_flows.setText(_fmt_count(flows))
 
+        tcp_rel = self.latest_analysis.get("global_results", {}).get("tcp_reliability", {})
+        rst_rate = tcp_rel.get("rst_rate") if isinstance(tcp_rel, dict) else None
+        self.stat_rst.setText(_fmt_pct(rst_rate))
+
+        capture_health = self.latest_analysis.get("global_results", {}).get("capture_health", {})
+        drops = ((capture_health.get("capture_quality", {}) or {}).get("drops", {}) or {}).get("dropped_packets")
+        self.stat_drops.setText(_fmt_count(drops))
+
         protocol_mix = self.latest_analysis.get("global_results", {}).get("protocol_mix", {})
         self.analysis_protocol.setText(f"{len(protocol_mix.get('protocol_counts', {}) or {})} protocols")
-        abnormal = self.latest_analysis.get("global_results", {}).get("abnormal_activity", {})
-        self.analysis_abnormal.setText(str(abnormal.get("summary", "-")))
+        top_proto = "-"
+        if isinstance(protocol_mix, dict):
+            counts = protocol_mix.get("protocol_counts") or {}
+            if isinstance(counts, dict) and counts:
+                top_proto = max(counts.items(), key=lambda kv: kv[1])[0]
+        self.stat_top_proto.setText(str(top_proto))
+        bytes_captured = totals.get("bytes") or totals.get("bytes_captured")
+        self.analysis_bytes.setText(_fmt_bytes(bytes_captured))
         handshake = self.latest_analysis.get("global_results", {}).get("tcp_handshakes", {})
         if handshake:
             total = handshake.get("handshakes_total")
