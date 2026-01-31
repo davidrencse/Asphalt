@@ -568,6 +568,9 @@ class AsphaltApp(QtWidgets.QMainWindow):
         self.packet_overview.setAlternatingRowColors(True)
         self.packet_overview.setStyleSheet("background-color: %s; color: %s;" % (BG_PANEL, FG_TEXT))
         self.packet_overview.setMinimumHeight(280)
+        self._packet_overview_resized = False
+        self._packet_overview_loaded_ids = set()
+        self._packet_group_cache = {"ip": None, "l4": None}
         header = self.packet_overview.header()
         header.setStretchLastSection(True)
         header.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
@@ -608,6 +611,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
         self.group_ip_btn.clicked.connect(lambda _checked=False: self.refresh_packet_overview())
         self.group_l4_btn.clicked.connect(lambda _checked=False: self.refresh_packet_overview())
         self.packet_overview.itemClicked.connect(self._on_packet_overview_click)
+        self.packet_overview.itemExpanded.connect(self._on_packet_overview_expand)
         for cb in [
             self.osi_l2_eth, self.osi_l2_arp,
             self.osi_l3_ipv4, self.osi_l3_ipv6,
@@ -1895,6 +1899,8 @@ class AsphaltApp(QtWidgets.QMainWindow):
             self.latest_packets = packets
             self.latest_analysis = analysis
             self._packet_search_cache = self._build_packet_search_cache(packets)
+            self._packet_search_cache_id = id(packets)
+            self._packet_search_cache_len = len(packets)
             self.ui_call.emit(self.refresh_all)
         except Exception as exc:
             msg = str(exc)
@@ -1918,6 +1924,14 @@ class AsphaltApp(QtWidgets.QMainWindow):
 
     def refresh_summary(self):
         totals = self._get_global_totals(self.latest_analysis)
+        cached = getattr(self, "_cached_quick_counts", None)
+        if isinstance(cached, dict) and cached.get("packet_count") == len(self.latest_packets or []):
+            self.analysis_eth.setText(_fmt_count(cached.get("eth_count")))
+            self.analysis_dns.setText(_fmt_count(cached.get("dns_count")))
+            self.analysis_unique_ips.setText(_fmt_count(cached.get("unique_ip_count")))
+            cached_valid = True
+        else:
+            cached_valid = False
         packets = totals.get("packets")
         bytes_total = totals.get("bytes") or totals.get("bytes_captured") or totals.get("bytes_original")
         duration_us = totals.get("duration_us")
@@ -1987,26 +2001,32 @@ class AsphaltApp(QtWidgets.QMainWindow):
             chunks = packet_chunks if isinstance(packet_chunks, list) else []
         count = len(chunks) if isinstance(chunks, list) else 0
         self.analysis_chunks.setText(_fmt_count(count))
-
-        eth_count = 0
-        dns_count = 0
-        unique_ips = set()
-        for pkt in self.latest_packets or []:
-            if not isinstance(pkt, dict):
-                continue
-            if pkt.get("is_arp") or pkt.get("src_mac") or pkt.get("dst_mac") or pkt.get("eth_type"):
-                eth_count += 1
-            if pkt.get("dns_qname") or pkt.get("dns_rcode") is not None or pkt.get("dns_is_query") or pkt.get("dns_is_response"):
-                dns_count += 1
-            src_ip = pkt.get("src_ip")
-            dst_ip = pkt.get("dst_ip")
-            if src_ip:
-                unique_ips.add(src_ip)
-            if dst_ip:
-                unique_ips.add(dst_ip)
-        self.analysis_eth.setText(_fmt_count(eth_count))
-        self.analysis_dns.setText(_fmt_count(dns_count))
-        self.analysis_unique_ips.setText(_fmt_count(len(unique_ips)))
+        if not cached_valid:
+            eth_count = 0
+            dns_count = 0
+            unique_ips = set()
+            for pkt in self.latest_packets or []:
+                if not isinstance(pkt, dict):
+                    continue
+                if pkt.get("is_arp") or pkt.get("src_mac") or pkt.get("dst_mac") or pkt.get("eth_type"):
+                    eth_count += 1
+                if pkt.get("dns_qname") or pkt.get("dns_rcode") is not None or pkt.get("dns_is_query") or pkt.get("dns_is_response"):
+                    dns_count += 1
+                src_ip = pkt.get("src_ip")
+                dst_ip = pkt.get("dst_ip")
+                if src_ip:
+                    unique_ips.add(src_ip)
+                if dst_ip:
+                    unique_ips.add(dst_ip)
+            self.analysis_eth.setText(_fmt_count(eth_count))
+            self.analysis_dns.setText(_fmt_count(dns_count))
+            self.analysis_unique_ips.setText(_fmt_count(len(unique_ips)))
+            self._cached_quick_counts = {
+                "eth_count": eth_count,
+                "dns_count": dns_count,
+                "unique_ip_count": len(unique_ips),
+                "packet_count": len(self.latest_packets or []),
+            }
 
     def refresh_raw_data(self):
         analysis = self.latest_analysis.get("global_results", {})
@@ -2245,8 +2265,14 @@ class AsphaltApp(QtWidgets.QMainWindow):
             self.refresh_packets()
             self.refresh_packet_overview()
             return
-        if len(self._packet_search_cache) != len(self.latest_packets):
+        if (
+            len(self._packet_search_cache) != len(self.latest_packets)
+            or getattr(self, "_packet_search_cache_id", None) != id(self.latest_packets)
+            or getattr(self, "_packet_search_cache_len", None) != len(self.latest_packets)
+        ):
             self._packet_search_cache = self._build_packet_search_cache(self.latest_packets)
+            self._packet_search_cache_id = id(self.latest_packets)
+            self._packet_search_cache_len = len(self.latest_packets)
         filtered = []
         for packet, hay in zip(self.latest_packets, self._packet_search_cache):
             if term in hay:
@@ -2303,11 +2329,40 @@ class AsphaltApp(QtWidgets.QMainWindow):
         packets = packets if packets is not None else (self.latest_packets or [])
         if not isinstance(packets, (list, tuple)):
             packets = self.latest_packets or []
-        packets = self._filter_packets_by_osi(packets)
         grouping = "ip" if self.group_ip_btn.isChecked() else "l4"
+        filters = self._get_selected_osi_filters()
+        can_skip = packets is self.latest_packets
+        if can_skip:
+            sig = (
+                id(self.latest_packets),
+                len(self.latest_packets),
+                grouping,
+                tuple(sorted(filters["l2"])),
+                tuple(sorted(filters["l3"])),
+                tuple(sorted(filters["l4"])),
+                tuple(sorted(filters["app"])),
+            )
+            if getattr(self, "_packet_overview_sig", None) == sig:
+                return
+            self._packet_overview_sig = sig
+        packets = self._filter_packets_by_osi(packets)
         self.packet_overview.clear()
-
-        groups = self._group_packets(packets, grouping)
+        self._packet_overview_loaded_ids = set()
+        can_cache = (
+            packets is self.latest_packets
+            and not any(filters.values())
+        )
+        cache_entry = self._packet_group_cache.get(grouping)
+        if can_cache and cache_entry and cache_entry.get("packets_id") == id(self.latest_packets) and cache_entry.get("count") == len(self.latest_packets):
+            groups = cache_entry.get("groups", [])
+        else:
+            groups = self._group_packets(packets, grouping)
+            if can_cache:
+                self._packet_group_cache[grouping] = {
+                    "packets_id": id(self.latest_packets),
+                    "count": len(self.latest_packets),
+                    "groups": groups,
+                }
         for group_name, group_packets in groups:
             group_item = QtWidgets.QTreeWidgetItem([group_name])
             group_item.setFirstColumnSpanned(True)
@@ -2319,11 +2374,15 @@ class AsphaltApp(QtWidgets.QMainWindow):
                 row = self._packet_row(pkt)
                 item = QtWidgets.QTreeWidgetItem(row)
                 item.setChildIndicatorPolicy(QtWidgets.QTreeWidgetItem.ShowIndicator)
+                if isinstance(pkt, dict) and "packet_id" in pkt:
+                    item.setData(0, QtCore.Qt.UserRole, pkt.get("packet_id"))
+                item.setData(1, QtCore.Qt.UserRole, pkt)
                 group_item.addChild(item)
-                self._add_packet_details(item, pkt)
 
-        for col in range(7):
-            self.packet_overview.resizeColumnToContents(col)
+        if not self._packet_overview_resized and self.packet_overview.topLevelItemCount() > 0:
+            for col in range(7):
+                self.packet_overview.resizeColumnToContents(col)
+            self._packet_overview_resized = True
 
     def _filter_packets_by_osi(self, packets):
         if not isinstance(packets, (list, tuple)):
@@ -2497,6 +2556,18 @@ class AsphaltApp(QtWidgets.QMainWindow):
         if not isinstance(pkt, dict):
             return tags
 
+        cached = pkt.get("_osi_tags_ui")
+        if isinstance(cached, dict):
+            try:
+                return {
+                    "l2": set(cached.get("l2") or []),
+                    "l3": set(cached.get("l3") or []),
+                    "l4": set(cached.get("l4") or []),
+                    "app": set(cached.get("app") or []),
+                }
+            except Exception:
+                pass
+
         raw_tags = pkt.get("osi_tags") or []
         if isinstance(raw_tags, str):
             raw_tags = [raw_tags]
@@ -2547,6 +2618,12 @@ class AsphaltApp(QtWidgets.QMainWindow):
             if pkt.get("dns_qname") or pkt.get("dns_rcode") is not None or pkt.get("dns_is_query") or pkt.get("dns_is_response"):
                 tags["app"].add("dns")
 
+        pkt["_osi_tags_ui"] = {
+            "l2": sorted(tags["l2"]),
+            "l3": sorted(tags["l3"]),
+            "l4": sorted(tags["l4"]),
+            "app": sorted(tags["app"]),
+        }
         return tags
 
     def _clear_osi_filters(self):
@@ -2565,6 +2642,26 @@ class AsphaltApp(QtWidgets.QMainWindow):
             return
         if parent.parent() is None:
             item.setExpanded(not item.isExpanded())
+            if item.isExpanded():
+                self._ensure_packet_details(item)
+
+    def _on_packet_overview_expand(self, item):
+        parent = item.parent()
+        if parent is None:
+            return
+        if parent.parent() is None:
+            self._ensure_packet_details(item)
+
+    def _ensure_packet_details(self, item):
+        pkt = item.data(1, QtCore.Qt.UserRole)
+        if not isinstance(pkt, dict):
+            return
+        pkt_id = item.data(0, QtCore.Qt.UserRole)
+        if pkt_id in self._packet_overview_loaded_ids:
+            return
+        if pkt_id is not None:
+            self._packet_overview_loaded_ids.add(pkt_id)
+        self._add_packet_details(item, pkt)
 
     def download_capture(self):
         if not self.latest_packets:
