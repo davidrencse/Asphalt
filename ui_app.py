@@ -550,7 +550,6 @@ class AsphaltApp(QtWidgets.QMainWindow):
         overview_controls.addWidget(self.group_ip_btn)
         overview_controls.addWidget(self.group_l4_btn)
         overview_controls.addSpacing(10)
-        overview_controls.addWidget(QtWidgets.QLabel("OSI"))
         overview_controls.addWidget(self.osi_l2_eth)
         overview_controls.addWidget(self.osi_l2_arp)
         overview_controls.addWidget(self.osi_l3_ipv4)
