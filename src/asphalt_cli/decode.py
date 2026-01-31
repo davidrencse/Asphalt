@@ -56,7 +56,8 @@ def _format_ports(decoded) -> str:
               default="table", show_default=True, help="Output format")
 @click.option("--output", "output", type=click.Path(dir_okay=False),
               help="Write JSON/JSONL output to file")
-def decode(filepath: str, limit: int, show_quality: bool, format: str, output: Optional[str]):
+@click.option("--filter", "filter_expr", help="Filter expression for decoded packets")
+def decode(filepath: str, limit: int, show_quality: bool, format: str, output: Optional[str], filter_expr: Optional[str]):
     """
     Decode packets from a PCAP/PCAPNG file.
 
@@ -65,6 +66,10 @@ def decode(filepath: str, limit: int, show_quality: bool, format: str, output: O
     """
     reader_cls = _select_reader(filepath)
     decoder = PacketDecoder()
+    predicate = None
+    if filter_expr:
+        from utils.filtering import compile_packet_filter
+        predicate = compile_packet_filter(filter_expr)
 
     try:
         with reader_cls(filepath) as reader:
@@ -81,6 +86,9 @@ def decode(filepath: str, limit: int, show_quality: bool, format: str, output: O
 
             for packet in reader:
                 decoded = decoder.decode(packet)
+                record = decoded.to_dict()
+                if predicate and not predicate(record):
+                    continue
 
                 if format == "table":
                     src = decoded.src_ip or "-"
@@ -96,9 +104,9 @@ def decode(filepath: str, limit: int, show_quality: bool, format: str, output: O
                         f"{stack:<12} {src:<22} {dst:<22} {ports:<10} {l4:<6} {flags:<7} {quality}"
                     )
                 elif format == "json":
-                    records.append(decoded.to_dict())
+                    records.append(record)
                 else:
-                    line = decoded.to_json()
+                    line = json.dumps(record, separators=(",", ":"), ensure_ascii=True)
                     if file_handle:
                         file_handle.write(line + "\n")
                     else:

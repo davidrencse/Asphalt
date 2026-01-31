@@ -190,6 +190,7 @@ class FlowState:
     tcp_rst_seen: bool = False
     tcp_seen: bool = False
     udp_seen: bool = False
+    dns_seen: bool = False
 
     def update_from_packet(self, packet: AnalysisPacket, direction: Direction) -> None:
         self.last_ts_us = max(self.last_ts_us, packet.timestamp_us)
@@ -236,6 +237,8 @@ class FlowState:
 
         if packet.l4_protocol == "UDP" or packet.ip_protocol == 17:
             self.udp_seen = True
+        if packet.dns_qname:
+            self.dns_seen = True
 
     def duration_us(self) -> int:
         if self.packets_total == 0:
@@ -243,6 +246,7 @@ class FlowState:
         return max(0, self.last_ts_us - self.first_ts_us)
 
     def to_dict(self) -> Dict[str, Any]:
+        from .osi import derive_osi_tags_from_flow
         duration = self.duration_us()
         return {
             "flow_id": self.flow_id,
@@ -267,6 +271,8 @@ class FlowState:
             "l4_protocols": self.l4_protocols,
             "tcp_flags": self.tcp_flags,
             "quality_flags": self.quality_flags,
+            "dns_seen": self.dns_seen,
+            "osi_tags": derive_osi_tags_from_flow(self),
         }
 
 @dataclass(frozen=True)
@@ -309,6 +315,7 @@ class AnalysisReport:
     global_results: Dict[str, Any] = field(default_factory=dict)
     flow_results: Dict[str, Any] = field(default_factory=dict)
     time_series: Dict[str, Any] = field(default_factory=dict)
+    osi_summary: Dict[str, Any] = field(default_factory=dict)
     analyzers: List[Dict[str, str]] = field(default_factory=list)
 
     @staticmethod
@@ -323,6 +330,7 @@ class AnalysisReport:
             "global_results": self.global_results,
             "flow_results": self.flow_results,
             "time_series": self.time_series,
+            "osi_summary": self.osi_summary,
             "analyzers": self.analyzers,
         }
 

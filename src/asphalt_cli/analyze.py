@@ -66,6 +66,7 @@ def _parse_analyzers(value: str):
 @click.option("--format", "format", type=click.Choice(["json"]), default="json", show_default=True)
 @click.option("--output", "output", type=click.Path(dir_okay=False),
               help="Write JSON output to file")
+@click.option("--filter", "filter_expr", help="Filter expression for decoded packets")
 def analyze(filepath: str,
             limit: int,
             analyzers: str,
@@ -74,7 +75,8 @@ def analyze(filepath: str,
             scan_port_threshold: int,
             rst_ratio_threshold: float,
             format: str,
-            output: Optional[str]):
+            output: Optional[str],
+            filter_expr: Optional[str]):
     """
     Analyze packets from a PCAP/PCAPNG file.
 
@@ -109,6 +111,10 @@ def analyze(filepath: str,
     reader_cls = _select_reader(filepath)
     decoder = PacketDecoder()
     capture_info = {}
+    predicate = None
+    if filter_expr:
+        from utils.filtering import compile_packet_filter
+        predicate = compile_packet_filter(filter_expr)
 
     try:
         with reader_cls(filepath) as reader:
@@ -119,6 +125,9 @@ def analyze(filepath: str,
             engine = AnalysisEngine(instances, capture_path=filepath, capture_info=capture_info)
             for packet in reader:
                 decoded = decoder.decode(packet)
+                record = decoded.to_dict()
+                if predicate and not predicate(record):
+                    continue
                 engine.process_packet(decoded)
                 if limit > 0 and engine.context.stats["packets_total"] >= limit:
                     break

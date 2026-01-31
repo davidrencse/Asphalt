@@ -512,14 +512,27 @@ class AsphaltApp(QtWidgets.QMainWindow):
         self.analysis_bytes = self._value_label("-")
         self.analysis_handshake = self._value_label("-")
         self.analysis_chunks = self._value_label("-")
+        self.analysis_eth = self._value_label("-")
+        self.analysis_dns = self._value_label("-")
+        self.analysis_unique_ips = self._value_label("-")
         analysis_row.addWidget(self._stat_block("Protocol Mix", self.analysis_protocol, width=150))
-        analysis_row.addWidget(self._stat_block("", self._value_label(""), width=150))
+        analysis_row.addWidget(self._stat_block("Ethernet Connections", self.analysis_eth, width=150))
         analysis_row.addWidget(self._stat_block("Bytes Captured", self.analysis_bytes, width=150))
-        analysis_row.addWidget(self._stat_block("", self._value_label(""), width=150))
+        analysis_row.addWidget(self._stat_block("DNS Connections", self.analysis_dns, width=150))
         analysis_row.addWidget(self._stat_block("TCP Handshakes", self.analysis_handshake, width=150))
         analysis_row.addWidget(self._stat_block("Packet Chunks", self.analysis_chunks, width=150))
-        analysis_row.addWidget(self._stat_block("", self._value_label(""), width=150))
+        analysis_row.addWidget(self._stat_block("Unique IPs", self.analysis_unique_ips, width=150))
         root.addLayout(analysis_row)
+
+        # OSI filter controls (placed in packet overview header later)
+        self.osi_l2_eth = QtWidgets.QCheckBox("Ethernet")
+        self.osi_l2_arp = QtWidgets.QCheckBox("ARP")
+        self.osi_l3_ipv4 = QtWidgets.QCheckBox("IPv4")
+        self.osi_l3_ipv6 = QtWidgets.QCheckBox("IPv6")
+        self.osi_l4_tcp = QtWidgets.QCheckBox("TCP")
+        self.osi_l4_udp = QtWidgets.QCheckBox("UDP")
+        self.osi_app_dns = QtWidgets.QCheckBox("DNS")
+        self.osi_clear_btn = QtWidgets.QPushButton("Clear")
 
         # Packet overview (Wireshark-style list with inline details)
         overview_box, overview_layout = self._make_section("Packet Overview")
@@ -536,12 +549,22 @@ class AsphaltApp(QtWidgets.QMainWindow):
         group_buttons.addButton(self.group_l4_btn)
         overview_controls.addWidget(self.group_ip_btn)
         overview_controls.addWidget(self.group_l4_btn)
+        overview_controls.addSpacing(10)
+        overview_controls.addWidget(QtWidgets.QLabel("OSI"))
+        overview_controls.addWidget(self.osi_l2_eth)
+        overview_controls.addWidget(self.osi_l2_arp)
+        overview_controls.addWidget(self.osi_l3_ipv4)
+        overview_controls.addWidget(self.osi_l3_ipv6)
+        overview_controls.addWidget(self.osi_l4_tcp)
+        overview_controls.addWidget(self.osi_l4_udp)
+        overview_controls.addWidget(self.osi_app_dns)
+        overview_controls.addWidget(self.osi_clear_btn)
         overview_controls.addStretch(1)
         overview_layout.addLayout(overview_controls)
 
         self.packet_overview = QtWidgets.QTreeWidget()
-        self.packet_overview.setColumnCount(7)
-        self.packet_overview.setHeaderLabels(["No.", "Time", "Source", "Destination", "Protocol", "Length", "Info"])
+        self.packet_overview.setColumnCount(8)
+        self.packet_overview.setHeaderLabels(["No.", "Time", "Source", "Destination", "Protocol", "Length", "OSI", "Info"])
         self.packet_overview.setRootIsDecorated(True)
         self.packet_overview.setAlternatingRowColors(True)
         self.packet_overview.setStyleSheet("background-color: %s; color: %s;" % (BG_PANEL, FG_TEXT))
@@ -554,6 +577,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
         header.setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
         header.setSectionResizeMode(4, QtWidgets.QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QtWidgets.QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(6, QtWidgets.QHeaderView.ResizeToContents)
         self.packet_overview.setTextElideMode(QtCore.Qt.ElideNone)
         overview_layout.addWidget(self.packet_overview)
         root.addWidget(overview_box)
@@ -585,6 +609,14 @@ class AsphaltApp(QtWidgets.QMainWindow):
         self.group_ip_btn.clicked.connect(lambda _checked=False: self.refresh_packet_overview())
         self.group_l4_btn.clicked.connect(lambda _checked=False: self.refresh_packet_overview())
         self.packet_overview.itemClicked.connect(self._on_packet_overview_click)
+        for cb in [
+            self.osi_l2_eth, self.osi_l2_arp,
+            self.osi_l3_ipv4, self.osi_l3_ipv6,
+            self.osi_l4_tcp, self.osi_l4_udp,
+            self.osi_app_dns,
+        ]:
+            cb.stateChanged.connect(self.refresh_packet_overview)
+        self.osi_clear_btn.clicked.connect(self._clear_osi_filters)
 
     def _build_title_bar(self):
         bar = QtWidgets.QFrame()
@@ -1957,6 +1989,26 @@ class AsphaltApp(QtWidgets.QMainWindow):
         count = len(chunks) if isinstance(chunks, list) else 0
         self.analysis_chunks.setText(_fmt_count(count))
 
+        eth_count = 0
+        dns_count = 0
+        unique_ips = set()
+        for pkt in self.latest_packets or []:
+            if not isinstance(pkt, dict):
+                continue
+            if pkt.get("is_arp") or pkt.get("src_mac") or pkt.get("dst_mac") or pkt.get("eth_type"):
+                eth_count += 1
+            if pkt.get("dns_qname") or pkt.get("dns_rcode") is not None or pkt.get("dns_is_query") or pkt.get("dns_is_response"):
+                dns_count += 1
+            src_ip = pkt.get("src_ip")
+            dst_ip = pkt.get("dst_ip")
+            if src_ip:
+                unique_ips.add(src_ip)
+            if dst_ip:
+                unique_ips.add(dst_ip)
+        self.analysis_eth.setText(_fmt_count(eth_count))
+        self.analysis_dns.setText(_fmt_count(dns_count))
+        self.analysis_unique_ips.setText(_fmt_count(len(unique_ips)))
+
     def refresh_raw_data(self):
         analysis = self.latest_analysis.get("global_results", {})
 
@@ -2250,6 +2302,9 @@ class AsphaltApp(QtWidgets.QMainWindow):
         if isinstance(packets, bool):
             packets = None
         packets = packets if packets is not None else (self.latest_packets or [])
+        if not isinstance(packets, (list, tuple)):
+            packets = self.latest_packets or []
+        packets = self._filter_packets_by_osi(packets)
         grouping = "ip" if self.group_ip_btn.isChecked() else "l4"
         self.packet_overview.clear()
 
@@ -2268,8 +2323,55 @@ class AsphaltApp(QtWidgets.QMainWindow):
                 group_item.addChild(item)
                 self._add_packet_details(item, pkt)
 
-        for col in range(6):
+        for col in range(7):
             self.packet_overview.resizeColumnToContents(col)
+
+    def _filter_packets_by_osi(self, packets):
+        if not isinstance(packets, (list, tuple)):
+            return list(self.latest_packets or [])
+        filters = self._get_selected_osi_filters()
+        if not any(filters.values()):
+            return list(packets)
+        filtered = []
+        for pkt in packets:
+            lens_tags = self._derive_osi_tags_ui(pkt)
+            if not self._packet_matches_osi_filters(lens_tags, filters):
+                continue
+            filtered.append(pkt)
+        return filtered
+
+    def _packet_matches_osi_filters(self, lens_tags, filters):
+        for lens, wanted in filters.items():
+            if not wanted:
+                continue
+            if not (lens_tags.get(lens) or set()):
+                return False
+            if not (lens_tags.get(lens, set()) & wanted):
+                return False
+        return True
+
+    def _get_selected_osi_filters(self):
+        filters = {
+            "l2": set(),
+            "l3": set(),
+            "l4": set(),
+            "app": set(),
+        }
+        if self.osi_l2_eth.isChecked():
+            filters["l2"].add("ethernet")
+        if self.osi_l2_arp.isChecked():
+            filters["l2"].add("arp")
+        if self.osi_l3_ipv4.isChecked():
+            filters["l3"].add("ipv4")
+        if self.osi_l3_ipv6.isChecked():
+            filters["l3"].add("ipv6")
+        if self.osi_l4_tcp.isChecked():
+            filters["l4"].add("tcp")
+        if self.osi_l4_udp.isChecked():
+            filters["l4"].add("udp")
+        if self.osi_app_dns.isChecked():
+            filters["app"].add("dns")
+        return filters
 
     def _group_packets(self, packets, mode):
         groups = {}
@@ -2303,7 +2405,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
 
     def _packet_row(self, pkt):
         if not isinstance(pkt, dict):
-            return ["-", "-", "-", "-", "-", "-", str(pkt)]
+            return ["-", "-", "-", "-", "-", "-", "-", str(pkt)]
         ts = pkt.get("timestamp_us")
         time_str = _fmt_ts_utc(ts) if ts else "-"
         src = pkt.get("src_ip") or pkt.get("src_mac") or "-"
@@ -2311,6 +2413,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
         proto = pkt.get("l4_protocol") or ("ARP" if pkt.get("is_arp") else pkt.get("stack_summary")) or "-"
         length = pkt.get("captured_length") or pkt.get("original_length") or "-"
         info = pkt.get("stack_summary") or "-"
+        osi_text = self._fmt_osi_tags(pkt)
         if pkt.get("dns_qname"):
             info = f"DNS {pkt.get('dns_qname')}"
         elif pkt.get("tcp_flags_names"):
@@ -2322,6 +2425,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
             str(dst),
             str(proto),
             str(length),
+            osi_text,
             str(info),
         ]
 
@@ -2355,6 +2459,11 @@ class AsphaltApp(QtWidgets.QMainWindow):
             ("is_response", pkt.get("dns_is_response")),
             ("rcode", pkt.get("dns_rcode")),
         ])
+        osi_text = self._fmt_osi_tags(pkt)
+        if osi_text and osi_text != "-":
+            self._add_detail_section(parent_item, "OSI Tags", [
+                ("tags", osi_text),
+            ])
 
     def _add_detail_section(self, parent_item, title, rows):
         section = QtWidgets.QTreeWidgetItem([title])
@@ -2364,8 +2473,91 @@ class AsphaltApp(QtWidgets.QMainWindow):
         for key, value in rows:
             if value is None or value == "":
                 continue
-            item = QtWidgets.QTreeWidgetItem([str(key), "", "", "", "", "", str(value)])
+            cols = max(1, self.packet_overview.columnCount())
+            row = [""] * cols
+            row[0] = str(key)
+            row[-1] = str(value)
+            item = QtWidgets.QTreeWidgetItem(row)
             section.addChild(item)
+
+    def _fmt_osi_tags(self, pkt):
+        tags = self._derive_osi_tags_ui(pkt)
+        parts = []
+        if tags.get("l2"):
+            parts.append("L2 " + "/".join(sorted(tags["l2"])))
+        if tags.get("l3"):
+            parts.append("L3 " + "/".join(sorted(tags["l3"])))
+        if tags.get("l4"):
+            parts.append("L4 " + "/".join(sorted(tags["l4"])))
+        if tags.get("app"):
+            parts.append("APP " + "/".join(sorted(tags["app"])))
+        return " | ".join(parts) if parts else "-"
+
+    def _derive_osi_tags_ui(self, pkt):
+        tags = {"l2": set(), "l3": set(), "l4": set(), "app": set()}
+        if not isinstance(pkt, dict):
+            return tags
+
+        raw_tags = pkt.get("osi_tags") or []
+        if isinstance(raw_tags, str):
+            raw_tags = [raw_tags]
+        for tag in raw_tags:
+            if not isinstance(tag, str):
+                continue
+            raw = tag.strip().lower()
+            if raw.startswith("l2:"):
+                tags["l2"].add(raw.split(":", 1)[1])
+            elif raw.startswith("l3:"):
+                tags["l3"].add(raw.split(":", 1)[1])
+            elif raw.startswith("l4:"):
+                tags["l4"].add(raw.split(":", 1)[1])
+            elif raw.startswith("app:"):
+                tags["app"].add(raw.split(":", 1)[1])
+            else:
+                if raw in ("ethernet", "arp"):
+                    tags["l2"].add(raw)
+                elif raw in ("ipv4", "ipv6"):
+                    tags["l3"].add(raw)
+                elif raw in ("tcp", "udp"):
+                    tags["l4"].add(raw)
+                elif raw in ("dns",):
+                    tags["app"].add(raw)
+
+        if not any(tags.values()):
+            if pkt.get("is_arp"):
+                tags["l2"].add("arp")
+            elif pkt.get("src_mac") or pkt.get("dst_mac") or pkt.get("eth_type"):
+                tags["l2"].add("ethernet")
+
+            ip_version = pkt.get("ip_version")
+            if ip_version == 4:
+                tags["l3"].add("ipv4")
+            elif ip_version == 6:
+                tags["l3"].add("ipv6")
+
+            l4 = (pkt.get("l4_protocol") or "").lower()
+            if l4 in ("tcp", "udp"):
+                tags["l4"].add(l4)
+            else:
+                ip_proto = pkt.get("ip_protocol")
+                if ip_proto == 6:
+                    tags["l4"].add("tcp")
+                elif ip_proto == 17:
+                    tags["l4"].add("udp")
+
+            if pkt.get("dns_qname") or pkt.get("dns_rcode") is not None or pkt.get("dns_is_query") or pkt.get("dns_is_response"):
+                tags["app"].add("dns")
+
+        return tags
+
+    def _clear_osi_filters(self):
+        for cb in (
+            self.osi_l2_eth, self.osi_l2_arp,
+            self.osi_l3_ipv4, self.osi_l3_ipv6,
+            self.osi_l4_tcp, self.osi_l4_udp,
+            self.osi_app_dns,
+        ):
+            cb.setChecked(False)
 
     def _on_packet_overview_click(self, item, _column):
         # Toggle packet rows (depth=1 under group)

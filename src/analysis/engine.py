@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional
 
 from .flow import make_flow_key, make_flow_key_from_fields
+from .osi import count_tags, derive_osi_tags_from_analysis_packet, derive_osi_tags_from_decoded
 from .models import AnalysisPacket, AnalysisReport, AnalyzerResult, FlowState
 from .analyzers.base import Analyzer
 
@@ -14,6 +15,7 @@ class AnalysisContext:
     stats: Dict[str, int]
     flow_table: Dict[str, FlowState]
     capture_info: Dict[str, object]
+    osi_tags: List[List[str]]
 
 class AnalysisEngine:
     def __init__(self,
@@ -33,6 +35,7 @@ class AnalysisEngine:
             },
             flow_table={},
             capture_info=capture_info or {},
+            osi_tags=[],
         )
         for analyzer in self.analyzers:
             analyzer.on_start(self.context)
@@ -49,6 +52,8 @@ class AnalysisEngine:
             stats["last_ts_us"] = packet.timestamp_us
         if stats["first_ts_us"] and stats["last_ts_us"]:
             stats["duration_us"] = max(0, stats["last_ts_us"] - stats["first_ts_us"])
+
+        self.context.osi_tags.append(derive_osi_tags_from_decoded(decoded))
 
         flow_key_data = make_flow_key(decoded)
         flow_key = None
@@ -124,6 +129,8 @@ class AnalysisEngine:
         if stats["first_ts_us"] and stats["last_ts_us"]:
             stats["duration_us"] = max(0, stats["last_ts_us"] - stats["first_ts_us"])
 
+        self.context.osi_tags.append(derive_osi_tags_from_analysis_packet(packet))
+
         flow_key_data = make_flow_key_from_fields(
             packet.src_ip,
             packet.dst_ip,
@@ -187,5 +194,6 @@ class AnalysisEngine:
             flow_results=flow_results,
             time_series=time_series,
             analyzers=analyzer_meta,
+            osi_summary=count_tags(self.context.osi_tags),
         )
         return report

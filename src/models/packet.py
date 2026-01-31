@@ -228,6 +228,7 @@ class DecodedPacket:
 
     def to_dict(self) -> Dict[str, Any]:
         """Deterministic dict representation for storage/UI."""
+        from analysis.osi import derive_osi_tags_from_decoded
         raw = self.raw_packet
         return {
             "packet_id": raw.packet_id,
@@ -270,6 +271,7 @@ class DecodedPacket:
             "is_broadcast": self.is_broadcast,
             "is_ipv4_fragment": self.is_ipv4_fragment,
             "is_ipv6_fragment": self.is_ipv6_fragment,
+            "osi_tags": derive_osi_tags_from_decoded(self),
         }
 
     def to_json(self) -> str:

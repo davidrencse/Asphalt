@@ -17,6 +17,8 @@ from capture.packet_decoder import quality_flag_names
 @click.option("--interface", "-i", required=True, help="Interface to capture from")
 @click.option("--duration", "-d", type=int, help="Duration in seconds (default: run until limit)")
 @click.option("--filter", "-f", help="BPF filter (e.g., \"tcp port 80\")")
+@click.option("--packet-filter", "--filter-expr", "filter_expr",
+              help="Filter expression for decoded packets")
 @click.option("--limit", type=int, default=50, show_default=True,
               help="Max packets to decode (0 = no limit)")
 @click.option("--show-quality", is_flag=True, help="Show decode quality flags")
@@ -30,7 +32,8 @@ def capture_decode(interface: str,
                    limit: int,
                    show_quality: bool,
                    format: str,
-                   output: Optional[str]):
+                   output: Optional[str],
+                   filter_expr: Optional[str]):
     """
     Live capture and decode packets, printing a compact summary.
     """
@@ -54,6 +57,10 @@ def capture_decode(interface: str,
     )
 
     decoder = PacketDecoder()
+    predicate = None
+    if filter_expr:
+        from utils.filtering import compile_packet_filter
+        predicate = compile_packet_filter(filter_expr)
     packet_id = 0
 
     try:
@@ -99,6 +106,9 @@ def capture_decode(interface: str,
                     pcap_ref="live:0:0",
                 )
                 decoded = decoder.decode(raw)
+                record = decoded.to_dict()
+                if predicate and not predicate(record):
+                    continue
 
                 if format == "table":
                     src = decoded.src_ip or "-"
@@ -114,9 +124,9 @@ def capture_decode(interface: str,
                         f"{stack:<12} {src:<22} {dst:<22} {ports:<10} {l4:<6} {flags:<7} {quality}"
                     )
                 elif format == "json":
-                    records.append(decoded.to_dict())
+                    records.append(record)
                 else:
-                    line = decoded.to_json()
+                    line = json.dumps(record, separators=(",", ":"), ensure_ascii=True)
                     if file_handle:
                         file_handle.write(line + "\n")
                     else:
