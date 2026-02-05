@@ -1207,8 +1207,8 @@ class AsphaltApp(QtWidgets.QMainWindow):
         stats_grid.addWidget(self._stat_block("UPLOAD / DOWNLOAD", self.top_domain_labels[1]), 0, 1)
         stats_grid.addWidget(self._stat_block("DOWNLOAD / UPLOAD SPEED", self.top_domain_labels[2]), 0, 2)
         stats_grid.addWidget(self._stat_block("SEARCH QUERIES", self.top_domain_labels[3]), 0, 3)
-        stats_grid.addWidget(self._stat_block("—", self.top_domain_labels[4]), 1, 0)
-        stats_grid.addWidget(self._stat_block("—", self.top_domain_labels[5]), 1, 1)
+        stats_grid.addWidget(self._stat_block("NETWORK QUALITY", self.top_domain_labels[4]), 1, 0)
+        stats_grid.addWidget(self._stat_block("UNUSUAL PORTS", self.top_domain_labels[5]), 1, 1)
         stats_grid.addWidget(self._stat_block("—", self.top_domain_labels[6]), 1, 2)
         stats_grid.addWidget(self._stat_block("—", self.top_domain_labels[7]), 1, 3)
         
@@ -3175,7 +3175,87 @@ class AsphaltApp(QtWidgets.QMainWindow):
         else:
             self.top_domain_labels[3].setText("-")
 
-        for idx in range(4, len(self.top_domain_labels)):
+        # Network quality score (heuristic)
+        capture_health = self.latest_analysis.get("global_results", {}).get("capture_health", {})
+        capture_quality = capture_health.get("capture_quality", {}) if isinstance(capture_health, dict) else {}
+        drops = capture_quality.get("drops", {}) if isinstance(capture_quality, dict) else {}
+        drop_rate = drops.get("drop_rate")
+        if drop_rate is not None:
+            try:
+                drop_rate = float(drop_rate)
+            except (TypeError, ValueError):
+                drop_rate = None
+        if drop_rate is not None:
+            drop_pct = drop_rate * 100.0 if drop_rate <= 1.0 else drop_rate
+        else:
+            drop_pct = None
+
+        tcp_rel = self.latest_analysis.get("global_results", {}).get("tcp_reliability", {})
+        retrans_rate = tcp_rel.get("retransmission_rate") if isinstance(tcp_rel, dict) else None
+        if retrans_rate is not None:
+            try:
+                retrans_rate = float(retrans_rate)
+            except (TypeError, ValueError):
+                retrans_rate = None
+
+        tcp_hs = self.latest_analysis.get("global_results", {}).get("tcp_handshakes", {})
+        completion = tcp_hs.get("completion_rate") if isinstance(tcp_hs, dict) else None
+        if completion is not None:
+            try:
+                completion = float(completion)
+            except (TypeError, ValueError):
+                completion = None
+
+        decode_health = capture_health.get("decode_health", {}) if isinstance(capture_health, dict) else {}
+        decode_ok = decode_health.get("decode_success_rate") if isinstance(decode_health, dict) else None
+        if decode_ok is not None:
+            try:
+                decode_ok = float(decode_ok)
+            except (TypeError, ValueError):
+                decode_ok = None
+
+        if any(v is not None for v in (drop_pct, retrans_rate, completion, decode_ok)):
+            score = 100.0
+            if drop_pct is not None:
+                score -= min(50.0, drop_pct * 0.5)
+            if retrans_rate is not None:
+                score -= min(40.0, retrans_rate * 100.0 * 0.4)
+            if completion is not None:
+                score -= min(40.0, (1.0 - completion) * 100.0 * 0.4)
+            if decode_ok is not None:
+                score -= min(30.0, (1.0 - decode_ok) * 100.0 * 0.3)
+            score = max(0.0, min(100.0, score))
+            self.top_domain_labels[4].setText(f"{_fmt_number(score, 1)} / 100")
+        else:
+            self.top_domain_labels[4].setText("-")
+
+        # Unusual ports (dst ports not in common list)
+        common_ports = {
+            20, 21, 22, 23, 25, 53, 67, 68, 80, 110, 123, 137, 138, 139, 143, 161, 162,
+            389, 443, 445, 465, 587, 993, 995, 1433, 3306, 3389, 5432, 6379, 8080, 8443,
+            9200, 27017,
+        }
+        port_counts = {}
+        for pkt in self.latest_packets or []:
+            if not isinstance(pkt, dict):
+                continue
+            dst_port = pkt.get("dst_port")
+            if dst_port is None:
+                continue
+            try:
+                port = int(dst_port)
+            except (TypeError, ValueError):
+                continue
+            if port <= 1024 or port in common_ports:
+                continue
+            port_counts[port] = port_counts.get(port, 0) + 1
+        if port_counts:
+            top_ports = sorted(port_counts.items(), key=lambda kv: kv[1], reverse=True)[:3]
+            self.top_domain_labels[5].setText(", ".join(f"{p} ({c})" for p, c in top_ports))
+        else:
+            self.top_domain_labels[5].setText("-")
+
+        for idx in range(6, len(self.top_domain_labels)):
             self.top_domain_labels[idx].setText("-")
 
     def refresh_raw_data(self):
