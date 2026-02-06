@@ -619,6 +619,12 @@ class AsphaltApp(QtWidgets.QMainWindow):
         self.osi_l4_udp = QtWidgets.QCheckBox("UDP")
         self.osi_app_dns = QtWidgets.QCheckBox("DNS")
         self.osi_clear_btn = QtWidgets.QPushButton("Clear")
+        self.osi_clear_btn.setObjectName("overviewClearBtn")
+        self.osi_clear_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        self.osi_clear_btn.setStyleSheet(
+            "QPushButton { background-color: %s; color: %s; border: 1px solid %s; padding: 4px 10px; border-radius: 8px; }"
+            % (ACCENT_BTN_BG, ACCENT_BTN_FG, BORDER_DARK)
+        )
 
         # Packet overview section
         overview_box, overview_layout = self._make_section("PACKET OVERVIEW")
@@ -633,6 +639,27 @@ class AsphaltApp(QtWidgets.QMainWindow):
         group_buttons.setExclusive(True)
         group_buttons.addButton(self.group_ip_btn)
         group_buttons.addButton(self.group_l4_btn)
+        overview_btn_style = (
+            "QPushButton { background-color: %s; color: %s; border: 1px solid %s; padding: 4px 10px; border-radius: 8px; }"
+            "QPushButton:checked { background-color: %s; color: %s; }"
+            % (BG_HEADER, FG_TEXT, BORDER_DARK, ACCENT_BTN_BG, ACCENT_BTN_FG)
+        )
+        self.group_ip_btn.setStyleSheet(overview_btn_style)
+        self.group_l4_btn.setStyleSheet(overview_btn_style)
+        overview_check_style = (
+            "QCheckBox { color: %s; }"
+            "QCheckBox::indicator { width: 14px; height: 14px; }"
+            "QCheckBox::indicator:unchecked { background: %s; border: 1px solid %s; border-radius: 4px; }"
+            "QCheckBox::indicator:checked { background: %s; border: 1px solid %s; border-radius: 4px; }"
+            % (FG_TEXT, BG_HEADER, INFO_BADGE, ACCENT_BTN_BG, INFO_BADGE)
+        )
+        for cb in (
+            self.osi_l2_eth, self.osi_l2_arp,
+            self.osi_l3_ipv4, self.osi_l3_ipv6,
+            self.osi_l4_tcp, self.osi_l4_udp,
+            self.osi_app_dns,
+        ):
+            cb.setStyleSheet(overview_check_style)
         overview_controls.addWidget(self.group_ip_btn)
         overview_controls.addWidget(self.group_l4_btn)
         overview_controls.addSpacing(10)
@@ -711,7 +738,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
             self.osi_app_dns,
         ]:
             cb.stateChanged.connect(self.refresh_packet_overview)
-        self.osi_clear_btn.clicked.connect(self._clear_osi_filters)
+        self.osi_clear_btn.clicked.connect(self._clear_packet_overview_settings)
 
     def _build_header_nav(self):
         """Build header navigation in row/column layout."""
@@ -1209,7 +1236,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
         stats_grid.addWidget(self._stat_block("SEARCH QUERIES", self.top_domain_labels[3]), 0, 3)
         stats_grid.addWidget(self._stat_block("NETWORK QUALITY", self.top_domain_labels[4]), 1, 0)
         stats_grid.addWidget(self._stat_block("UNUSUAL PORTS", self.top_domain_labels[5]), 1, 1)
-        stats_grid.addWidget(self._stat_block("—", self.top_domain_labels[6]), 1, 2)
+        stats_grid.addWidget(self._stat_block("TOP EXTERNAL IP", self.top_domain_labels[6]), 1, 2)
         stats_grid.addWidget(self._stat_block("—", self.top_domain_labels[7]), 1, 3)
         
         layout.addLayout(stats_grid)
@@ -1684,6 +1711,8 @@ class AsphaltApp(QtWidgets.QMainWindow):
             "QPushButton#titlebarBtn:hover { background: %s; }"
             "QPushButton#titlebarClose { background: %s; color: %s; border: 1px solid %s; }"
             "QPushButton#titlebarClose:hover { background: %s; }"
+            "QPushButton#overviewClearBtn { background: %s; color: %s; border: 1px solid %s; padding: 4px 10px; }"
+            "QPushButton#overviewClearBtn:hover { background: %s; }"
             % (
                 BG_MAIN,
                 BORDER_DARK,
@@ -1698,6 +1727,10 @@ class AsphaltApp(QtWidgets.QMainWindow):
                 FG_TEXT,
                 BORDER_DARK,
                 TITLEBAR_BTN_DANGER_HOVER,
+                ACCENT_BTN_BG,
+                ACCENT_BTN_FG,
+                BORDER_DARK,
+                BG_CARD,
             )
         )
 
@@ -3099,6 +3132,7 @@ class AsphaltApp(QtWidgets.QMainWindow):
         byte_in = 0
         local_candidates = {}
         local_ips = set()
+        ext_counts = {}
         try:
             import socket
             host = socket.gethostname()
@@ -3146,6 +3180,16 @@ class AsphaltApp(QtWidgets.QMainWindow):
                 byte_out += length
             elif dst_ip in local_ips:
                 byte_in += length
+            # External IPs (inbound only)
+            if dst_ip in local_ips and src_ip and src_ip not in local_ips:
+                try:
+                    import ipaddress
+                    ip_obj = ipaddress.ip_address(src_ip)
+                    if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_multicast or ip_obj.is_link_local:
+                        continue
+                except Exception:
+                    pass
+                ext_counts[src_ip] = ext_counts.get(src_ip, 0) + 1
         top = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:1]
         if top:
             domain, count = top[0]
@@ -3255,7 +3299,13 @@ class AsphaltApp(QtWidgets.QMainWindow):
         else:
             self.top_domain_labels[5].setText("-")
 
-        for idx in range(6, len(self.top_domain_labels)):
+        if ext_counts:
+            ip, count = max(ext_counts.items(), key=lambda kv: kv[1])
+            self.top_domain_labels[6].setText(f"{ip} ({count})")
+        else:
+            self.top_domain_labels[6].setText("-")
+
+        for idx in range(7, len(self.top_domain_labels)):
             self.top_domain_labels[idx].setText("-")
 
     def refresh_raw_data(self):
@@ -3856,14 +3906,37 @@ class AsphaltApp(QtWidgets.QMainWindow):
         }
         return tags
 
-    def _clear_osi_filters(self):
-        for cb in (
-            self.osi_l2_eth, self.osi_l2_arp,
-            self.osi_l3_ipv4, self.osi_l3_ipv6,
-            self.osi_l4_tcp, self.osi_l4_udp,
-            self.osi_app_dns,
-        ):
-            cb.setChecked(False)
+    def _clear_packet_overview_settings(self):
+        # Reset all Packet Overview controls to defaults.
+        blockers = [
+            QtCore.QSignalBlocker(self.group_ip_btn),
+            QtCore.QSignalBlocker(self.group_l4_btn),
+            QtCore.QSignalBlocker(self.osi_l2_eth),
+            QtCore.QSignalBlocker(self.osi_l2_arp),
+            QtCore.QSignalBlocker(self.osi_l3_ipv4),
+            QtCore.QSignalBlocker(self.osi_l3_ipv6),
+            QtCore.QSignalBlocker(self.osi_l4_tcp),
+            QtCore.QSignalBlocker(self.osi_l4_udp),
+            QtCore.QSignalBlocker(self.osi_app_dns),
+        ]
+        try:
+            self.group_ip_btn.setChecked(True)
+            self.group_l4_btn.setChecked(False)
+            for cb in (
+                self.osi_l2_eth, self.osi_l2_arp,
+                self.osi_l3_ipv4, self.osi_l3_ipv6,
+                self.osi_l4_tcp, self.osi_l4_udp,
+                self.osi_app_dns,
+            ):
+                cb.setChecked(False)
+        finally:
+            blockers.clear()
+
+        self.packet_overview.clearSelection()
+        self.packet_overview.collapseAll()
+        self._packet_overview_loaded_ids = set()
+        self._packet_overview_sig = None
+        self.refresh_packet_overview()
 
     def _on_packet_overview_click(self, item, _column):
         # Toggle packet rows (depth=1 under group)
