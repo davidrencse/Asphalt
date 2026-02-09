@@ -102,12 +102,6 @@ If `PySide6` is missing, the UI will exit with an install hint. If `matplotlib` 
 - `asphalt` CLI (installed via `pip install -e .`)
 - `python run.py` or `python asphalt.py` (local launcher wrappers)
 
-## Project Layout
-- `src/`: Core capture, decode, analysis, and CLI modules
-- `tests/`: Test suite
-- `docs/`: Architecture and design notes
-- `ui_app.py`: Desktop UI
-
 ## Notes
 - Live capture generally requires administrator privileges.
 - On Windows, ensure Npcap is installed and enabled for WinPcap API compatibility.
