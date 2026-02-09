@@ -25,9 +25,6 @@ If you only want the CLI without the UI:
 pip install -e .
 ```
 
-## End User Install (No Python Required)
-Distribute `dist-installer\Asphalt-Setup.exe`. End users only need to run the installer and launch Asphalt from the Start Menu or desktop shortcut. If they plan to use live capture, they must also install Npcap in WinPcap API-compatible mode.
-
 ## Pipeline Overview
 Asphalt is the same whether you run live capture, offline decode, or full analysis. The steps are modular and can be combined:
 
