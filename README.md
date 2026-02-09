@@ -48,19 +48,6 @@ If you prefer the spec file:
 pyinstaller asphalt_ui.spec --noconfirm --clean --onefile --windowed
 ```
 
-## Build Installer (Windows EXE Setup)
-This uses Inno Setup to create a standard Windows installer.
-
-1. Install Inno Setup.
-2. Build the installer:
-
-```powershell
-.\build_installer.ps1
-```
-
-Output:
-- `dist-installer\Asphalt-Setup.exe`
-
 ## End User Install (No Python Required)
 Distribute `dist-installer\Asphalt-Setup.exe`. End users only need to run the installer and launch Asphalt from the Start Menu or desktop shortcut. If they plan to use live capture, they must also install Npcap in WinPcap API-compatible mode.
 
