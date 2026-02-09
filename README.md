@@ -90,7 +90,7 @@ asphalt analyze capture.pcapng --analyzers global_stats,flow_summary,protocol_mi
 Both `decode` and `analyze` accept `--filter` expressions for decoded packets. Filters are evaluated against decoded fields (e.g., IPs, ports, protocol tags). See `src/utils/filtering.py` for supported fields and behavior.
 
 ## Desktop UI
-Run the optional desktop UI:
+Run the desktop UI:
 
 ```powershell
 python ui_app.py
