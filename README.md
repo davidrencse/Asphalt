@@ -1,9 +1,9 @@
 # Asphalt
 
-Asphalt is a Python-based packet capture, decode, and analysis toolkit with a CLI and an optional desktop UI. It captures live traffic (via Scapy), decodes packets into structured records, and runs a configurable analysis pipeline that emits JSON reports suitable for dashboards or downstream tooling.
+Asphalt is a packet capture, decode, and analysis toolkit with a CLI and an UI. It captures live traffic via Scapy, decodes packets into records and runs an analysis pipeline suitable for dashboards or downstream tooling.
 
 ## Pipeline Overview
-Asphalt’s pipeline is the same whether you run live capture, offline decode, or full analysis. The steps are modular and can be combined:
+Asphalt is the same whether you run live capture, offline decode, or full analysis. The steps are modular and can be combined:
 
 1. **Capture**
    - Live capture is performed via Scapy (`capture.scapy_backend`).
@@ -45,13 +45,12 @@ Asphalt is structured around a few core subsystems:
   - `analysis.registry` registers and instantiates analyzers.
   - Output is a normalized JSON report for programmatic use.
 
-- **UI layer (optional)**
+- **UI layer**
   - `ui_app.py` provides a PySide6 desktop UI.
   - The UI runs the same capture + decode + analysis pipeline and renders
     diagnostics and charts (via Matplotlib when available).
 
 ## Features
-Each feature below maps to a concrete pipeline stage or subsystem.
 
 - **Live capture**
   - Start capture on any interface with optional BPF filters.
@@ -108,7 +107,7 @@ If you only want the CLI without the UI:
 pip install -e .
 ```
 
-## Quickstart (CLI)
+## CLIs
 
 List interfaces:
 
@@ -152,45 +151,9 @@ Run analysis and save a report:
 asphalt analyze capture.pcapng --output report.json
 ```
 
-## Analyzer List
-The built-in analyzer names include:
-`abnormal_activity`, `arp_lan_signals`, `capture_health`, `dns_anomalies`,
-`flow_analytics`, `flow_summary`, `global_stats`, `l2_l3_breakdown`,
-`packet_chunks`, `packet_size_stats`, `protocol_mix`, `scan_signals`,
-`tcp_handshakes`, `tcp_performance`, `tcp_reliability`, `throughput_peaks`,
-`time_series`, `top_entities`.
-
-To run a subset:
-
-```powershell
-asphalt analyze capture.pcapng --analyzers global_stats,flow_summary,protocol_mix
-```
-
-## Packet Filters
-Both `decode` and `analyze` accept `--filter` expressions for decoded packets.
-Filters are evaluated against decoded fields and OSI tags. See `src/utils/filtering.py`
-for supported fields and normalization behavior.
-
 ## Desktop UI
 Run the optional desktop UI:
 
 ```powershell
 python ui_app.py
 ```
-
-If `PySide6` is missing, the UI will exit with an install hint. If `matplotlib`
-is missing, charts will be disabled but the UI will still run.
-
-## Entry Points
-- `asphalt` CLI (installed via `pip install -e .`)
-- `python run.py` or `python asphalt.py` (local launcher wrappers)
-
-## Project Layout
-- `src/`: Core capture, decode, analysis, and CLI modules
-- `tests/`: Test suite
-- `docs/`: Architecture and design notes
-- `ui_app.py`: Desktop UI
-
-## Notes
-- Live capture generally requires administrator privileges.
-- On Windows, ensure Npcap is installed and enabled for WinPcap API compatibility.
