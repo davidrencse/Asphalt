@@ -27,7 +27,13 @@ except Exception:
     FigureCanvas = None
     _HAS_MPL = False
 
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+def _resolve_project_root() -> str:
+    """Return project root for both source and PyInstaller builds."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return sys._MEIPASS  # type: ignore[attr-defined]
+    return os.path.dirname(os.path.abspath(__file__))
+
+PROJECT_ROOT = _resolve_project_root()
 SRC_DIR = os.path.join(PROJECT_ROOT, "src")
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
