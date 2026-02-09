@@ -25,29 +25,6 @@ If you only want the CLI without the UI:
 pip install -e .
 ```
 
-## Desktop UI
-Run the desktop UI:
-
-```powershell
-python ui_app.py
-```
-
-## Build EXE (Windows)
-Build a single-file UI executable with PyInstaller:
-
-```powershell
-.\build_exe.ps1
-```
-
-Output:
-- `dist/Asphalt.exe`
-
-If you prefer the spec file:
-
-```powershell
-pyinstaller asphalt_ui.spec --noconfirm --clean --onefile --windowed
-```
-
 ## End User Install (No Python Required)
 Distribute `dist-installer\Asphalt-Setup.exe`. End users only need to run the installer and launch Asphalt from the Start Menu or desktop shortcut. If they plan to use live capture, they must also install Npcap in WinPcap API-compatible mode.
 
