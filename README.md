@@ -2,6 +2,36 @@
 
 Asphalt is a packet capture, decode, and analysis toolkit with a CLI and an UI. It captures live traffic via Scapy, decodes packets into records and runs an analysis pipeline suitable for dashboards or downstream tooling.
 
+## Requirements
+- Python 3.8+
+- Windows live capture: Npcap in WinPcap API-compatible mode (required by Scapy)
+- Dependencies:
+  - CLI/core: `click`, `scapy`
+  - UI: `PySide6` (required), `matplotlib` (optional but recommended for charts)
+
+## Install
+From the project root:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+pip install -e .
+```
+
+If you only want the CLI without the UI:
+
+```powershell
+pip install -e .
+```
+
+## Desktop UI
+Run the desktop UI:
+
+```powershell
+python ui_app.py
+```
+
 ## Pipeline Overview
 Asphalt is the same whether you run live capture, offline decode, or full analysis. The steps are modular and can be combined:
 
@@ -84,29 +114,6 @@ Asphalt is structured around a few core subsystems:
   - Run the full pipeline with live diagnostics and charts.
   - UI gracefully degrades if Matplotlib is missing.
 
-## Requirements
-- Python 3.8+
-- Windows live capture: Npcap in WinPcap API-compatible mode (required by Scapy)
-- Dependencies:
-  - CLI/core: `click`, `scapy`
-  - UI: `PySide6` (required), `matplotlib` (optional but recommended for charts)
-
-## Install
-From the project root:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-pip install -e .
-```
-
-If you only want the CLI without the UI:
-
-```powershell
-pip install -e .
-```
-
 ## CLIs
 
 List interfaces:
@@ -151,9 +158,3 @@ Run analysis and save a report:
 asphalt analyze capture.pcapng --output report.json
 ```
 
-## Desktop UI
-Run the optional desktop UI:
-
-```powershell
-python ui_app.py
-```
