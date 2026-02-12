@@ -1,6 +1,6 @@
 # Asphalt
 
-Asphalt is a packet capture, decode, and analysis toolkit with a CLI and an UI. It captures live traffic via Scapy, decodes packets into records and runs an analysis pipeline suitable for dashboards or downstream tooling.
+Asphalt is a packet capture, decode, and analysis toolkit. It captures live traffic via Scapy, decodes packets into records and runs an analysis pipeline suitable for dashboards or downstream tooling.
 
 ## Requirements
 - Python 3.8+
